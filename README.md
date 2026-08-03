@@ -34,7 +34,7 @@ npx wrangler pages dev
 
 ```bash
 npx wrangler login
-npx wrangler pages project create teshu-trend   # 首次创建项目
+npx wrangler pages project create aomenliuhe    # 首次创建项目
 npx wrangler pages deploy                        # 之后每次部署
 ```
 
