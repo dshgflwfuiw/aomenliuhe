@@ -9,7 +9,6 @@ public/
   app.js        逻辑（原 <script> 块）
 functions/
   api/proxy.js  Cloudflare Pages Function: 开奖数据代理 /api/proxy?year=2026
-wrangler.toml   部署配置
 ```
 
 ## 为什么需要数据代理
@@ -35,13 +34,17 @@ npx wrangler pages dev
 ```bash
 npx wrangler login
 npx wrangler pages project create aomenliuhe    # 首次创建项目
-npx wrangler pages deploy                        # 之后每次部署
+npx wrangler pages deploy public --project-name aomenliuhe   # 之后每次部署
 ```
 
 方式二：Git 接入
 
 在 Cloudflare 控制台新建 Pages 项目，连接本仓库，构建命令留空、
 构建输出目录填 `public`，保存后每次 push 自动部署。
+
+注意：仓库内不要保留 `wrangler.toml`，否则 Cloudflare 会自动执行
+`npx wrangler deploy`（Worker 部署命令）导致构建失败，标准 Pages 构建
+不需要该文件。
 
 ## 已修复的问题（相对原单文件版）
 
