@@ -36,6 +36,7 @@
             followMode: 'zodiac',
             followZodiac: '马',
             followMultiZodiacs: ['马', '蛇'],
+            followMissNumbers: [],
             loadedYears: new Set(),
             canvas: null,
             ctx: null,
@@ -582,7 +583,13 @@
                     step = matches > 0 ? 1 : -1;
                     coldMatchesForPoint = matches;
                 } else if (state.currentMode === 'pingxiao_follow') {
-                    if (state.followMode === 'multi') {
+                    if (state.followMode === 'missnum') {
+                        const targets = (state.followMissNumbers || []).filter(Boolean);
+                        if (targets.length >= 1 && targets.length <= 5) {
+                            followTargetForPoint = targets.join('、');
+                            step = targets.every(n => cList.includes(n)) ? 1 : -1;
+                        }
+                    } else if (state.followMode === 'multi') {
                         const targets = (state.followMultiZodiacs || []).filter(Boolean);
                         if (targets.length >= 2 && targets.length <= 5) {
                             followTargetForPoint = targets.join('、');
@@ -1139,8 +1146,7 @@
             }
 
             if (state.currentMode === 'pingxiao_follow' && d.followZodiac) {
-                const followLabel = state.followMode === 'multi' ? '连肖' : '跟肖';
-                ballsHtml += `<div style="margin-top:6px;font-size:11px;color:var(--warn);">${followLabel} ${d.followZodiac}: ${d.followHit ? '全中 +1' : '未全中 -1'}</div>`;
+                ballsHtml += `<div style="margin-top:6px;font-size:11px;color:var(--warn);">${getFollowLabel()} ${d.followZodiac}: ${d.followHit ? '全中 +1' : '未全中 -1'}</div>`;
             }
 
             document.getElementById('dispBalls').innerHTML = ballsHtml;
@@ -1174,8 +1180,7 @@
             }
 
             if (state.currentMode === 'pingxiao_follow' && d.followZodiac) {
-                const followLabel = state.followMode === 'multi' ? '连' : '跟';
-                topHtml += ` <span style="margin-left:8px;font-size:10px;color:var(--warn);">${followLabel}${d.followZodiac}${d.followHit ? '✓' : '✗'}</span>`;
+                topHtml += ` <span style="margin-left:8px;font-size:10px;color:var(--warn);">${getFollowShortLabel()}${d.followZodiac}${d.followHit ? '✓' : '✗'}</span>`;
             }
 
             document.getElementById('topBarCenter').innerHTML = topHtml;
@@ -2298,9 +2303,11 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
                 const posWrap = document.getElementById('followPosWrap');
                 const zodWrap = document.getElementById('followZodiacWrap');
                 const multiWrap = document.getElementById('followMultiWrap');
+                const missNumWrap = document.getElementById('followMissNumWrap');
                 if (posWrap) posWrap.style.display = state.followMode === 'position' ? 'block' : 'none';
                 if (zodWrap) zodWrap.style.display = state.followMode === 'zodiac' ? 'block' : 'none';
                 if (multiWrap) multiWrap.style.display = state.followMode === 'multi' ? 'block' : 'none';
+                if (missNumWrap) missNumWrap.style.display = state.followMode === 'missnum' ? 'block' : 'none';
             }
             recalcData();
         }
@@ -2315,9 +2322,11 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
             const posWrap = document.getElementById('followPosWrap');
             const zodWrap = document.getElementById('followZodiacWrap');
             const multiWrap = document.getElementById('followMultiWrap');
+            const missNumWrap = document.getElementById('followMissNumWrap');
             if (posWrap) posWrap.style.display = val === 'position' ? 'block' : 'none';
             if (zodWrap) zodWrap.style.display = val === 'zodiac' ? 'block' : 'none';
             if (multiWrap) multiWrap.style.display = val === 'multi' ? 'block' : 'none';
+            if (missNumWrap) missNumWrap.style.display = val === 'missnum' ? 'block' : 'none';
             recalcData();
         }
 
@@ -2338,6 +2347,7 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
                 state.followZodiac = zodiacs[0] || null;
             }
             updateFollowMultiOptions();
+            updateFollowMissNumOptions();
         }
 
         function updateFollowMultiOptions() {
@@ -2386,6 +2396,84 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
             state.followMultiZodiacs = arr;
             updateFollowMultiHint();
             recalcData();
+        }
+
+        function getCold15PingteNumbers(list, count = 15) {
+            const keys = Array.from({ length: 49 }, (_, i) => (i + 1).toString().padStart(2, '0'));
+            const counts = {};
+            const seen = {};
+            keys.forEach(k => { counts[k] = 0; seen[k] = false; });
+            for (let i = list.length - 1; i >= 0; i--) {
+                const codes = (list[i].openCode || '').split(',');
+                keys.forEach(key => {
+                    if (seen[key]) return;
+                    if (codes.includes(key)) {
+                        seen[key] = true;
+                    } else {
+                        counts[key]++;
+                    }
+                });
+            }
+            return Object.entries(counts)
+                .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+                .slice(0, count);
+        }
+
+        function updateFollowMissNumOptions() {
+            const wrap = document.getElementById('followMissNumList');
+            if (!wrap) return;
+            const list = state.processedList || [];
+            const top15 = getCold15PingteNumbers(list, 15);
+            state.followMissNumbers = (state.followMissNumbers || []).filter(n => top15.some(([num]) => num === n));
+            wrap.innerHTML = top15.map(([num, om]) =>
+                `<label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;min-width:0;"><input type="checkbox" id="followMissNum_${num}" onchange="toggleFollowMissNum('${num}')" ${state.followMissNumbers.includes(num) ? 'checked' : ''}> <span>${parseInt(num, 10)}</span><span style="color:var(--text-secondary);font-size:9px;">遗${om}</span></label>`
+            ).join('');
+            updateFollowMissNumHint();
+        }
+
+        function updateFollowMissNumHint() {
+            const hint = document.getElementById('followMissNumHint');
+            if (!hint) return;
+            const n = (state.followMissNumbers || []).length;
+            hint.textContent = n >= 1 && n <= 5
+                ? `已选 ${n} 个号码，全部开出+1、否则-1`
+                : n < 1 ? '请至少选择1个号码' : '最多选择5个号码';
+        }
+
+        function toggleFollowMissNum(num) {
+            const arr = [...(state.followMissNumbers || [])];
+            const idx = arr.indexOf(num);
+            const cb = document.getElementById('followMissNum_' + num);
+            if (idx >= 0) {
+                if (arr.length <= 1) {
+                    if (cb) cb.checked = true;
+                    updateFollowMissNumHint();
+                    return;
+                }
+                arr.splice(idx, 1);
+            } else {
+                if (arr.length >= 5) {
+                    if (cb) cb.checked = false;
+                    updateFollowMissNumHint();
+                    return;
+                }
+                arr.push(num);
+            }
+            state.followMissNumbers = arr;
+            updateFollowMissNumHint();
+            recalcData();
+        }
+
+        function getFollowLabel() {
+            if (state.followMode === 'missnum') return '跟号';
+            if (state.followMode === 'multi') return '连肖';
+            return '跟肖';
+        }
+
+        function getFollowShortLabel() {
+            if (state.followMode === 'missnum') return '号';
+            if (state.followMode === 'multi') return '连';
+            return '跟';
         }
 
         function toggleSidebar() {
@@ -2627,14 +2715,15 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
                 `;
             } else if (currentMode === 'pingxiao_follow') {
                 const isMulti = state.followMode === 'multi';
+                const isMissNum = state.followMode === 'missnum';
                 modeSpecificHtml = `
                     <div style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.05);">
                         <div class="tooltip-row">
-                            <span class="tooltip-label">${isMulti ? '连肖目标' : '跟肖目标'}</span>
+                            <span class="tooltip-label">${getFollowLabel()}目标</span>
                             <span class="tooltip-value" style="color:var(--warn);font-weight:700;">${data.followZodiac || '首期待定'}</span>
                         </div>
                         <div class="tooltip-row">
-                            <span class="tooltip-label">${isMulti ? '本期7号是否全中' : '本期7号含该肖'}</span>
+                            <span class="tooltip-label">${(isMulti || isMissNum) ? '本期7号是否全中' : '本期7号含该肖'}</span>
                             <span class="tooltip-value" style="color:${data.followHit ? 'var(--up)' : 'var(--down)'};font-weight:700;">${data.followHit ? '✓ 全中 +1' : '✗ 未全中 -1'}</span>
                         </div>
                     </div>

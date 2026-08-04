@@ -80,6 +80,7 @@
                     <option value="zodiac" selected>选生肖（12生肖任选其一）</option>
                     <option value="position">跟位次（上一期该位生肖）</option>
                     <option value="multi">连肖（选2~5肖，全中才+1）</option>
+                    <option value="missnum">平特遗漏最多15号（选1~5号，全中才+1）</option>
                 </select>
                 <div id="followPosWrap" style="display: none;">
                     <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">跟肖位次：取该位生肖，看下期7个号是否开出</div>
@@ -101,6 +102,11 @@
                     <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">连肖：勾选2~5个生肖，每期7个号全部开出+1、否则-1</div>
                     <div id="followMultiZodiacs" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; font-size: 12px; margin-bottom: 8px;"></div>
                     <div id="followMultiHint" style="font-size: 11px; color: var(--accent);"></div>
+                </div>
+                <div id="followMissNumWrap" style="display: none;">
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">平特遗漏最多15号：勾选1~5个号码，每期7个号全部开出+1、否则-1</div>
+                    <div id="followMissNumList" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; font-size: 12px; margin-bottom: 8px;"></div>
+                    <div id="followMissNumHint" style="font-size: 11px; color: var(--accent);"></div>
                 </div>
             </div>
         </div>
