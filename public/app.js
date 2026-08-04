@@ -36,7 +36,7 @@
             followMode: 'zodiac',
             followZodiac: '马',
             followMultiZodiacs: ['马', '蛇'],
-            followMissNumbers: [],
+            followMissNumCount: 3,
             loadedYears: new Set(),
             canvas: null,
             ctx: null,
@@ -511,6 +511,8 @@
             let colorScores = { red: 0, blue: 0, green: 0 };
             const maWindow =[];
             let prevFollowZodiac = null;
+            const numLastSeen = {};
+            for (let n = 1; n <= 49; n++) numLastSeen[n.toString().padStart(2, '0')] = -1;
 
             let colorOmissions = { red: 0, blue: 0, green: 0 };
             let sizeOmissions = { big: 0, small: 0 };
@@ -584,10 +586,18 @@
                     coldMatchesForPoint = matches;
                 } else if (state.currentMode === 'pingxiao_follow') {
                     if (state.followMode === 'missnum') {
-                        const targets = (state.followMissNumbers || []).filter(Boolean);
-                        if (targets.length >= 1 && targets.length <= 5) {
-                            followTargetForPoint = targets.join('、');
-                            step = targets.every(n => zList.includes(getZodiac(parseInt(n, 10)))) ? 1 : -1;
+                        const n = Math.min(Math.max(state.followMissNumCount || 1, 1), 5);
+                        if (idx >= 1) {
+                            const topNums = Object.entries(numLastSeen)
+                                .sort((a, b) => {
+                                    const omA = idx - 1 - a[1];
+                                    const omB = idx - 1 - b[1];
+                                    return omB - omA || parseInt(a[0], 10) - parseInt(b[0], 10);
+                                })
+                                .slice(0, n)
+                                .map(e => e[0]);
+                            followTargetForPoint = topNums.map(num => `${parseInt(num, 10)}(${getZodiac(parseInt(num, 10))})`).join('、');
+                            step = topNums.every(num => zList.includes(getZodiac(parseInt(num, 10)))) ? 1 : -1;
                         }
                     } else if (state.followMode === 'multi') {
                         const targets = (state.followMultiZodiacs || []).filter(Boolean);
@@ -676,6 +686,7 @@
                 }
 
                 prevFollowZodiac = zList[state.followPosition] || null;
+                cList.forEach(num => { numLastSeen[num] = idx; });
             });
 
             updatePagination();
@@ -2311,6 +2322,7 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
                 if (zodWrap) zodWrap.style.display = state.followMode === 'zodiac' ? 'block' : 'none';
                 if (multiWrap) multiWrap.style.display = state.followMode === 'multi' ? 'block' : 'none';
                 if (missNumWrap) missNumWrap.style.display = state.followMode === 'missnum' ? 'block' : 'none';
+                updateFollowMissNumHint();
             }
             recalcData();
         }
@@ -2330,6 +2342,7 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
             if (zodWrap) zodWrap.style.display = val === 'zodiac' ? 'block' : 'none';
             if (multiWrap) multiWrap.style.display = val === 'multi' ? 'block' : 'none';
             if (missNumWrap) missNumWrap.style.display = val === 'missnum' ? 'block' : 'none';
+            if (val === 'missnum') updateFollowMissNumHint();
             recalcData();
         }
 
@@ -2350,7 +2363,6 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
                 state.followZodiac = zodiacs[0] || null;
             }
             updateFollowMultiOptions();
-            updateFollowMissNumOptions();
         }
 
         function updateFollowMultiOptions() {
@@ -2401,68 +2413,15 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
             recalcData();
         }
 
-        function getCold15PingteNumbers(list, count = 15) {
-            const keys = Array.from({ length: 49 }, (_, i) => (i + 1).toString().padStart(2, '0'));
-            const counts = {};
-            const seen = {};
-            keys.forEach(k => { counts[k] = 0; seen[k] = false; });
-            for (let i = list.length - 1; i >= 0; i--) {
-                const codes = (list[i].openCode || '').split(',');
-                keys.forEach(key => {
-                    if (seen[key]) return;
-                    if (codes.includes(key)) {
-                        seen[key] = true;
-                    } else {
-                        counts[key]++;
-                    }
-                });
-            }
-            return Object.entries(counts)
-                .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-                .slice(0, count);
-        }
-
-        function updateFollowMissNumOptions() {
-            const wrap = document.getElementById('followMissNumList');
-            if (!wrap) return;
-            const list = state.processedList || [];
-            const top15 = getCold15PingteNumbers(list, 15);
-            state.followMissNumbers = (state.followMissNumbers || []).filter(n => top15.some(([num]) => num === n));
-            wrap.innerHTML = top15.map(([num, om]) =>
-                `<label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;min-width:0;"><input type="checkbox" id="followMissNum_${num}" onchange="toggleFollowMissNum('${num}')" ${state.followMissNumbers.includes(num) ? 'checked' : ''}> <span>${parseInt(num, 10)}</span><span style="color:var(--text-secondary);font-size:9px;">遗${om}</span></label>`
-            ).join('');
-            updateFollowMissNumHint();
-        }
-
         function updateFollowMissNumHint() {
             const hint = document.getElementById('followMissNumHint');
             if (!hint) return;
-            const n = (state.followMissNumbers || []).length;
-            hint.textContent = n >= 1 && n <= 5
-                ? `已选 ${n} 个号码，所属生肖全部开出+1、否则-1`
-                : n < 1 ? '请至少选择1个号码' : '最多选择5个号码';
+            const n = state.followMissNumCount || 1;
+            hint.textContent = `每期跟踪遗漏最多前${n}名号码，所属生肖全部开出+1、否则-1（排名每期变动）`;
         }
 
-        function toggleFollowMissNum(num) {
-            const arr = [...(state.followMissNumbers || [])];
-            const idx = arr.indexOf(num);
-            const cb = document.getElementById('followMissNum_' + num);
-            if (idx >= 0) {
-                if (arr.length <= 1) {
-                    if (cb) cb.checked = true;
-                    updateFollowMissNumHint();
-                    return;
-                }
-                arr.splice(idx, 1);
-            } else {
-                if (arr.length >= 5) {
-                    if (cb) cb.checked = false;
-                    updateFollowMissNumHint();
-                    return;
-                }
-                arr.push(num);
-            }
-            state.followMissNumbers = arr;
+        function changeFollowMissNumCount(val) {
+            state.followMissNumCount = parseInt(val, 10) || 1;
             updateFollowMissNumHint();
             recalcData();
         }
@@ -2726,7 +2685,7 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
                             <span class="tooltip-value" style="color:var(--warn);font-weight:700;">${data.followZodiac || '首期待定'}</span>
                         </div>
                         <div class="tooltip-row">
-                            <span class="tooltip-label">${isMissNum ? '本期7号含所选号码生肖' : (isMulti ? '本期7号是否全中' : '本期7号含该肖')}</span>
+                            <span class="tooltip-label">${isMissNum ? '本期7号含前N名号码生肖' : (isMulti ? '本期7号是否全中' : '本期7号含该肖')}</span>
                             <span class="tooltip-value" style="color:${data.followHit ? 'var(--up)' : 'var(--down)'};font-weight:700;">${data.followHit ? '✓ 全中 +1' : '✗ 未全中 -1'}</span>
                         </div>
                     </div>
