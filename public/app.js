@@ -35,6 +35,7 @@
             followPosition: 2,
             followMode: 'zodiac',
             followZodiac: '马',
+            followMultiZodiacs: ['马', '蛇'],
             loadedYears: new Set(),
             canvas: null,
             ctx: null,
@@ -581,9 +582,17 @@
                     step = matches > 0 ? 1 : -1;
                     coldMatchesForPoint = matches;
                 } else if (state.currentMode === 'pingxiao_follow') {
-                    const followTarget = state.followMode === 'zodiac' ? state.followZodiac : prevFollowZodiac;
-                    followTargetForPoint = followTarget;
-                    step = followTarget ? (zList.includes(followTarget) ? 1 : -1) : 0;
+                    if (state.followMode === 'multi') {
+                        const targets = (state.followMultiZodiacs || []).filter(Boolean);
+                        if (targets.length >= 2 && targets.length <= 5) {
+                            followTargetForPoint = targets.join('、');
+                            step = targets.every(z => zList.includes(z)) ? 1 : -1;
+                        }
+                    } else {
+                        const followTarget = state.followMode === 'zodiac' ? state.followZodiac : prevFollowZodiac;
+                        followTargetForPoint = followTarget;
+                        step = followTarget ? (zList.includes(followTarget) ? 1 : -1) : 0;
+                    }
                 } else if (state.currentMode === 'zodiac_hotcold' || state.currentMode === 'number_hotcold') {
                     step = 0; 
                 }
@@ -1130,7 +1139,8 @@
             }
 
             if (state.currentMode === 'pingxiao_follow' && d.followZodiac) {
-                ballsHtml += `<div style="margin-top:6px;font-size:11px;color:var(--warn);">跟肖 ${d.followZodiac}: ${d.followHit ? '命中 +1' : '未中 -1'}</div>`;
+                const followLabel = state.followMode === 'multi' ? '连肖' : '跟肖';
+                ballsHtml += `<div style="margin-top:6px;font-size:11px;color:var(--warn);">${followLabel} ${d.followZodiac}: ${d.followHit ? '全中 +1' : '未全中 -1'}</div>`;
             }
 
             document.getElementById('dispBalls').innerHTML = ballsHtml;
@@ -1164,7 +1174,8 @@
             }
 
             if (state.currentMode === 'pingxiao_follow' && d.followZodiac) {
-                topHtml += ` <span style="margin-left:8px;font-size:10px;color:var(--warn);">跟${d.followZodiac}${d.followHit ? '✓' : '✗'}</span>`;
+                const followLabel = state.followMode === 'multi' ? '连' : '跟';
+                topHtml += ` <span style="margin-left:8px;font-size:10px;color:var(--warn);">${followLabel}${d.followZodiac}${d.followHit ? '✓' : '✗'}</span>`;
             }
 
             document.getElementById('topBarCenter').innerHTML = topHtml;
@@ -2286,8 +2297,10 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
             if (mode === 'pingxiao_follow') {
                 const posWrap = document.getElementById('followPosWrap');
                 const zodWrap = document.getElementById('followZodiacWrap');
+                const multiWrap = document.getElementById('followMultiWrap');
                 if (posWrap) posWrap.style.display = state.followMode === 'position' ? 'block' : 'none';
                 if (zodWrap) zodWrap.style.display = state.followMode === 'zodiac' ? 'block' : 'none';
+                if (multiWrap) multiWrap.style.display = state.followMode === 'multi' ? 'block' : 'none';
             }
             recalcData();
         }
@@ -2301,8 +2314,10 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
             state.followMode = val;
             const posWrap = document.getElementById('followPosWrap');
             const zodWrap = document.getElementById('followZodiacWrap');
+            const multiWrap = document.getElementById('followMultiWrap');
             if (posWrap) posWrap.style.display = val === 'position' ? 'block' : 'none';
             if (zodWrap) zodWrap.style.display = val === 'zodiac' ? 'block' : 'none';
+            if (multiWrap) multiWrap.style.display = val === 'multi' ? 'block' : 'none';
             recalcData();
         }
 
@@ -2322,6 +2337,55 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
             } else {
                 state.followZodiac = zodiacs[0] || null;
             }
+            updateFollowMultiOptions();
+        }
+
+        function updateFollowMultiOptions() {
+            const wrap = document.getElementById('followMultiZodiacs');
+            if (!wrap) return;
+            const zodiacs = CONFIG.zodiacMap[state.currentYear] || [];
+            let selected = (state.followMultiZodiacs || []).filter(z => zodiacs.includes(z));
+            if (selected.length < 2 && zodiacs.length >= 2) {
+                selected = zodiacs.slice(0, 2);
+            }
+            state.followMultiZodiacs = selected;
+            wrap.innerHTML = zodiacs.map(z =>
+                `<label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="followMultiZodiac_${z}" onchange="toggleFollowMultiZodiac('${z}')" ${selected.includes(z) ? 'checked' : ''}> ${z}</label>`
+            ).join('');
+            updateFollowMultiHint();
+        }
+
+        function updateFollowMultiHint() {
+            const hint = document.getElementById('followMultiHint');
+            if (!hint) return;
+            const n = (state.followMultiZodiacs || []).length;
+            hint.textContent = n >= 2 && n <= 5
+                ? `已选 ${n} 个生肖，全部开出+1、否则-1`
+                : n < 2 ? '连肖至少选择2个生肖' : '连肖最多选择5个生肖';
+        }
+
+        function toggleFollowMultiZodiac(z) {
+            const arr = [...(state.followMultiZodiacs || [])];
+            const idx = arr.indexOf(z);
+            const cb = document.getElementById('followMultiZodiac_' + z);
+            if (idx >= 0) {
+                if (arr.length <= 2) {
+                    if (cb) cb.checked = true;
+                    updateFollowMultiHint();
+                    return;
+                }
+                arr.splice(idx, 1);
+            } else {
+                if (arr.length >= 5) {
+                    if (cb) cb.checked = false;
+                    updateFollowMultiHint();
+                    return;
+                }
+                arr.push(z);
+            }
+            state.followMultiZodiacs = arr;
+            updateFollowMultiHint();
+            recalcData();
         }
 
         function toggleSidebar() {
@@ -2562,15 +2626,16 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
                     </div>
                 `;
             } else if (currentMode === 'pingxiao_follow') {
+                const isMulti = state.followMode === 'multi';
                 modeSpecificHtml = `
                     <div style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.05);">
                         <div class="tooltip-row">
-                            <span class="tooltip-label">跟肖目标</span>
+                            <span class="tooltip-label">${isMulti ? '连肖目标' : '跟肖目标'}</span>
                             <span class="tooltip-value" style="color:var(--warn);font-weight:700;">${data.followZodiac || '首期待定'}</span>
                         </div>
                         <div class="tooltip-row">
-                            <span class="tooltip-label">本期7号含该肖</span>
-                            <span class="tooltip-value" style="color:${data.followHit ? 'var(--up)' : 'var(--down)'};font-weight:700;">${data.followHit ? '✓ 命中 +1' : '✗ 未中 -1'}</span>
+                            <span class="tooltip-label">${isMulti ? '本期7号是否全中' : '本期7号含该肖'}</span>
+                            <span class="tooltip-value" style="color:${data.followHit ? 'var(--up)' : 'var(--down)'};font-weight:700;">${data.followHit ? '✓ 全中 +1' : '✗ 未全中 -1'}</span>
                         </div>
                     </div>
                 `;

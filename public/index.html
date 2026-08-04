@@ -79,6 +79,7 @@
                 <select id="followModeSel" onchange="changeFollowMode(this.value)" style="font-size: 11px; margin-bottom: 8px;">
                     <option value="zodiac" selected>选生肖（12生肖任选其一）</option>
                     <option value="position">跟位次（上一期该位生肖）</option>
+                    <option value="multi">连肖（选2~5肖，全中才+1）</option>
                 </select>
                 <div id="followPosWrap" style="display: none;">
                     <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">跟肖位次：取该位生肖，看下期7个号是否开出</div>
@@ -95,6 +96,11 @@
                 <div id="followZodiacWrap">
                     <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">跟肖生肖：固定跟踪该生肖，每期7个号命中+1、未中-1</div>
                     <select id="followZodiacSel" onchange="changeFollowZodiac(this.value)" style="font-size: 11px;"></select>
+                </div>
+                <div id="followMultiWrap" style="display: none;">
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">连肖：勾选2~5个生肖，每期7个号全部开出+1、否则-1</div>
+                    <div id="followMultiZodiacs" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; font-size: 12px; margin-bottom: 8px;"></div>
+                    <div id="followMultiHint" style="font-size: 11px; color: var(--accent);"></div>
                 </div>
             </div>
         </div>
