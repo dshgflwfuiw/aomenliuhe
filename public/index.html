@@ -104,14 +104,8 @@
                     <div id="followMultiHint" style="font-size: 11px; color: var(--accent);"></div>
                 </div>
                 <div id="followMissNumWrap" style="display: none;">
-                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">平特遗漏最多15号：每期按遗漏从多到少排名（排名每期变动），跟踪前N名号码，看这N个号码所属生肖是否在7个开奖号中全部开出：全中+1、否则-1</div>
-                    <select id="followMissNumCountSel" onchange="changeFollowMissNumCount(this.value)" style="font-size: 11px; margin-bottom: 8px;">
-                        <option value="1">跟前1名（遗漏最多1个号）</option>
-                        <option value="2">跟前2名</option>
-                        <option value="3" selected>跟前3名</option>
-                        <option value="4">跟前4名</option>
-                        <option value="5">跟前5名</option>
-                    </select>
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">平特遗漏最多15号：每期按遗漏从多到少给号码排名（排名每期变动），勾选要跟的名次（最多5个），看这些名次号码所属生肖是否在7个开奖号中全部开出：全中+1、否则-1</div>
+                    <div id="followMissNumRanks" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; font-size: 12px; margin-bottom: 8px;"></div>
                     <div id="followMissNumHint" style="font-size: 11px; color: var(--accent);"></div>
                 </div>
             </div>

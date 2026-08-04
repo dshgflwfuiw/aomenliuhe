@@ -1336,6 +1336,9 @@
             .sidebar-card div[style*="grid-template-columns: repeat(4"] {
                 grid-template-columns: repeat(2, 1fr) !important;
             }
+            .sidebar-card div[style*="grid-template-columns: repeat(5"] {
+                grid-template-columns: repeat(3, 1fr) !important;
+            }
             .sidebar-card div[style*="grid-template-columns: 1fr 1fr"] {
                 gap: 4px !important;
                 margin-bottom: 8px !important;

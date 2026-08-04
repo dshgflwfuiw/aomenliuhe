@@ -36,7 +36,7 @@
             followMode: 'zodiac',
             followZodiac: '马',
             followMultiZodiacs: ['马', '蛇'],
-            followMissNumCount: 3,
+            followMissRanks: [1, 2, 3],
             loadedYears: new Set(),
             canvas: null,
             ctx: null,
@@ -586,18 +586,20 @@
                     coldMatchesForPoint = matches;
                 } else if (state.currentMode === 'pingxiao_follow') {
                     if (state.followMode === 'missnum') {
-                        const n = Math.min(Math.max(state.followMissNumCount || 1, 1), 5);
-                        if (idx >= 1) {
-                            const topNums = Object.entries(numLastSeen)
+                        const ranks = (state.followMissRanks || [])
+                            .filter(r => r >= 1 && r <= 15)
+                            .sort((a, b) => a - b);
+                        if (idx >= 1 && ranks.length >= 1) {
+                            const sortedNums = Object.entries(numLastSeen)
                                 .sort((a, b) => {
                                     const omA = idx - 1 - a[1];
                                     const omB = idx - 1 - b[1];
                                     return omB - omA || parseInt(a[0], 10) - parseInt(b[0], 10);
                                 })
-                                .slice(0, n)
                                 .map(e => e[0]);
-                            followTargetForPoint = topNums.map(num => `${parseInt(num, 10)}(${getZodiac(parseInt(num, 10))})`).join('、');
-                            step = topNums.every(num => zList.includes(getZodiac(parseInt(num, 10)))) ? 1 : -1;
+                            const targets = ranks.map(r => sortedNums[r - 1]);
+                            followTargetForPoint = ranks.map((r, i) => `${r}名${parseInt(targets[i], 10)}(${getZodiac(parseInt(targets[i], 10))})`).join('、');
+                            step = targets.every(num => zList.includes(getZodiac(parseInt(num, 10)))) ? 1 : -1;
                         }
                     } else if (state.followMode === 'multi') {
                         const targets = (state.followMultiZodiacs || []).filter(Boolean);
@@ -2363,6 +2365,7 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
                 state.followZodiac = zodiacs[0] || null;
             }
             updateFollowMultiOptions();
+            updateFollowMissNumOptions();
         }
 
         function updateFollowMultiOptions() {
@@ -2416,12 +2419,42 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
         function updateFollowMissNumHint() {
             const hint = document.getElementById('followMissNumHint');
             if (!hint) return;
-            const n = state.followMissNumCount || 1;
-            hint.textContent = `每期跟踪遗漏最多前${n}名号码，所属生肖全部开出+1、否则-1（排名每期变动）`;
+            const ranks = (state.followMissRanks || []).slice().sort((a, b) => a - b);
+            hint.textContent = ranks.length >= 1
+                ? `已选 ${ranks.length} 个名次：第${ranks.join('、第')}名，所属生肖全部开出+1、否则-1（排名每期变动）`
+                : '请至少选择1个名次（最多5个）';
         }
 
-        function changeFollowMissNumCount(val) {
-            state.followMissNumCount = parseInt(val, 10) || 1;
+        function updateFollowMissNumOptions() {
+            const wrap = document.getElementById('followMissNumRanks');
+            if (!wrap) return;
+            const selected = new Set(state.followMissRanks || []);
+            wrap.innerHTML = Array.from({ length: 15 }, (_, i) => i + 1).map(r =>
+                `<label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;min-width:0;"><input type="checkbox" id="followMissNumRank_${r}" onchange="toggleFollowMissNumRank(${r})" ${selected.has(r) ? 'checked' : ''}> <span>第${r}名</span></label>`
+            ).join('');
+            updateFollowMissNumHint();
+        }
+
+        function toggleFollowMissNumRank(r) {
+            const arr = [...(state.followMissRanks || [])];
+            const idx = arr.indexOf(r);
+            const cb = document.getElementById('followMissNumRank_' + r);
+            if (idx >= 0) {
+                if (arr.length <= 1) {
+                    if (cb) cb.checked = true;
+                    updateFollowMissNumHint();
+                    return;
+                }
+                arr.splice(idx, 1);
+            } else {
+                if (arr.length >= 5) {
+                    if (cb) cb.checked = false;
+                    updateFollowMissNumHint();
+                    return;
+                }
+                arr.push(r);
+            }
+            state.followMissRanks = arr;
             updateFollowMissNumHint();
             recalcData();
         }
@@ -2685,7 +2718,7 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
                             <span class="tooltip-value" style="color:var(--warn);font-weight:700;">${data.followZodiac || '首期待定'}</span>
                         </div>
                         <div class="tooltip-row">
-                            <span class="tooltip-label">${isMissNum ? '本期7号含前N名号码生肖' : (isMulti ? '本期7号是否全中' : '本期7号含该肖')}</span>
+                            <span class="tooltip-label">${isMissNum ? '本期7号含所选名次号码生肖' : (isMulti ? '本期7号是否全中' : '本期7号含该肖')}</span>
                             <span class="tooltip-value" style="color:${data.followHit ? 'var(--up)' : 'var(--down)'};font-weight:700;">${data.followHit ? '✓ 全中 +1' : '✗ 未全中 -1'}</span>
                         </div>
                     </div>
