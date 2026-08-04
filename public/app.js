@@ -587,7 +587,7 @@
                         const targets = (state.followMissNumbers || []).filter(Boolean);
                         if (targets.length >= 1 && targets.length <= 5) {
                             followTargetForPoint = targets.join('、');
-                            step = targets.every(n => cList.includes(n)) ? 1 : -1;
+                            step = targets.every(n => zList.includes(getZodiac(parseInt(n, 10)))) ? 1 : -1;
                         }
                     } else if (state.followMode === 'multi') {
                         const targets = (state.followMultiZodiacs || []).filter(Boolean);
@@ -1146,7 +1146,10 @@
             }
 
             if (state.currentMode === 'pingxiao_follow' && d.followZodiac) {
-                ballsHtml += `<div style="margin-top:6px;font-size:11px;color:var(--warn);">${getFollowLabel()} ${d.followZodiac}: ${d.followHit ? '全中 +1' : '未全中 -1'}</div>`;
+                const hitText = state.followMode === 'missnum'
+                    ? (d.followHit ? '生肖全中 +1' : '生肖未全中 -1')
+                    : (d.followHit ? '全中 +1' : '未全中 -1');
+                ballsHtml += `<div style="margin-top:6px;font-size:11px;color:var(--warn);">${getFollowLabel()} ${d.followZodiac}: ${hitText}</div>`;
             }
 
             document.getElementById('dispBalls').innerHTML = ballsHtml;
@@ -2436,7 +2439,7 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
             if (!hint) return;
             const n = (state.followMissNumbers || []).length;
             hint.textContent = n >= 1 && n <= 5
-                ? `已选 ${n} 个号码，全部开出+1、否则-1`
+                ? `已选 ${n} 个号码，所属生肖全部开出+1、否则-1`
                 : n < 1 ? '请至少选择1个号码' : '最多选择5个号码';
         }
 
@@ -2723,7 +2726,7 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
                             <span class="tooltip-value" style="color:var(--warn);font-weight:700;">${data.followZodiac || '首期待定'}</span>
                         </div>
                         <div class="tooltip-row">
-                            <span class="tooltip-label">${(isMulti || isMissNum) ? '本期7号是否全中' : '本期7号含该肖'}</span>
+                            <span class="tooltip-label">${isMissNum ? '本期7号含所选号码生肖' : (isMulti ? '本期7号是否全中' : '本期7号含该肖')}</span>
                             <span class="tooltip-value" style="color:${data.followHit ? 'var(--up)' : 'var(--down)'};font-weight:700;">${data.followHit ? '✓ 全中 +1' : '✗ 未全中 -1'}</span>
                         </div>
                     </div>
