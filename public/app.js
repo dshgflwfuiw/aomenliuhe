@@ -2129,6 +2129,8 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
             document.getElementById('info-mode').textContent = '特码自由K线';
             const followWrap = document.getElementById('followWrap');
             if (followWrap) followWrap.style.display = 'none';
+            const coldCard = document.getElementById('coldCard');
+            if (coldCard) coldCard.style.display = 'block';
             updateColdSummary();
             recalcData();
         }
@@ -2315,6 +2317,8 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
             document.getElementById('trendModeSel').value = mode;
             const followWrap = document.getElementById('followWrap');
             if (followWrap) followWrap.style.display = mode === 'pingxiao_follow' ? 'block' : 'none';
+            const coldCard = document.getElementById('coldCard');
+            if (coldCard) coldCard.style.display = mode === 'cold_custom' ? 'block' : 'none';
             if (mode === 'pingxiao_follow') {
                 const posWrap = document.getElementById('followPosWrap');
                 const zodWrap = document.getElementById('followZodiacWrap');
