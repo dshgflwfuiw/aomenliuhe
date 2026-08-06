@@ -739,6 +739,11 @@
             height: calc(100% - 50px) !important;
         }
 
+        .chart-section.chart-fullscreen .chart-header #info-left,
+        .chart-section.chart-fullscreen .chart-header #info-mid {
+            display: flex !important;
+        }
+
         
 
         @media screen and (min-width: 768px) and (max-width: 1024px) {
@@ -1161,6 +1166,11 @@
                 display: none;
             }
 
+            .chart-header #info-left,
+            .chart-header #info-mid {
+                display: none !important;
+            }
+
             #info-mode {
                 margin-left: auto;
                 max-width: 92px;
@@ -1475,6 +1485,7 @@
                 font-size: 10px;
             }
 
+            .chart-header #info-left,
             .chart-header #info-mid {
                 display: none !important;
             }
