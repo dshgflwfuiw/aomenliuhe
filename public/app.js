@@ -42,6 +42,7 @@
             tailValue: 3,
             tailMultiTails: [2, 4],
             tailMissRanks: [1, 2, 3],
+            followNumAbsent: ['01', '02', '03', '04', '05'],
             loadedYears: new Set(),
             canvas: null,
             ctx: null,
@@ -69,6 +70,7 @@
             initCardCollapse();
             updateFollowZodiacOptions();
             updateTailOptions();
+            updateFollowNumAbsentOptions();
             fetchData();
         });
 
@@ -503,6 +505,7 @@
             const list = [...state.processedList];
             updateFollowZodiacOptions();
             updateTailOptions();
+            updateFollowNumAbsentOptions();
             const zodiacs = CONFIG.zodiacMap[state.currentYear];
             let omissions = {};
             let counts = {};
@@ -675,6 +678,12 @@
                             followTargetForPoint = t + '尾';
                             step = tailHit(t) ? 1 : -1;
                         }
+                    }
+                } else if (state.currentMode === 'pingnum_absent') {
+                    const targets = (state.followNumAbsent || []).filter(Boolean);
+                    if (targets.length >= 5 && targets.length <= 12) {
+                        followTargetForPoint = targets.slice().sort((a, b) => parseInt(a, 10) - parseInt(b, 10)).map(n => parseInt(n, 10)).join('、');
+                        step = targets.every(n => !cList.includes(n)) ? 1 : -1;
                     }
                 } else if (state.currentMode === 'zodiac_hotcold' || state.currentMode === 'number_hotcold') {
                     step = 0; 
@@ -1252,6 +1261,10 @@
                 const hitText = d.followHit ? '全中 +1' : '未全中 -1';
                 ballsHtml += `<div style="margin-top:6px;font-size:11px;color:var(--warn);">${tLabel} ${d.followZodiac}: ${hitText}</div>`;
             }
+            if (state.currentMode === 'pingnum_absent' && d.followZodiac) {
+                const hitText = d.followHit ? '全不出 +1' : '有出 -1';
+                ballsHtml += `<div style="margin-top:6px;font-size:11px;color:var(--warn);">不出号 ${d.followZodiac}: ${hitText}</div>`;
+            }
 
             document.getElementById('dispBalls').innerHTML = ballsHtml;
                         let topHtml = '';
@@ -1289,6 +1302,9 @@
             if (state.currentMode === 'pingtail_follow' && d.followZodiac) {
                 const tShort = state.tailMode === 'multi' ? '连' : '跟';
                 topHtml += ` <span style="margin-left:8px;font-size:10px;color:var(--warn);">${tShort}${d.followZodiac}${d.followHit ? '✓' : '✗'}</span>`;
+            }
+            if (state.currentMode === 'pingnum_absent' && d.followZodiac) {
+                topHtml += ` <span style="margin-left:8px;font-size:10px;color:var(--warn);">不${d.followZodiac}${d.followHit ? '✓' : '✗'}</span>`;
             }
 
             document.getElementById('topBarCenter').innerHTML = topHtml;
@@ -2482,7 +2498,8 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
                 number_hotcold: '特码冷热',
                 cold_custom: '特码自由K线',
                 pingxiao_follow: '平特肖K线',
-                pingtail_follow: '平特尾K线'
+                pingtail_follow: '平特尾K线',
+                pingnum_absent: '平特号不出'
             };
             document.getElementById('info-mode').textContent = labels[mode] || '特码自由K线';
             document.getElementById('trendModeSel').value = mode;
@@ -2490,6 +2507,8 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
             if (followWrap) followWrap.style.display = mode === 'pingxiao_follow' ? 'block' : 'none';
             const tailWrap = document.getElementById('followTailWrap');
             if (tailWrap) tailWrap.style.display = mode === 'pingtail_follow' ? 'block' : 'none';
+            const numAbsentWrap = document.getElementById('followNumAbsentWrap');
+            if (numAbsentWrap) numAbsentWrap.style.display = mode === 'pingnum_absent' ? 'block' : 'none';
             const coldCard = document.getElementById('coldCard');
             if (coldCard) coldCard.style.display = mode === 'cold_custom' ? 'block' : 'none';
             if (mode === 'pingxiao_follow') {
@@ -2766,6 +2785,50 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
             recalcData();
         }
 
+        function updateFollowNumAbsentOptions() {
+            const wrap = document.getElementById('followNumAbsentList');
+            if (!wrap) return;
+            const selected = new Set(state.followNumAbsent || []);
+            wrap.innerHTML = Array.from({ length: 49 }, (_, i) => {
+                const num = (i + 1).toString().padStart(2, '0');
+                return `<label style="display:flex;align-items:center;justify-content:center;gap:3px;cursor:pointer;font-size:11px;min-width:0;"><input type="checkbox" id="followNumAbsent_${num}" onchange="toggleFollowNumAbsent('${num}')" ${selected.has(num) ? 'checked' : ''}> <span>${i + 1}</span></label>`;
+            }).join('');
+            updateFollowNumAbsentHint();
+        }
+
+        function updateFollowNumAbsentHint() {
+            const hint = document.getElementById('followNumAbsentHint');
+            if (!hint) return;
+            const n = (state.followNumAbsent || []).length;
+            hint.textContent = n >= 5 && n <= 12
+                ? `已选 ${n} 个号码，全部不出+1、有任一开出-1`
+                : n < 5 ? '至少选择5个号码' : '最多选择12个号码';
+        }
+
+        function toggleFollowNumAbsent(num) {
+            const arr = [...(state.followNumAbsent || [])];
+            const idx = arr.indexOf(num);
+            const cb = document.getElementById('followNumAbsent_' + num);
+            if (idx >= 0) {
+                if (arr.length <= 5) {
+                    if (cb) cb.checked = true;
+                    updateFollowNumAbsentHint();
+                    return;
+                }
+                arr.splice(idx, 1);
+            } else {
+                if (arr.length >= 12) {
+                    if (cb) cb.checked = false;
+                    updateFollowNumAbsentHint();
+                    return;
+                }
+                arr.push(num);
+            }
+            state.followNumAbsent = arr;
+            updateFollowNumAbsentHint();
+            recalcData();
+        }
+
         function toggleSidebar() {
             const sb = document.getElementById('sidebar');
             const isPhone = window.matchMedia('(max-width: 767px)').matches;
@@ -3031,6 +3094,19 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
                         <div class="tooltip-row">
                             <span class="tooltip-label">${isMiss ? '本期7号含所选名次尾数' : (isMulti ? '本期7号是否全中' : '本期7号含该尾')}</span>
                             <span class="tooltip-value" style="color:${data.followHit ? 'var(--up)' : 'var(--down)'};font-weight:700;">${data.followHit ? '✓ 全中 +1' : '✗ 未全中 -1'}</span>
+                        </div>
+                    </div>
+                `;
+            } else if (currentMode === 'pingnum_absent') {
+                modeSpecificHtml = `
+                    <div style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.05);">
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">不出号目标</span>
+                            <span class="tooltip-value" style="color:var(--warn);font-weight:700;">${data.followZodiac || '首期待定'}</span>
+                        </div>
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">本期7号是否全不出</span>
+                            <span class="tooltip-value" style="color:${data.followHit ? 'var(--up)' : 'var(--down)'};font-weight:700;">${data.followHit ? '✓ 全不出 +1' : '✗ 有出 -1'}</span>
                         </div>
                     </div>
                 `;
