@@ -37,6 +37,11 @@
             followZodiac: '马',
             followMultiZodiacs: ['马', '蛇'],
             followMissRanks: [1, 2, 3],
+            tailPosition: 2,
+            tailMode: 'single',
+            tailValue: 3,
+            tailMultiTails: [2, 4],
+            tailMissRanks: [1, 2, 3],
             loadedYears: new Set(),
             canvas: null,
             ctx: null,
@@ -63,6 +68,7 @@
             initEvents();
             initCardCollapse();
             updateFollowZodiacOptions();
+            updateTailOptions();
             fetchData();
         });
 
@@ -496,6 +502,7 @@
         function recalcData() {
             const list = [...state.processedList];
             updateFollowZodiacOptions();
+            updateTailOptions();
             const zodiacs = CONFIG.zodiacMap[state.currentYear];
             let omissions = {};
             let counts = {};
@@ -513,6 +520,17 @@
             let prevFollowZodiac = null;
             const numLastSeen = {};
             for (let n = 1; n <= 49; n++) numLastSeen[n.toString().padStart(2, '0')] = -1;
+            let prevFollowTail = null;
+            const tailLastSeen = {};
+            for (let t = 0; t <= 9; t++) tailLastSeen[t] = -1;
+            let tailOmissions = {};
+            let tailCounts = {};
+            state.tailGlobalMaxOm = {};
+            for (let t = 0; t <= 9; t++) {
+                tailOmissions[t] = 0;
+                tailCounts[t] = 0;
+                state.tailGlobalMaxOm[t] = 0;
+            }
 
             let colorOmissions = { red: 0, blue: 0, green: 0 };
             let sizeOmissions = { big: 0, small: 0 };
@@ -622,6 +640,42 @@
                         followTargetForPoint = followTarget;
                         step = followTarget ? (zList.includes(followTarget) ? 1 : -1) : 0;
                     }
+                } else if (state.currentMode === 'pingtail_follow') {
+                    const tailHit = tail => cList.some(n => parseInt(n, 10) % 10 === tail);
+                    if (state.tailMode === 'missrank') {
+                        const ranks = (state.tailMissRanks || [])
+                            .filter(r => r >= 1 && r <= 10)
+                            .sort((a, b) => a - b);
+                        if (idx >= 1 && ranks.length >= 1) {
+                            const sortedTails = Object.entries(tailLastSeen)
+                                .sort((a, b) => {
+                                    const omA = idx - 1 - a[1];
+                                    const omB = idx - 1 - b[1];
+                                    return omB - omA || parseInt(a[0], 10) - parseInt(b[0], 10);
+                                })
+                                .map(e => e[0]);
+                            const targets = ranks.map(r => sortedTails[r - 1]);
+                            followTargetForPoint = ranks.map((r, i) => `${r}名${targets[i]}尾`).join('、');
+                            step = targets.every(t => tailHit(parseInt(t, 10))) ? 1 : -1;
+                        }
+                    } else if (state.tailMode === 'multi') {
+                        const targets = (state.tailMultiTails || []).filter(t => t >= 0 && t <= 9);
+                        if (targets.length >= 2 && targets.length <= 5) {
+                            followTargetForPoint = targets.slice().sort((a, b) => a - b).map(t => t + '尾').join('、');
+                            step = targets.every(t => tailHit(t)) ? 1 : -1;
+                        }
+                    } else if (state.tailMode === 'position') {
+                        if (prevFollowTail !== null) {
+                            followTargetForPoint = prevFollowTail + '尾';
+                            step = tailHit(prevFollowTail) ? 1 : -1;
+                        }
+                    } else {
+                        const t = state.tailValue;
+                        if (t >= 0 && t <= 9) {
+                            followTargetForPoint = t + '尾';
+                            step = tailHit(t) ? 1 : -1;
+                        }
+                    }
                 } else if (state.currentMode === 'zodiac_hotcold' || state.currentMode === 'number_hotcold') {
                     step = 0; 
                 }
@@ -662,6 +716,18 @@
                     }
                 });
 
+                for (let t = 0; t <= 9; t++) {
+                    if (cList.some(n => parseInt(n, 10) % 10 === t)) {
+                        tailOmissions[t] = 0;
+                        tailCounts[t]++;
+                    } else {
+                        tailOmissions[t]++;
+                    }
+                    if (tailOmissions[t] > state.tailGlobalMaxOm[t]) {
+                        state.tailGlobalMaxOm[t] = tailOmissions[t];
+                    }
+                }
+
                 const historyPoint = {
                     expect: item.expect,
                     time: item.openTime,
@@ -673,6 +739,8 @@
                     pingXiao: zList.slice(0, 6).join(' '),
                     snapshot: { ...omissions },
                     counts: { ...counts },
+                    tailSnapshot: { ...tailOmissions },
+                    tailCounts: { ...tailCounts },
                     total: idx + 1,
                     colorScores: { ...colorScores },
                     colorOmissions: { ...colorOmissions },
@@ -702,6 +770,8 @@
 
                 prevFollowZodiac = zList[state.followPosition] || null;
                 cList.forEach(num => { numLastSeen[num] = idx; });
+                prevFollowTail = parseInt(cList[state.tailPosition], 10) % 10;
+                new Set(cList.map(n => parseInt(n, 10) % 10)).forEach(t => { tailLastSeen[t] = idx; });
             });
 
             updatePagination();
@@ -1177,6 +1247,11 @@
                     : (d.followHit ? '全中 +1' : '未全中 -1');
                 ballsHtml += `<div style="margin-top:6px;font-size:11px;color:var(--warn);">${getFollowLabel()} ${d.followZodiac}: ${hitText}</div>`;
             }
+            if (state.currentMode === 'pingtail_follow' && d.followZodiac) {
+                const tLabel = state.tailMode === 'multi' ? '连尾' : (state.tailMode === 'missrank' ? '跟名次' : '跟尾');
+                const hitText = d.followHit ? '全中 +1' : '未全中 -1';
+                ballsHtml += `<div style="margin-top:6px;font-size:11px;color:var(--warn);">${tLabel} ${d.followZodiac}: ${hitText}</div>`;
+            }
 
             document.getElementById('dispBalls').innerHTML = ballsHtml;
                         let topHtml = '';
@@ -1211,25 +1286,44 @@
             if (state.currentMode === 'pingxiao_follow' && d.followZodiac) {
                 topHtml += ` <span style="margin-left:8px;font-size:10px;color:var(--warn);">${getFollowShortLabel()}${d.followZodiac}${d.followHit ? '✓' : '✗'}</span>`;
             }
+            if (state.currentMode === 'pingtail_follow' && d.followZodiac) {
+                const tShort = state.tailMode === 'multi' ? '连' : '跟';
+                topHtml += ` <span style="margin-left:8px;font-size:10px;color:var(--warn);">${tShort}${d.followZodiac}${d.followHit ? '✓' : '✗'}</span>`;
+            }
 
             document.getElementById('topBarCenter').innerHTML = topHtml;
             renderTable(d);
         }
 
         function renderTable(currentData) {
-            const zodiacs = CONFIG.zodiacMap[state.currentYear];
             const snapshot = currentData.snapshot;
             const counts = currentData.counts;
             const total = currentData.total;
 
-            const sorted = zodiacs.map(z => ({
-                name: z,
-                om: snapshot[z],
-                max: state.globalMaxOm[z],
-                count: counts[z],
-                avg: (total / (counts[z] || 1)).toFixed(1),
-                ratio: state.globalMaxOm[z] > 0 ? snapshot[z] / state.globalMaxOm[z] : 0
-            })).sort((a, b) => a.om - b.om);
+            let sorted;
+            if (state.currentMode === 'pingtail_follow') {
+                const tSnap = currentData.tailSnapshot || {};
+                const tCounts = currentData.tailCounts || {};
+                const tMax = state.tailGlobalMaxOm || {};
+                sorted = Array.from({ length: 10 }, (_, i) => ({
+                    name: i + '尾',
+                    om: tSnap[i] || 0,
+                    max: tMax[i] || 0,
+                    count: tCounts[i] || 0,
+                    avg: (total / (tCounts[i] || 1)).toFixed(1),
+                    ratio: (tMax[i] || 0) > 0 ? (tSnap[i] || 0) / tMax[i] : 0
+                })).sort((a, b) => a.om - b.om);
+            } else {
+                const zodiacs = CONFIG.zodiacMap[state.currentYear];
+                sorted = zodiacs.map(z => ({
+                    name: z,
+                    om: snapshot[z],
+                    max: state.globalMaxOm[z],
+                    count: counts[z],
+                    avg: (total / (counts[z] || 1)).toFixed(1),
+                    ratio: state.globalMaxOm[z] > 0 ? snapshot[z] / state.globalMaxOm[z] : 0
+                })).sort((a, b) => a.om - b.om);
+            }
 
             const tbody = document.getElementById('tableBody');
             tbody.innerHTML = sorted.map((item, i) => {
@@ -2387,12 +2481,15 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
                 zodiac_hotcold: '特肖冷热',
                 number_hotcold: '特码冷热',
                 cold_custom: '特码自由K线',
-                pingxiao_follow: '平特肖K线'
+                pingxiao_follow: '平特肖K线',
+                pingtail_follow: '平特尾K线'
             };
             document.getElementById('info-mode').textContent = labels[mode] || '特码自由K线';
             document.getElementById('trendModeSel').value = mode;
             const followWrap = document.getElementById('followWrap');
             if (followWrap) followWrap.style.display = mode === 'pingxiao_follow' ? 'block' : 'none';
+            const tailWrap = document.getElementById('followTailWrap');
+            if (tailWrap) tailWrap.style.display = mode === 'pingtail_follow' ? 'block' : 'none';
             const coldCard = document.getElementById('coldCard');
             if (coldCard) coldCard.style.display = mode === 'cold_custom' ? 'block' : 'none';
             if (mode === 'pingxiao_follow') {
@@ -2405,6 +2502,9 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
                 if (multiWrap) multiWrap.style.display = state.followMode === 'multi' ? 'block' : 'none';
                 if (missNumWrap) missNumWrap.style.display = state.followMode === 'missnum' ? 'block' : 'none';
                 updateFollowMissNumHint();
+            }
+            if (mode === 'pingtail_follow') {
+                syncTailWraps();
             }
             recalcData();
         }
@@ -2549,6 +2649,121 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
             if (state.followMode === 'missnum') return '号';
             if (state.followMode === 'multi') return '连';
             return '跟';
+        }
+
+        function syncTailWraps() {
+            const posWrap = document.getElementById('tailPosWrap');
+            const singleWrap = document.getElementById('tailSingleWrap');
+            const multiWrap = document.getElementById('tailMultiWrap');
+            const missWrap = document.getElementById('tailMissWrap');
+            if (posWrap) posWrap.style.display = state.tailMode === 'position' ? 'block' : 'none';
+            if (singleWrap) singleWrap.style.display = state.tailMode === 'single' ? 'block' : 'none';
+            if (multiWrap) multiWrap.style.display = state.tailMode === 'multi' ? 'block' : 'none';
+            if (missWrap) missWrap.style.display = state.tailMode === 'missrank' ? 'block' : 'none';
+        }
+
+        function changeTailMode(val) {
+            state.tailMode = val;
+            syncTailWraps();
+            recalcData();
+        }
+
+        function changeTailPos(val) {
+            state.tailPosition = parseInt(val, 10) - 1;
+            recalcData();
+        }
+
+        function changeTailSingle(val) {
+            state.tailValue = parseInt(val, 10);
+            recalcData();
+        }
+
+        function updateTailOptions() {
+            const singleSel = document.getElementById('tailSingleSel');
+            if (singleSel) {
+                singleSel.innerHTML = Array.from({ length: 10 }, (_, i) => `<option value="${i}">${i}尾</option>`).join('');
+                singleSel.value = state.tailValue;
+            }
+            const multiWrap = document.getElementById('tailMultiList');
+            if (multiWrap) {
+                multiWrap.innerHTML = Array.from({ length: 10 }, (_, i) =>
+                    `<label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;min-width:0;"><input type="checkbox" id="tailMulti_${i}" onchange="toggleTailMulti(${i})" ${state.tailMultiTails.includes(i) ? 'checked' : ''}> <span>${i}尾</span></label>`
+                ).join('');
+            }
+            updateTailMultiHint();
+            const missWrap = document.getElementById('tailMissRanks');
+            if (missWrap) {
+                missWrap.innerHTML = Array.from({ length: 10 }, (_, i) => i + 1).map(r =>
+                    `<label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;min-width:0;"><input type="checkbox" id="tailMissRank_${r}" onchange="toggleTailMissRank(${r})" ${state.tailMissRanks.includes(r) ? 'checked' : ''}> <span>第${r}名</span></label>`
+                ).join('');
+            }
+            updateTailMissHint();
+        }
+
+        function updateTailMultiHint() {
+            const hint = document.getElementById('tailMultiHint');
+            if (!hint) return;
+            const n = (state.tailMultiTails || []).length;
+            hint.textContent = n >= 2 && n <= 5
+                ? `已选 ${n} 个尾，全部开出+1、否则-1`
+                : n < 2 ? '连尾至少选择2个尾' : '连尾最多选择5个尾';
+        }
+
+        function toggleTailMulti(t) {
+            const arr = [...(state.tailMultiTails || [])];
+            const idx = arr.indexOf(t);
+            const cb = document.getElementById('tailMulti_' + t);
+            if (idx >= 0) {
+                if (arr.length <= 2) {
+                    if (cb) cb.checked = true;
+                    updateTailMultiHint();
+                    return;
+                }
+                arr.splice(idx, 1);
+            } else {
+                if (arr.length >= 5) {
+                    if (cb) cb.checked = false;
+                    updateTailMultiHint();
+                    return;
+                }
+                arr.push(t);
+            }
+            state.tailMultiTails = arr;
+            updateTailMultiHint();
+            recalcData();
+        }
+
+        function updateTailMissHint() {
+            const hint = document.getElementById('tailMissHint');
+            if (!hint) return;
+            const ranks = (state.tailMissRanks || []).slice().sort((a, b) => a - b);
+            hint.textContent = ranks.length >= 1
+                ? `已选 ${ranks.length} 个名次：第${ranks.join('、第')}名，尾数全部开出+1、否则-1（排名每期变动）`
+                : '请至少选择1个名次（最多5个）';
+        }
+
+        function toggleTailMissRank(r) {
+            const arr = [...(state.tailMissRanks || [])];
+            const idx = arr.indexOf(r);
+            const cb = document.getElementById('tailMissRank_' + r);
+            if (idx >= 0) {
+                if (arr.length <= 1) {
+                    if (cb) cb.checked = true;
+                    updateTailMissHint();
+                    return;
+                }
+                arr.splice(idx, 1);
+            } else {
+                if (arr.length >= 5) {
+                    if (cb) cb.checked = false;
+                    updateTailMissHint();
+                    return;
+                }
+                arr.push(r);
+            }
+            state.tailMissRanks = arr;
+            updateTailMissHint();
+            recalcData();
         }
 
         function toggleSidebar() {
@@ -2800,6 +3015,21 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
                         </div>
                         <div class="tooltip-row">
                             <span class="tooltip-label">${isMissNum ? '本期7号含所选名次号码生肖' : (isMulti ? '本期7号是否全中' : '本期7号含该肖')}</span>
+                            <span class="tooltip-value" style="color:${data.followHit ? 'var(--up)' : 'var(--down)'};font-weight:700;">${data.followHit ? '✓ 全中 +1' : '✗ 未全中 -1'}</span>
+                        </div>
+                    </div>
+                `;
+            } else if (currentMode === 'pingtail_follow') {
+                const isMulti = state.tailMode === 'multi';
+                const isMiss = state.tailMode === 'missrank';
+                modeSpecificHtml = `
+                    <div style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.05);">
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">${isMulti ? '连尾目标' : (isMiss ? '跟名次目标' : '跟尾目标')}</span>
+                            <span class="tooltip-value" style="color:var(--warn);font-weight:700;">${data.followZodiac || '首期待定'}</span>
+                        </div>
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">${isMiss ? '本期7号含所选名次尾数' : (isMulti ? '本期7号是否全中' : '本期7号含该尾')}</span>
                             <span class="tooltip-value" style="color:${data.followHit ? 'var(--up)' : 'var(--down)'};font-weight:700;">${data.followHit ? '✓ 全中 +1' : '✗ 未全中 -1'}</span>
                         </div>
                     </div>

@@ -73,6 +73,7 @@
                 <option value="number_hotcold">特码冷热K线</option>
                 <option value="cold_custom">特码自由K线</option>
                 <option value="pingxiao_follow">平特肖K线</option>
+                <option value="pingtail_follow">平特尾K线</option>
             </select>
             <div id="followWrap" style="display: none; margin-top: 10px;">
                 <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">跟肖方式</div>
@@ -107,6 +108,41 @@
                     <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">平特遗漏最多15号：每期按遗漏从多到少给号码排名（排名每期变动），勾选要跟的名次（最多5个），看这些名次号码所属生肖是否在7个开奖号中全部开出：全中+1、否则-1</div>
                     <div id="followMissNumRanks" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; font-size: 12px; margin-bottom: 8px;"></div>
                     <div id="followMissNumHint" style="font-size: 11px; color: var(--accent);"></div>
+                </div>
+            </div>
+            <div id="followTailWrap" style="display: none; margin-top: 10px;">
+                <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">跟尾方式</div>
+                <select id="tailModeSel" onchange="changeTailMode(this.value)" style="font-size: 11px; margin-bottom: 8px;">
+                    <option value="single" selected>选尾（0-9尾任选其一）</option>
+                    <option value="position">跟位次（上一期该位尾数）</option>
+                    <option value="multi">连尾（选2~5尾，全中才+1）</option>
+                    <option value="missrank">平特遗漏最多尾（选名次，最多5个）</option>
+                </select>
+                <div id="tailPosWrap" style="display: none;">
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">跟尾位次：取该位尾数，看下期7个号是否开出</div>
+                    <select id="tailPosSel" onchange="changeTailPos(this.value)" style="font-size: 11px;">
+                        <option value="1">第1号</option>
+                        <option value="2">第2号</option>
+                        <option value="3" selected>第3号</option>
+                        <option value="4">第4号</option>
+                        <option value="5">第5号</option>
+                        <option value="6">第6号</option>
+                        <option value="7">第7号(特码)</option>
+                    </select>
+                </div>
+                <div id="tailSingleWrap">
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">跟尾：固定跟踪该尾，每期7个号命中+1、未中-1</div>
+                    <select id="tailSingleSel" onchange="changeTailSingle(this.value)" style="font-size: 11px;"></select>
+                </div>
+                <div id="tailMultiWrap" style="display: none;">
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">连尾：勾选2~5个尾，每期7个号全部开出+1、否则-1</div>
+                    <div id="tailMultiList" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; font-size: 12px; margin-bottom: 8px;"></div>
+                    <div id="tailMultiHint" style="font-size: 11px; color: var(--accent);"></div>
+                </div>
+                <div id="tailMissWrap" style="display: none;">
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">平特遗漏最多尾：每期按遗漏从多到少给尾数排名（排名每期变动），勾选要跟的名次（最多5个），看这些名次尾数是否在7个开奖号中全部开出：全中+1、否则-1</div>
+                    <div id="tailMissRanks" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; font-size: 12px; margin-bottom: 8px;"></div>
+                    <div id="tailMissHint" style="font-size: 11px; color: var(--accent);"></div>
                 </div>
             </div>
         </div>
