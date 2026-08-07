@@ -573,7 +573,17 @@
                     if (cold.types.includes('allColdZodiacs') && rollingColdSets.allColdZodiacs.includes(winZ)) matches++;
                     if (cold.types.includes('selectZodiacs') && cold.selectedZodiacs && cold.selectedZodiacs.includes(winZ)) matches++;
                     if (cold.types.includes('selectedWaves') && cold.selectedWaves && cold.selectedWaves.includes(color)) matches++;
-                    if (cold.types.includes('inputNumbers') && cold.selectedNumbers && cold.selectedNumbers.includes(numStr)) matches++;
+                    if (cold.types.includes('inputNumbers')) {
+                        const t = cold.inputTerms || { numbers: cold.selectedNumbers || [] };
+                        if (
+                            t.numbers.includes(numStr) ||
+                            t.zodiacs.includes(winZ) ||
+                            t.tails.includes(winNum % 10) ||
+                            t.heads.includes(Math.floor(winNum / 10)) ||
+                            t.waves.includes(color) ||
+                            t.segments.includes(Math.ceil(winNum / 7))
+                        ) matches++;
+                    }
                     if (cold.types.includes('wave') && rollingColdSets.wave.includes(color)) matches++;
                     if (cold.types.includes('halfwave') && rollingColdSets.halfwave.includes(halfWaveKey)) matches++;
                     if (cold.types.includes('jiaYe') && rollingColdSets.jiaYe.includes(jiaYe)) matches++;
@@ -685,6 +695,9 @@
                         getCurrentColdSourceData(state.historyData),
                         state.coldSelection.counts || {}
                     );
+                }
+                if (state.currentMode === 'cold_custom' && state.coldSelection && state.coldSelection.types.includes('inputNumbers') && state.coldSelection.inputTerms) {
+                    historyPoint.coldSets.inputNumbers = formatInputTerms(state.coldSelection.inputTerms);
                 }
 
                 prevFollowZodiac = zList[state.followPosition] || null;
@@ -2044,11 +2057,22 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
             if (sets.tail) sets.tail.forEach(tail => addNumbersByFilter(num => `${parseInt(num, 10) % 10}尾` === tail));
             if (sets.wuxing) sets.wuxing.forEach(segment => addNumbersByFilter(num => getSegmentKey(parseInt(num, 10)) === segment));
             if (sets.halfHead) sets.halfHead.forEach(key => addNumbersByFilter(num => getHalfHeadKey(parseInt(num, 10)) === key));
+            if (sets.inputTerms) {
+                const it = sets.inputTerms;
+                it.numbers.forEach(addNumber);
+                it.zodiacs.forEach(z => addNumbersByFilter(num => getZodiac(parseInt(num, 10)) === z));
+                it.tails.forEach(t => addNumbersByFilter(num => parseInt(num, 10) % 10 === t));
+                it.heads.forEach(h => addNumbersByFilter(num => Math.floor(parseInt(num, 10) / 10) === h));
+                it.waves.forEach(w => addNumbersByFilter(num => getColor(num) === w));
+                it.segments.forEach(s => addNumbersByFilter(num => Math.ceil(parseInt(num, 10) / 7) === s));
+            }
 
             const sortedNumbers = Array.from(numberUnion).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
-            summary.innerHTML = sortedNumbers.length
+            const inputDesc = formatInputTerms(sets.inputTerms);
+            summary.innerHTML = (sortedNumbers.length
                 ? `<div>扣选包含号码: ${sortedNumbers.join(' ')}</div>`
-                : '已生成自由K线';
+                : '已生成自由K线')
+                + (inputDesc.length ? `<div style="margin-top:4px;">输入条件: ${inputDesc.join(' ')}</div>` : '');
 
             // Show inline selection results next to each checked option (skip zodiac types - self-explanatory)
             const skipTypes = ['zodiacs', 'hotZodiacs', 'coldZodiacs', 'allHotZodiacs', 'allColdZodiacs', 'selectZodiacs'];
@@ -2077,13 +2101,63 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
             });
         }
 
+        function parseInputTerms(text) {
+            const terms = { numbers: [], zodiacs: [], tails: [], heads: [], waves: [], segments: [] };
+            if (!text) return terms;
+            const zodiacNames = new Set(['鼠', '牛', '虎', '兔', '龙', '蛇', '马', '羊', '猴', '鸡', '狗', '猪']);
+            const waveMap = { '红': 'red', '蓝': 'blue', '绿': 'green', '红波': 'red', '蓝波': 'blue', '绿波': 'green' };
+            const cnNum = { '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7 };
+            const toSeg = s => /^\d$/.test(s) ? parseInt(s, 10) : cnNum[s];
+            const tokens = text.split(/[*^&%$#@!~,，;；、\s\-\+|｜]+/).map(s => s.trim()).filter(Boolean);
+            tokens.forEach(token => {
+                if (waveMap[token]) { terms.waves.push(waveMap[token]); return; }
+                let m = token.match(/^([一二三四五六七1-7])段$/);
+                if (m) { const s = toSeg(m[1]); if (!terms.segments.includes(s)) terms.segments.push(s); return; }
+                m = token.match(/^段([一二三四五六七1-7])$/);
+                if (m) { const s = toSeg(m[1]); if (!terms.segments.includes(s)) terms.segments.push(s); return; }
+                m = token.match(/^(\d{1,2})尾$/);
+                if (m) { const t = parseInt(m[1], 10) % 10; if (!terms.tails.includes(t)) terms.tails.push(t); return; }
+                m = token.match(/^尾(\d{1,2})$/);
+                if (m) { const t = parseInt(m[1], 10) % 10; if (!terms.tails.includes(t)) terms.tails.push(t); return; }
+                m = token.match(/^([0-4])头$/);
+                if (m) { const h = parseInt(m[1], 10); if (!terms.heads.includes(h)) terms.heads.push(h); return; }
+                m = token.match(/^头([0-4])$/);
+                if (m) { const h = parseInt(m[1], 10); if (!terms.heads.includes(h)) terms.heads.push(h); return; }
+                if (zodiacNames.has(token)) { if (!terms.zodiacs.includes(token)) terms.zodiacs.push(token); return; }
+                if (/^\d{1,2}$/.test(token)) {
+                    const n = parseInt(token, 10);
+                    if (n >= 1 && n <= 49) {
+                        const s = n.toString().padStart(2, '0');
+                        if (!terms.numbers.includes(s)) terms.numbers.push(s);
+                    }
+                }
+            });
+            terms.waves = [...new Set(terms.waves)];
+            return terms;
+        }
+
+        function formatInputTerms(t) {
+            if (!t) return [];
+            const waveNames = { red: '红波', blue: '蓝波', green: '绿波' };
+            const parts = [];
+            if (t.numbers && t.numbers.length) parts.push(...t.numbers.map(n => parseInt(n, 10)));
+            if (t.zodiacs && t.zodiacs.length) parts.push(...t.zodiacs);
+            if (t.tails && t.tails.length) parts.push(...t.tails.map(x => x + '尾'));
+            if (t.heads && t.heads.length) parts.push(...t.heads.map(x => x + '头'));
+            if (t.waves && t.waves.length) parts.push(...t.waves.map(w => waveNames[w]));
+            if (t.segments && t.segments.length) parts.push(...t.segments.map(s => s + '段'));
+            return parts.map(String);
+        }
+
         function generateColdKline() {
             const types = ['numbers', 'zodiacs', 'hotNumbers', 'coldNumbers', 'hotZodiacs', 'coldZodiacs', 'allHotNumbers', 'allColdNumbers', 'allHotZodiacs', 'allColdZodiacs', 'wave', 'halfwave', 'jiaYe', 'head', 'tail', 'wuxing', 'halfHead']
                 .filter(type => document.getElementById(`coldOption_${type}`).checked);
             
             const inputText = document.getElementById('coldOption_inputNumbers').value.trim();
-            const selectedNumbers = inputText ? inputText.split(/[*^&%$#@!~,，;\s、\-\+]+/).filter(s => /^\d{1,2}$/.test(s)).map(s => parseInt(s, 10)).filter(n => n >= 1 && n <= 49).map(n => n.toString().padStart(2, '0')) : [];
-            if (selectedNumbers.length) types.push('inputNumbers');
+            const inputTerms = parseInputTerms(inputText);
+            const selectedNumbers = inputTerms.numbers;
+            const hasInput = selectedNumbers.length || inputTerms.zodiacs.length || inputTerms.tails.length || inputTerms.heads.length || inputTerms.waves.length || inputTerms.segments.length;
+            if (hasInput) types.push('inputNumbers');
             const selectedZodiacs = CONFIG.zodiacMap[state.currentYear]
                 .filter(z => document.getElementById(`zodiacOption_${z}`).checked);
             if (selectedZodiacs.length) types.push('selectZodiacs');
@@ -2115,6 +2189,7 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
             if (selectedZodiacs.length) sets.selectZodiacs = selectedZodiacs;
             if (selectedWaves.length) sets.selectedWaves = selectedWaves;
             if (selectedNumbers.length) sets.inputNumbers = selectedNumbers;
+            if (hasInput) sets.inputTerms = inputTerms;
             
             state.coldSelection = {
                 types,
@@ -2122,7 +2197,8 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
                 selectedZodiacs,
                 selectedWaves,
                 counts,
-                selectedNumbers
+                selectedNumbers,
+                inputTerms
             };
             state.currentMode = 'cold_custom';
             document.getElementById('trendModeSel').value = 'cold_custom';
@@ -2584,7 +2660,8 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
                 tail: '遗漏最多尾数',
                 wuxing: '遗漏最多段位',
                 halfHead: '遗漏最多半头',
-                selectedWaves: '选择波色'
+                selectedWaves: '选择波色',
+                inputNumbers: '输入条件'
             };
 
             const rows = types
