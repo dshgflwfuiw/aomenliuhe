@@ -46,6 +46,7 @@
             maWindow: 5,
             tableSort: { key: null, dir: 1 },
             lastRenderedData: null,
+            overlay: { type: 'zodiac', items: [], enabled: false },
             loadedYears: new Set(),
             canvas: null,
             ctx: null,
@@ -76,6 +77,8 @@
             updateFollowNumAbsentOptions();
             buildModeQuickBar();
             updateFollowPanelSummaries();
+            initTheme();
+            buildOverlayOptions();
             fetchData();
         });
 
@@ -512,6 +515,7 @@
             updateTailOptions();
             updateFollowNumAbsentOptions();
             updateFollowPanelSummaries();
+            buildOverlayOptions();
             const zodiacs = CONFIG.zodiacMap[state.currentYear];
             let omissions = {};
             let counts = {};
@@ -540,6 +544,8 @@
                 tailCounts[t] = 0;
                 state.tailGlobalMaxOm[t] = 0;
             }
+            const overlayItems = (state.overlay && state.overlay.enabled && state.overlay.items) || [];
+            const overlayScores = {};
 
             let colorOmissions = { red: 0, blue: 0, green: 0 };
             let sizeOmissions = { big: 0, small: 0 };
@@ -743,11 +749,24 @@
                     }
                 }
 
+                overlayItems.forEach(item => {
+                    let ovHit = false;
+                    if (state.overlay.type === 'zodiac') {
+                        ovHit = zList.includes(item);
+                    } else if (state.overlay.type === 'tail') {
+                        ovHit = cList.some(n => parseInt(n, 10) % 10 === parseInt(item, 10));
+                    } else {
+                        ovHit = cList.includes(item);
+                    }
+                    overlayScores[item] = (overlayScores[item] || 0) + (ovHit ? 1 : -1);
+                });
+
                 const historyPoint = {
                     expect: item.expect,
                     time: item.openTime,
                     win: winZ,
                     winNum: winNum,
+                    step: step,
                     score: score,
                     ma5: ma5,
                     codes: cList.map((n, i) => ({ num: n, wave: item.wave.split(',')[i] })),
@@ -764,6 +783,7 @@
                     sizeMaxOmissions: { ...sizeMaxOmissions },
                     currentColor: color,
                     currentSize: winNum >= 25 ? 'big' : 'small',
+                    overlayScores: { ...overlayScores },
                     coldHitSets: coldHitSetsForPoint,
                     coldMatches: coldMatchesForPoint,
                     followZodiac: followTargetForPoint,
@@ -824,6 +844,9 @@
             const overall = computeMaxRiseFall(state.historyData);
             state.overallMaxRise = overall.maxRiseCount;
             state.overallMaxFall = overall.maxFallCount;
+            updateChartLegend();
+            renderHotColdMatrix();
+            runBacktest();
         }
 
         // ==================== 动态冷热数据拦截计算 ====================
@@ -981,7 +1004,7 @@
                 if (Math.abs(v) < rawStep * 0.1) continue;
                 const y = centerY - v * scaleY;
                 if (y < 0 || y > height) continue;
-                ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+                ctx.strokeStyle = themeGrid(0.12);
                 ctx.lineWidth = 1;
                 ctx.setLineDash([3, 6]);
                 ctx.beginPath();
@@ -989,7 +1012,7 @@
                 ctx.lineTo(width, y);
                 ctx.stroke();
                 ctx.setLineDash([]);
-                ctx.fillStyle = 'rgba(255,255,255,0.25)';
+                ctx.fillStyle = themeText(0.45);
                 ctx.fillText(v > 0 ? '+' + v : '' + v, -6, y + 3);
             }
         }
@@ -1003,9 +1026,9 @@
                 const d = data[i];
                 const x = startX + i * spacing;
                 const label = d.expect.slice(-4);
-                ctx.fillStyle = 'rgba(255,255,255,0.2)';
+                ctx.fillStyle = themeText(0.4);
                 ctx.fillText(label, x, height - 8);
-                ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+                ctx.strokeStyle = themeGrid(0.15);
                 ctx.lineWidth = 1;
                 ctx.beginPath();
                 ctx.moveTo(x, height - 16);
@@ -1026,7 +1049,7 @@
             drawYAxisGrid(ctx, width, height, centerY, scaleY, maxScore, minScore);
             drawXAxisLabels(ctx, data, width, height, spacing, startX);
 
-            ctx.strokeStyle = '#1f2329';
+            ctx.strokeStyle = isLightTheme() ? '#ccd3dd' : '#1f2329';
             ctx.lineWidth = 1;
             ctx.beginPath();
             ctx.moveTo(0, centerY);
@@ -1088,6 +1111,36 @@
                     ctx.beginPath();
                     ctx.arc(d.px, markY, 2.4, 0, Math.PI * 2);
                     ctx.fill();
+                });
+            }
+            if (state.overlay && state.overlay.enabled && state.overlay.items.length >= 2) {
+                const ovItems = state.overlay.items.slice(0, 3);
+                const palette = ['#ff9800', '#e040fb', '#00c4ff'];
+                ovItems.forEach((item, idx) => {
+                    const firstVal = data.length && data[0].overlayScores ? data[0].overlayScores[item] : 0;
+                    ctx.strokeStyle = palette[idx % 3];
+                    ctx.lineWidth = 1.8;
+                    ctx.setLineDash([]);
+                    ctx.beginPath();
+                    let started = false;
+                    data.forEach((d, i) => {
+                        const v = d.overlayScores ? d.overlayScores[item] : null;
+                        if (v == null) { started = false; return; }
+                        const x = startX + i * spacing;
+                        const y = centerY - (v - firstVal) * scaleY;
+                        if (!started) { ctx.moveTo(x, y); started = true; }
+                        else ctx.lineTo(x, y);
+                    });
+                    ctx.stroke();
+                });
+                ctx.font = '10px sans-serif';
+                ctx.textAlign = 'left';
+                ovItems.forEach((item, idx) => {
+                    const label = state.overlay.type === 'zodiac' ? item
+                        : state.overlay.type === 'tail' ? parseInt(item, 10) + '尾'
+                        : parseInt(item, 10);
+                    ctx.fillStyle = palette[idx % 3];
+                    ctx.fillText(String(label), 8, 16 + idx * 14);
                 });
             }
             ctx.globalAlpha = 1;
@@ -1215,7 +1268,7 @@
 
             ctx.beginPath();
             ctx.arc(x, y, 6, 0, Math.PI * 2);
-            ctx.fillStyle = '#fff';
+            ctx.fillStyle = isLightTheme() ? '#1c2530' : '#fff';
             ctx.fill();
             ctx.strokeStyle = '#00d4ff';
             ctx.lineWidth = 2;
@@ -2939,6 +2992,7 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
 
         function changeMaWindow(val) {
             state.maWindow = parseInt(val, 10) || 0;
+            updateChartLegend();
             draw();
         }
 
@@ -2958,6 +3012,179 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
                 }
             });
             if (state.lastRenderedData) renderTable(state.lastRenderedData);
+        }
+
+        // ==================== 浅色主题 ====================
+        function isLightTheme() {
+            return document.body.classList.contains('light-theme');
+        }
+        function initTheme() {
+            let saved = 'dark';
+            try { saved = localStorage.getItem('lh_theme') || 'dark'; } catch (e) {}
+            applyTheme(saved === 'light');
+        }
+        function applyTheme(light) {
+            document.body.classList.toggle('light-theme', light);
+            try { localStorage.setItem('lh_theme', light ? 'light' : 'dark'); } catch (e) {}
+            const btn = document.getElementById('themeToggle');
+            if (btn) btn.textContent = light ? '☀️' : '🌙';
+            draw();
+        }
+        function toggleTheme() {
+            applyTheme(!isLightTheme());
+        }
+        function themeGrid(alpha) {
+            return isLightTheme() ? `rgba(25, 40, 60, ${alpha})` : `rgba(255, 255, 255, ${alpha})`;
+        }
+        function themeText(alpha) {
+            return isLightTheme() ? `rgba(20, 30, 45, ${alpha})` : `rgba(255, 255, 255, ${alpha})`;
+        }
+
+        // ==================== 多曲线叠加 ====================
+        function buildOverlayOptions() {
+            const zodiacWrap = document.getElementById('overlayZodiacWrap');
+            if (zodiacWrap) {
+                const selected = new Set(state.overlay.items || []);
+                const zodiacs = CONFIG.zodiacMap[state.currentYear] || [];
+                zodiacWrap.innerHTML = zodiacs.map(z =>
+                    `<label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;"><input type="checkbox" id="overlayZodiac_${z}" onchange="toggleOverlayItem('${z}')" ${selected.has(z) ? 'checked' : ''}> ${z}</label>`
+                ).join('');
+            }
+            const tailWrap = document.getElementById('overlayTailWrap');
+            if (tailWrap) {
+                const selected = new Set(state.overlay.items || []);
+                tailWrap.innerHTML = Array.from({ length: 10 }, (_, i) =>
+                    `<label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;"><input type="checkbox" id="overlayTail_${i}" onchange="toggleOverlayItem('${i}')" ${selected.has(String(i)) ? 'checked' : ''}> ${i}尾</label>`
+                ).join('');
+            }
+            syncOverlayTypeWrap();
+            updateOverlayHint();
+        }
+        function syncOverlayTypeWrap() {
+            const type = state.overlay.type;
+            const z = document.getElementById('overlayZodiacWrap');
+            const t = document.getElementById('overlayTailWrap');
+            const n = document.getElementById('overlayNumberWrap');
+            if (z) z.style.display = type === 'zodiac' ? 'grid' : 'none';
+            if (t) t.style.display = type === 'tail' ? 'grid' : 'none';
+            if (n) n.style.display = type === 'number' ? 'block' : 'none';
+        }
+        function changeOverlayType(val) {
+            state.overlay.type = val;
+            state.overlay.items = [];
+            const input = document.getElementById('overlayNumbersInput');
+            if (input) input.value = '';
+            buildOverlayOptions();
+            recalcData();
+        }
+        function toggleOverlayItem(item) {
+            const arr = [...(state.overlay.items || [])];
+            const idx = arr.indexOf(item);
+            const cb = document.getElementById('overlayZodiac_' + item) || document.getElementById('overlayTail_' + item);
+            if (idx >= 0) {
+                if (arr.length <= 2) { if (cb) cb.checked = true; updateOverlayHint(); return; }
+                arr.splice(idx, 1);
+            } else {
+                if (arr.length >= 3) { if (cb) cb.checked = false; updateOverlayHint(); return; }
+                arr.push(item);
+            }
+            state.overlay.items = arr;
+            updateOverlayHint();
+            recalcData();
+        }
+        function applyOverlayNumbers() {
+            const input = document.getElementById('overlayNumbersInput');
+            if (!input) return;
+            const nums = input.value.split(/[,，、;\s]+/).map(s => parseInt(s, 10))
+                .filter(n => !isNaN(n) && n >= 1 && n <= 49)
+                .slice(0, 3)
+                .map(n => n.toString().padStart(2, '0'));
+            state.overlay.items = nums;
+            input.value = nums.join(',');
+            updateOverlayHint();
+            recalcData();
+        }
+        function toggleOverlayEnabled(checked) {
+            state.overlay.enabled = !!checked;
+            updateOverlayHint();
+            recalcData();
+        }
+        function updateOverlayHint() {
+            const hint = document.getElementById('overlayHint');
+            if (!hint) return;
+            const n = (state.overlay.items || []).length;
+            if (n < 2) {
+                hint.textContent = '请选择2~3项（当前' + n + '项）';
+            } else {
+                hint.textContent = '已选' + n + '项：' + state.overlay.items.map(i =>
+                    state.overlay.type === 'zodiac' ? i : (state.overlay.type === 'tail' ? i + '尾' : parseInt(i, 10))
+                ).join('、');
+            }
+        }
+
+        // ==================== 号码冷热矩阵 ====================
+        function renderHotColdMatrix() {
+            const grid = document.getElementById('matrixGrid');
+            if (!grid) return;
+            const N = parseInt(document.getElementById('matrixWindow')?.value) || 50;
+            const data = state.historyData.slice(-N);
+            const counts = {};
+            for (let n = 1; n <= 49; n++) counts[n] = 0;
+            data.forEach(d => {
+                (d.codes || []).forEach(c => {
+                    const num = parseInt(c.num, 10);
+                    if (num >= 1 && num <= 49) counts[num]++;
+                });
+            });
+            const max = Math.max(...Object.values(counts), 1);
+            grid.innerHTML = Array.from({ length: 49 }, (_, i) => {
+                const n = i + 1;
+                const ratio = counts[n] / max;
+                const r = Math.round(28 + ratio * 220);
+                const g = Math.round(28 + (1 - ratio) * 195);
+                const b = 52;
+                return `<div style="aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:5px;background:rgb(${r},${g},${b});color:#fff;font-size:11px;font-weight:600;">${n}</div>`;
+            }).join('');
+        }
+
+        // ==================== 策略回测 ====================
+        function runBacktest() {
+            const result = document.getElementById('backtestResult');
+            if (!result) return;
+            const win = document.getElementById('backtestWindow').value;
+            const N = win === 'all' ? state.historyData.length : parseInt(win);
+            const data = state.historyData.slice(-N);
+            if (data.length < 2) {
+                result.innerHTML = '数据不足，请先加载数据';
+                return;
+            }
+            let wins = 0, loss = 0, flat = 0, sum = 0, curUp = 0, maxUp = 0, curDown = 0, maxDown = 0;
+            data.forEach(d => {
+                const s = d.step || 0;
+                sum += s;
+                if (s > 0) { wins++; curUp++; curDown = 0; maxUp = Math.max(maxUp, curUp); }
+                else if (s < 0) { loss++; curDown++; curUp = 0; maxDown = Math.max(maxDown, curDown); }
+                else { flat++; curUp = 0; curDown = 0; }
+            });
+            const valid = data.length - flat;
+            const winRate = valid > 0 ? wins / valid * 100 : 0;
+            const conclusion = winRate >= 60 ? '表现优秀，可继续关注' : winRate >= 45 ? '表现一般，观察为主' : '表现偏弱，谨慎使用';
+            result.innerHTML = `近${data.length}期：胜率 <b style="color:${winRate >= 50 ? 'var(--up)' : 'var(--down)'};">${winRate.toFixed(1)}%</b>（${wins}胜/${loss}负）<br>累计 <b>${sum > 0 ? '+' : ''}${sum}</b> · 最大连涨 ${maxUp} · 最大连跌 ${maxDown}<br>结论：${conclusion}`;
+        }
+
+        // ==================== 图例 + 近10期统计 ====================
+        function updateChartLegend() {
+            const el = document.getElementById('chartLegend');
+            if (!el) return;
+            const maText = state.maWindow > 0 ? '绿涨·红跌·黄虚线=MA' : '绿涨·红跌';
+            const data = state.historyData.slice(-10);
+            let wins = 0, sum = 0;
+            data.forEach(d => {
+                if ((d.step || 0) > 0) wins++;
+                sum += d.step || 0;
+            });
+            const recent = data.length ? ` · 近10期 ${wins}/${data.length} · 累计${sum > 0 ? '+' : ''}${sum}` : '';
+            el.textContent = maText + recent;
         }
 
         function toggleSidebar() {

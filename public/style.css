@@ -2159,3 +2159,73 @@
                 font-size: 9px;
             }
         }
+
+        /* ==================== 浅色主题 (2026-08) ==================== */
+        body.light-theme {
+            --bg: #f2f4f8;
+            --side: #ffffff;
+            --border: #d8dee8;
+            --up: #0ba360;
+            --down: #e03131;
+            --accent: #0084d6;
+            --warn: #b26a00;
+            --card-bg: #ffffff;
+            --card-hover: #eef1f6;
+            --text-primary: #1c2530;
+            --text-secondary: #5b6675;
+            --glass: rgba(255, 255, 255, 0.9);
+            color: #1c2530;
+        }
+        body.light-theme input,
+        body.light-theme select,
+        body.light-theme textarea {
+            background: #ffffff;
+            color: #1c2530;
+            border-color: var(--border);
+        }
+        body.light-theme .chart-section {
+            background: radial-gradient(ellipse at top, #f8fafd 0%, #e4e9f1 100%);
+        }
+        body.light-theme .kline-tooltip {
+            background: rgba(255, 255, 255, 0.97);
+            border-color: var(--border);
+            box-shadow: 0 10px 30px rgba(30, 45, 70, 0.18);
+        }
+        body.light-theme .chart-legend {
+            background: rgba(0, 0, 0, 0.05);
+            border-color: var(--border);
+            color: var(--text-secondary);
+        }
+        body.light-theme .stat-bar,
+        body.light-theme .omission-bar {
+            background: #e3e7ee;
+        }
+        body.light-theme .follow-panel-body {
+            background: rgba(0, 0, 0, 0.02);
+        }
+        body.light-theme .follow-panel-header {
+            background: rgba(0, 0, 0, 0.02);
+        }
+        body.light-theme .follow-panel-header:hover {
+            background: rgba(0, 132, 214, 0.06);
+        }
+        body.light-theme .advanced-toggle {
+            color: var(--text-secondary);
+        }
+        body.light-theme .mode-quick-bar button {
+            background: #ffffff;
+            color: var(--text-secondary);
+        }
+        body.light-theme .mode-quick-bar button.active {
+            color: #fff;
+        }
+        body.light-theme button {
+            background: var(--card-bg);
+            color: var(--text-primary);
+        }
+        body.light-theme button.primary {
+            color: #fff;
+        }
+        body.light-theme .top-bar .ball {
+            border: 1px solid var(--border);
+        }

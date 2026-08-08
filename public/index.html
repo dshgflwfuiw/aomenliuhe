@@ -28,6 +28,8 @@
         <div class="top-bar-center" id="topBarCenter"></div>
         <div class="top-bar-right">
             <span id="topScore" style="font-size:13px;font-weight:700;color:var(--text-secondary);">--</span>
+            <button id="themeToggle" onclick="toggleTheme()" title="切换浅色/深色主题"
+                style="width:30px;height:30px;padding:0;font-size:14px;border-radius:8px;flex-shrink:0;">🌙</button>
         </div>
     </div>
 
@@ -536,6 +538,54 @@
             </div>
         </div>
 
+        <div class="sidebar-card" id="overlayCard">
+            <h3>📈 多曲线叠加</h3>
+            <label style="display:flex;align-items:center;gap:6px;font-size:11px;margin-bottom:8px;cursor:pointer;">
+                <input type="checkbox" id="overlayEnabled" onchange="toggleOverlayEnabled(this.checked)"> 在图上叠加显示（选2~3项）
+            </label>
+            <select id="overlayTypeSel" onchange="changeOverlayType(this.value)" style="font-size:11px;margin-bottom:8px;">
+                <option value="zodiac" selected>生肖</option>
+                <option value="tail">尾数</option>
+                <option value="number">号码</option>
+            </select>
+            <div id="overlayZodiacWrap" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;font-size:12px;margin-bottom:8px;"></div>
+            <div id="overlayTailWrap" style="display:none;grid-template-columns:repeat(5,1fr);gap:6px;font-size:12px;margin-bottom:8px;"></div>
+            <div id="overlayNumberWrap" style="display:none;margin-bottom:8px;">
+                <input type="text" id="overlayNumbersInput" placeholder="号码，逗号分隔，最多3个" style="width:100%;font-size:11px;padding:6px;background:#0d1117;border:1px solid var(--border);border-radius:6px;color:#e6edf3;outline:none;" onchange="applyOverlayNumbers()">
+            </div>
+            <div id="overlayHint" style="font-size:10px;color:var(--accent);"></div>
+        </div>
+
+        <div class="sidebar-card" id="matrixCard">
+            <h3>🔥 号码冷热矩阵</h3>
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+                <span style="font-size:11px;color:var(--text-secondary);">统计最近</span>
+                <select id="matrixWindow" onchange="renderHotColdMatrix()" style="font-size:11px;flex:1;">
+                    <option value="20">20期</option>
+                    <option value="50" selected>50期</option>
+                    <option value="100">100期</option>
+                </select>
+            </div>
+            <div id="matrixGrid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;"></div>
+            <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text-secondary);margin-top:4px;">
+                <span>冷</span><span>热</span>
+            </div>
+        </div>
+
+        <div class="sidebar-card" id="backtestCard">
+            <h3>📊 策略回测</h3>
+            <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">
+                <select id="backtestWindow" style="font-size:11px;flex:1;">
+                    <option value="20">最近20期</option>
+                    <option value="50" selected>最近50期</option>
+                    <option value="100">最近100期</option>
+                    <option value="all">全部</option>
+                </select>
+                <button onclick="runBacktest()" class="primary" style="font-size:11px;padding:6px 12px;">回测</button>
+            </div>
+            <div id="backtestResult" style="font-size:11px;color:var(--text-secondary);min-height:40px;line-height:1.7;">选择期数后点击回测，统计当前模式的近期表现</div>
+        </div>
+
         <div class="sidebar-card" id="warningPanel">
             <h3 style="color: var(--down);">⚠️ 风险预警 <span id="warnCount"
                     style="background: var(--down); color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 10px;">0</span>
@@ -573,7 +623,7 @@
                     <option value="5" selected>MA5</option>
                     <option value="10">MA10</option>
                 </select>
-                <span class="chart-legend">绿涨·红跌·黄虚线=MA</span>
+                <span class="chart-legend" id="chartLegend">绿涨·红跌·黄虚线=MA</span>
                 <div class="page-controls">
                     <select id="pageSizeSel" onchange="changePageSize(this.value)"
                         style="width: 80px; font-size: 11px; padding: 4px 8px;">
