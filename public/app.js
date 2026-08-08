@@ -43,6 +43,9 @@
             tailMultiTails: [2, 4],
             tailMissRanks: [1, 2, 3],
             followNumAbsent: ['01', '02', '03', '04', '05'],
+            maWindow: 5,
+            tableSort: { key: null, dir: 1 },
+            lastRenderedData: null,
             loadedYears: new Set(),
             canvas: null,
             ctx: null,
@@ -71,6 +74,8 @@
             updateFollowZodiacOptions();
             updateTailOptions();
             updateFollowNumAbsentOptions();
+            buildModeQuickBar();
+            updateFollowPanelSummaries();
             fetchData();
         });
 
@@ -506,6 +511,7 @@
             updateFollowZodiacOptions();
             updateTailOptions();
             updateFollowNumAbsentOptions();
+            updateFollowPanelSummaries();
             const zodiacs = CONFIG.zodiacMap[state.currentYear];
             let omissions = {};
             let counts = {};
@@ -1027,18 +1033,22 @@
             ctx.lineTo(width, centerY);
             ctx.stroke();
 
-            ctx.strokeStyle = 'rgba(255, 214, 0, 0.6)';
-            ctx.lineWidth = 1.5;
-            ctx.setLineDash([4, 4]);
-            ctx.beginPath();
-            data.forEach((d, i) => {
-                const x = startX + i * spacing;
-                const y = centerY - (d.displayMa5 - baseScore) * scaleY;
-                if (i === 0) ctx.moveTo(x, y);
-                else ctx.lineTo(x, y);
-            });
-            ctx.stroke();
-            ctx.setLineDash([]);
+            if (state.maWindow > 0) {
+                ctx.strokeStyle = 'rgba(255, 214, 0, 0.6)';
+                ctx.lineWidth = 1.5;
+                ctx.setLineDash([4, 4]);
+                ctx.beginPath();
+                data.forEach((d, i) => {
+                    const slice = data.slice(Math.max(0, i - state.maWindow + 1), i + 1);
+                    const avg = slice.reduce((a, b) => a + b.displayScore, 0) / slice.length;
+                    const x = startX + i * spacing;
+                    const y = centerY - (avg - baseScore) * scaleY;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                });
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
 
             const gradient = ctx.createLinearGradient(0, centerY - 50, 0, centerY + 50);
             gradient.addColorStop(0, 'rgba(0, 230, 118, 0.8)');
@@ -1069,6 +1079,17 @@
                     : (d.displayScore >= 0 ? '#00e676' : '#ff1744');
                 ctx.fill();
             });
+            if (['pingxiao_follow', 'pingtail_follow', 'pingnum_absent'].includes(state.currentMode)) {
+                data.forEach(d => {
+                    if (typeof d.followHit !== 'boolean' || d.px == null) return;
+                    const markY = d.followHit ? d.py - dotSize - 5 : d.py + dotSize + 5;
+                    ctx.globalAlpha = 0.9;
+                    ctx.fillStyle = d.followHit ? '#00e676' : '#ff1744';
+                    ctx.beginPath();
+                    ctx.arc(d.px, markY, 2.4, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+            }
             ctx.globalAlpha = 1;
         }
         function drawColorModeFixed(ctx, data, width, height, spacing, startX) {
@@ -1204,6 +1225,7 @@
         // ==================== UI更新 ====================
         function updateInfoPanel(d) {
             if (!d) return;
+            state.lastRenderedData = d;
             document.getElementById('dispExpect').textContent = d.expect;
             document.getElementById('topExpect').textContent = d.expect;
 
@@ -1339,6 +1361,17 @@
                     avg: (total / (counts[z] || 1)).toFixed(1),
                     ratio: state.globalMaxOm[z] > 0 ? snapshot[z] / state.globalMaxOm[z] : 0
                 })).sort((a, b) => a.om - b.om);
+            }
+
+            const sortKey = state.tableSort && state.tableSort.key;
+            if (sortKey && sortKey !== 'rank') {
+                const dir = state.tableSort.dir;
+                sorted = sorted.slice().sort((a, b) => {
+                    if (sortKey === 'name') return String(a.name).localeCompare(String(b.name)) * dir;
+                    return (Number(a[sortKey]) - Number(b[sortKey])) * dir;
+                });
+            } else if (sortKey === 'rank') {
+                sorted = sorted.slice().sort((a, b) => a.om - b.om);
             }
 
             const tbody = document.getElementById('tableBody');
@@ -2503,6 +2536,9 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
             };
             document.getElementById('info-mode').textContent = labels[mode] || '特码自由K线';
             document.getElementById('trendModeSel').value = mode;
+            document.querySelectorAll('#modeQuickBar button').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.mode === mode);
+            });
             const followWrap = document.getElementById('followWrap');
             if (followWrap) followWrap.style.display = mode === 'pingxiao_follow' ? 'block' : 'none';
             const tailWrap = document.getElementById('followTailWrap');
@@ -2827,6 +2863,101 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
             state.followNumAbsent = arr;
             updateFollowNumAbsentHint();
             recalcData();
+        }
+
+        function toggleFollowPanel(id) {
+            const panel = document.getElementById(id);
+            if (!panel) return;
+            const collapsed = panel.classList.toggle('collapsed');
+            const arrow = document.getElementById(id + 'Arrow');
+            if (arrow) arrow.textContent = collapsed ? '▸' : '▾';
+        }
+
+        function toggleAdvanced(id) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const show = el.style.display === 'none';
+            el.style.display = show ? 'block' : 'none';
+            const arrow = document.getElementById(id + 'Arrow');
+            if (arrow) arrow.textContent = show ? '▾' : '▸';
+        }
+
+        function updateFollowPanelSummaries() {
+            const followSummary = document.getElementById('followWrapSummary');
+            if (followSummary) {
+                let s = '';
+                if (state.followMode === 'zodiac') s = `跟肖: ${state.followZodiac || '-'}`;
+                else if (state.followMode === 'position') s = `位次: 第${state.followPosition + 1}号`;
+                else if (state.followMode === 'multi') s = `连肖: ${(state.followMultiZodiacs || []).join('、')}`;
+                else if (state.followMode === 'missnum') {
+                    const ranks = (state.followMissRanks || []).slice().sort((a, b) => a - b);
+                    s = `名次: 第${ranks.join('、第')}名`;
+                }
+                followSummary.textContent = s;
+            }
+            const tailSummary = document.getElementById('followTailWrapSummary');
+            if (tailSummary) {
+                let s = '';
+                if (state.tailMode === 'single') s = `跟尾: ${state.tailValue}尾`;
+                else if (state.tailMode === 'position') s = `位次: 第${state.tailPosition + 1}号`;
+                else if (state.tailMode === 'multi') s = `连尾: ${(state.tailMultiTails || []).slice().sort((a, b) => a - b).map(t => t + '尾').join('、')}`;
+                else if (state.tailMode === 'missrank') {
+                    const ranks = (state.tailMissRanks || []).slice().sort((a, b) => a - b);
+                    s = `名次: 第${ranks.join('、第')}名`;
+                }
+                tailSummary.textContent = s;
+            }
+            const absentSummary = document.getElementById('followNumAbsentWrapSummary');
+            if (absentSummary) {
+                absentSummary.textContent = `已选 ${(state.followNumAbsent || []).length} 号`;
+            }
+        }
+
+        const MODE_ITEMS = [
+            ['zodiac', '特肖遗漏'],
+            ['oddeven', '单双'],
+            ['bigsmall', '大小'],
+            ['color', '波色'],
+            ['zodiac_hotcold', '特肖冷热'],
+            ['number_hotcold', '特码冷热'],
+            ['cold_custom', '特码自由'],
+            ['pingxiao_follow', '平特肖'],
+            ['pingtail_follow', '平特尾'],
+            ['pingnum_absent', '平特断号']
+        ];
+
+        function buildModeQuickBar() {
+            const bar = document.getElementById('modeQuickBar');
+            if (!bar) return;
+            bar.innerHTML = MODE_ITEMS.map(([mode, label]) =>
+                `<button data-mode="${mode}" onclick="switchTrendMode('${mode}')">${label}</button>`
+            ).join('');
+            document.querySelectorAll('#modeQuickBar button').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.mode === state.currentMode);
+            });
+        }
+
+        function changeMaWindow(val) {
+            state.maWindow = parseInt(val, 10) || 0;
+            draw();
+        }
+
+        function sortTable(key) {
+            if (!state.tableSort) state.tableSort = { key: null, dir: 1 };
+            if (state.tableSort.key === key) {
+                state.tableSort.dir *= -1;
+            } else {
+                state.tableSort = { key, dir: 1 };
+            }
+            document.querySelectorAll('.table-section th[data-sort]').forEach(th => {
+                const arrow = th.querySelector('.sort-arrow');
+                if (arrow) {
+                    arrow.textContent = th.dataset.sort === state.tableSort.key
+                        ? (state.tableSort.dir > 0 ? '▲' : '▼')
+                        : '';
+                }
+            });
+            if (state.lastRenderedData) renderTable(state.lastRenderedData);
         }
 
         function toggleSidebar() {

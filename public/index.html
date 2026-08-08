@@ -9,6 +9,7 @@
     <meta name="format-detection" content="telephone=no">
     <meta name="theme-color" content="#0a0c10">
     <title>六合趋势全自动联动终端</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="style.css">
 </head>
 
@@ -29,6 +30,8 @@
             <span id="topScore" style="font-size:13px;font-weight:700;color:var(--text-secondary);">--</span>
         </div>
     </div>
+
+    <div class="mode-quick-bar" id="modeQuickBar"></div>
 
     <div class="sidebar" id="sidebar">
         <h2 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 800; letter-spacing: -0.5px; flex-shrink: 0;">
@@ -52,17 +55,23 @@
             <button class="primary" style="width: 100%; margin-bottom: 10px;" onclick="clearCacheAndRetry()">
                 ⟳ 自动同步数据
             </button>
-            <div style="text-align: center; font-size: 11px; color: var(--text-secondary); margin: 10px 0;">或手动导入</div>
-            <textarea id="jsonInput" placeholder="粘贴JSON数据..."
-                style="height: 60px; margin-bottom: 10px; font-size: 11px; resize: vertical; min-height: 40px;"></textarea>
-            <div style="display: flex; gap: 8px;">
-                <button onclick="processData(document.getElementById('jsonInput').value)"
-                    style="flex: 1; font-size: 12px;">✓ 导入</button>
-                <button onclick="exportCSV()" style="flex: 1; font-size: 12px;">⬇ 导出CSV</button>
+            <div class="advanced-toggle" onclick="toggleAdvanced('dataSourceAdvanced')">
+                <span>⚙ 高级设置</span>
+                <span id="dataSourceAdvancedArrow" class="follow-panel-arrow">▸</span>
+            </div>
+            <div id="dataSourceAdvanced" style="display: none;">
+                <div style="text-align: center; font-size: 11px; color: var(--text-secondary); margin: 10px 0;">或手动导入</div>
+                <textarea id="jsonInput" placeholder="粘贴JSON数据..."
+                    style="height: 60px; margin-bottom: 10px; font-size: 11px; resize: vertical; min-height: 40px;"></textarea>
+                <div style="display: flex; gap: 8px;">
+                    <button onclick="processData(document.getElementById('jsonInput').value)"
+                        style="flex: 1; font-size: 12px;">✓ 导入</button>
+                    <button onclick="exportCSV()" style="flex: 1; font-size: 12px;">⬇ 导出CSV</button>
+                </div>
             </div>
         </div>
 
-        <div class="sidebar-card">
+        <div class="sidebar-card mode-card" id="modeCard">
             <h3>📈 分析模式</h3>
             <select id="trendModeSel" onchange="switchTrendMode(this.value)">
                 <option value="zodiac" selected>特肖遗漏分析</option>
@@ -76,7 +85,13 @@
                 <option value="pingtail_follow">平特尾K线</option>
                 <option value="pingnum_absent">平特断号K线</option>
             </select>
-            <div id="followWrap" style="display: none; margin-top: 10px;">
+            <div id="followWrap" class="follow-panel collapsed" style="display: none; margin-top: 10px;">
+                <div class="follow-panel-header" onclick="toggleFollowPanel('followWrap')">
+                    <span class="follow-panel-title">平特肖K线</span>
+                    <span id="followWrapSummary" class="follow-panel-summary"></span>
+                    <span id="followWrapArrow" class="follow-panel-arrow">▸</span>
+                </div>
+                <div class="follow-panel-body">
                 <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">跟肖方式</div>
                 <select id="followModeSel" onchange="changeFollowMode(this.value)" style="font-size: 11px; margin-bottom: 8px;">
                     <option value="zodiac" selected>选生肖（12生肖任选其一）</option>
@@ -110,8 +125,15 @@
                     <div id="followMissNumRanks" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; font-size: 12px; margin-bottom: 8px;"></div>
                     <div id="followMissNumHint" style="font-size: 11px; color: var(--accent);"></div>
                 </div>
+                </div>
             </div>
-                <div id="followTailWrap" style="display: none; margin-top: 10px;">
+                <div id="followTailWrap" class="follow-panel collapsed" style="display: none; margin-top: 10px;">
+                <div class="follow-panel-header" onclick="toggleFollowPanel('followTailWrap')">
+                    <span class="follow-panel-title">平特尾K线</span>
+                    <span id="followTailWrapSummary" class="follow-panel-summary"></span>
+                    <span id="followTailWrapArrow" class="follow-panel-arrow">▸</span>
+                </div>
+                <div class="follow-panel-body">
                 <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">跟尾方式</div>
                 <select id="tailModeSel" onchange="changeTailMode(this.value)" style="font-size: 11px; margin-bottom: 8px;">
                     <option value="single" selected>选尾（0-9尾任选其一）</option>
@@ -145,11 +167,19 @@
                     <div id="tailMissRanks" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; font-size: 12px; margin-bottom: 8px;"></div>
                     <div id="tailMissHint" style="font-size: 11px; color: var(--accent);"></div>
                 </div>
+                </div>
             </div>
-                <div id="followNumAbsentWrap" style="display: none; margin-top: 10px;">
+                <div id="followNumAbsentWrap" class="follow-panel collapsed" style="display: none; margin-top: 10px;">
+                <div class="follow-panel-header" onclick="toggleFollowPanel('followNumAbsentWrap')">
+                    <span class="follow-panel-title">平特断号K线</span>
+                    <span id="followNumAbsentWrapSummary" class="follow-panel-summary"></span>
+                    <span id="followNumAbsentWrapArrow" class="follow-panel-arrow">▸</span>
+                </div>
+                <div class="follow-panel-body">
                     <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">平特断号：勾选5~12个号码，每期7个号一个都没开出+1、有任意一个开出-1</div>
                     <div id="followNumAbsentList" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; font-size: 12px; margin-bottom: 8px;"></div>
                     <div id="followNumAbsentHint" style="font-size: 11px; color: var(--accent);"></div>
+                </div>
                 </div>
         </div>
 
@@ -536,6 +566,14 @@
                     style="padding: 4px 12px; background: var(--card-bg); border-radius: 6px; border: 1px solid var(--border); font-size: 11px; font-weight: 600;">
                     特肖模式
                 </div>
+                <select id="maSel" onchange="changeMaWindow(this.value)" title="均线周期"
+                    style="width: 64px; font-size: 11px; padding: 4px 6px;">
+                    <option value="0">MA关</option>
+                    <option value="3">MA3</option>
+                    <option value="5" selected>MA5</option>
+                    <option value="10">MA10</option>
+                </select>
+                <span class="chart-legend">绿涨·红跌·黄虚线=MA</span>
                 <div class="page-controls">
                     <select id="pageSizeSel" onchange="changePageSize(this.value)"
                         style="width: 80px; font-size: 11px; padding: 4px 8px;">
@@ -586,13 +624,13 @@
             <table>
                 <thead>
                     <tr>
-                        <th width="8%">排名</th>
-                        <th width="10%">生肖</th>
-                        <th width="10%">遗漏期数</th>
-                        <th width="10%">历史极值</th>
+                        <th width="8%" data-sort="rank" onclick="sortTable('rank')">排名</th>
+                        <th width="10%" data-sort="name" onclick="sortTable('name')">生肖<span class="sort-arrow"></span></th>
+                        <th width="10%" data-sort="om" onclick="sortTable('om')">遗漏期数<span class="sort-arrow"></span></th>
+                        <th width="10%" data-sort="max" onclick="sortTable('max')">历史极值<span class="sort-arrow"></span></th>
                         <th width="20%">遗漏走势</th>
-                        <th width="10%">出现次数</th>
-                        <th width="9%">平均周期</th>
+                        <th width="10%" data-sort="count" onclick="sortTable('count')">出现次数<span class="sort-arrow"></span></th>
+                        <th width="9%" data-sort="avg" onclick="sortTable('avg')">平均周期<span class="sort-arrow"></span></th>
                         <th width="8%">波色</th>
                         <th width="8%">大小</th>
                         <th width="7%">趋势</th>
