@@ -2499,7 +2499,7 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
                 cold_custom: '特码自由K线',
                 pingxiao_follow: '平特肖K线',
                 pingtail_follow: '平特尾K线',
-                pingnum_absent: '平特号不出'
+                pingnum_absent: '平特断号K线'
             };
             document.getElementById('info-mode').textContent = labels[mode] || '特码自由K线';
             document.getElementById('trendModeSel').value = mode;
@@ -2871,7 +2871,7 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `特肖分析_${state.currentYear}.csv`;
+            a.download = `六合分析_${state.currentYear}.csv`;
             a.click();
         }
 

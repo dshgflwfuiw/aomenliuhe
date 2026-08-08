@@ -1,4 +1,4 @@
-# 特肖趋势 Pro - Cloudflare Pages 部署版
+# 六合趋势 Pro - Cloudflare Pages 部署版
 
 纯静态单页应用（无后端），已在原单文件 `index.html` 基础上拆分为：
 
