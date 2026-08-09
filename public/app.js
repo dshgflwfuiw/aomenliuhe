@@ -2270,7 +2270,7 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
             const sortedNumbers = Array.from(numberUnion).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
             const inputDesc = formatInputTerms(sets.inputTerms);
             summary.innerHTML = (sortedNumbers.length
-                ? `<div>扣选包含号码: ${sortedNumbers.join(' ')}</div>`
+                ? `<div>扣选包含号码（共${sortedNumbers.length}个）: ${sortedNumbers.join(' ')}</div>`
                 : '已生成自由K线')
                 + (inputDesc.length ? `<div style="margin-top:4px;">输入条件: ${inputDesc.join(' ')}</div>` : '');
 
