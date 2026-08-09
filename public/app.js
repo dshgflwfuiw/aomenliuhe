@@ -611,7 +611,10 @@
                             nums = Object.keys(cntMap);
                         }
                         nums.sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
-                        coldHitSetsForPoint = { setKline: nums.map(n => parseInt(n, 10)) };
+                        coldHitSetsForPoint = { ...rollingSets, setKline: nums.map(n => parseInt(n, 10)) };
+                        if (cold.inputTerms) coldHitSetsForPoint.inputNumbers = formatInputTerms(cold.inputTerms);
+                        if (cold.selectedZodiacs && cold.selectedZodiacs.length) coldHitSetsForPoint.selectZodiacs = cold.selectedZodiacs;
+                        if (cold.selectedWaves && cold.selectedWaves.length) coldHitSetsForPoint.selectedWaves = cold.selectedWaves;
                         if (nums.length >= 1) {
                             followTargetForPoint = nums.map(n => parseInt(n, 10)).join('、');
                             step = nums.includes(winNum.toString().padStart(2, '0')) ? 1 : -1;
@@ -3553,6 +3556,12 @@ function copyRecommendations() {
             draw();
         }
 
+        function getColdTooltipTypes(cold) {
+            if (!cold) return [];
+            if (cold.setKline) return [...(cold.setTypes || []), 'setKline'];
+            return cold.types || [];
+        }
+
         function renderColdSetsForTooltip(sets, types) {
             if (!sets || !types.length) return '';
             const labels = {
@@ -3703,7 +3712,7 @@ function copyRecommendations() {
                             <span class="tooltip-label">条件命中</span>
                             <span class="tooltip-value" style="color: ${data.coldMatches > 0 ? 'var(--up)' : 'var(--down)'}; font-weight:700;">${data.coldMatches || 0}/${state.coldSelection?.types.length || 0}</span>
                         </div>
-                        ${renderColdSetsForTooltip(data.coldSets, state.coldSelection?.types || [])}
+                        ${renderColdSetsForTooltip(data.coldSets, getColdTooltipTypes(state.coldSelection))}
                     </div>
                 `;
             } else if (currentMode === 'pingxiao_follow') {
