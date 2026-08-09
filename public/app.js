@@ -2322,9 +2322,8 @@ function copyRecommendations() {
             const inputDesc = formatInputTerms(sets.inputTerms);
             let setLine = '';
             if (state.coldSelection && state.coldSelection.setKline) {
-                const label = SET_MODE_LABELS[state.coldSelection.setMode] || '所有号码';
                 const nums = state.coldSelection.setNumbers || [];
-                setLine = `<div style="margin-top:4px;color:var(--warn);">${label}（${nums.length}个）: ${nums.map(n => parseInt(n, 10)).join(' ')}</div>`;
+                setLine = `<div style="margin-top:4px;color:var(--warn);">扣选包含号码（${nums.length}个）: ${nums.map(n => parseInt(n, 10)).join(' ')}</div>`;
             }
             summary.innerHTML = (state.coldSelection && state.coldSelection.setKline)
                 ? (setLine || '已生成自由K线')
