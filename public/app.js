@@ -411,8 +411,9 @@
 
         function loadMockData() {
             const warningList = document.getElementById('warningList');
-            warningList.innerHTML = '<div style="text-align:center;color:var(--text-secondary);padding:15px;font-size:12px;">✓ 已加载演示数据</div>';
-            document.getElementById('warnCount').textContent = '0';
+            if (warningList) warningList.innerHTML = '<div style="text-align:center;color:var(--text-secondary);padding:15px;font-size:12px;">✓ 已加载演示数据</div>';
+            const warnCount = document.getElementById('warnCount');
+            if (warnCount) warnCount.textContent = '0';
 
             const mockData =[];
             const base = parseInt(state.currentYear + '001');
@@ -850,7 +851,6 @@
 
             changePage('last');
             updateStats();
-            updateWarningRadar();
             updatePeriodSelectors();
 
             const overall = computeMaxRiseFall(state.historyData);
@@ -1514,70 +1514,6 @@
         `;
         }
 
-        function updateWarningRadar() {
-            const warnings =[];
-            const zodiacs = CONFIG.zodiacMap[state.currentYear];
-            const last = state.historyData[state.historyData.length - 1];
-
-            zodiacs.forEach(z => {
-                const curr = last?.snapshot[z] || 0;
-                const max = state.globalMaxOm[z];
-                if (max > 5) {
-                    const ratio = curr / max;
-                    if (ratio >= 0.8) {
-                        warnings.push({ type: 'zodiac', name: z, curr, max, ratio, level: ratio >= 0.9 ? 'critical' : 'high' });
-                    }
-                }
-            });
-
-            if (last && last.colorOmissions) {
-                const colorNames = { red: '红波', blue: '蓝波', green: '绿波' };
-                Object.entries(last.colorOmissions).forEach(([color, om]) => {
-                    if (om >= 10) {
-                        warnings.push({ type: 'color', name: colorNames[color], curr: om, max: 15, ratio: om / 15, level: om >= 13 ? 'critical' : 'high' });
-                    }
-                });
-            }
-
-            if (last && last.sizeOmissions) {
-                const sizeNames = { big: '大数', small: '小数' };
-                Object.entries(last.sizeOmissions).forEach(([size, om]) => {
-                    if (om >= 10) {
-                        warnings.push({ type: 'size', name: sizeNames[size], curr: om, max: 15, ratio: om / 15, level: om >= 13 ? 'critical' : 'high' });
-                    }
-                });
-            }
-
-            warnings.sort((a, b) => b.ratio - a.ratio);
-
-            document.getElementById('warnCount').textContent = warnings.length;
-            const list = document.getElementById('warningList');
-
-            if (warnings.length === 0) {
-                list.innerHTML = '<div style="text-align:center;color:var(--text-secondary);padding:15px;font-size:12px;">✓ 系统正常，无风险预警</div>';
-                return;
-            }
-
-            list.innerHTML = warnings.map(w => {
-                let typeLabel = '';
-                if (w.type === 'zodiac') typeLabel = '生肖';
-                else if (w.type === 'color') typeLabel = '波色';
-                else if (w.type === 'size') typeLabel = '大小';
-
-                return `
-            <div class="warning-item ${w.level}">
-                <div>
-                    <div style="font-weight:700;margin-bottom:2px;">${w.name} ${typeLabel}遗漏</div>
-                    <div style="font-size:10px;color:var(--text-secondary);">当前 ${w.curr} / 参考 ${w.max}</div>
-                </div>
-                <span style="background:${w.level === 'critical' ? 'var(--down)' : 'var(--warn)'};color:${w.level === 'critical' ? '#fff' : '#000'};padding:3px 8px;border-radius:4px;font-size:11px;font-weight:700;">
-                    ${Math.round(w.ratio * 100)}%
-                </span>
-            </div>
-            `;
-            }).join('');
-        }
-
         function updateStats() {
             const last = state.historyData[state.historyData.length - 1];
             document.getElementById('statTotal').textContent = state.historyData.length;
@@ -1589,77 +1525,6 @@
             const cold = Object.values(snapshot).filter(om => om >= 15).length;
             document.getElementById('statHot').textContent = hot;
             document.getElementById('statCold').textContent = cold;
-
-            if (last && last.colorOmissions) {
-                document.getElementById('colorRedOm').textContent = last.colorOmissions.red;
-                document.getElementById('colorBlueOm').textContent = last.colorOmissions.blue;
-                document.getElementById('colorGreenOm').textContent = last.colorOmissions.green;
-
-                const maxColorOm = Math.max(
-                    last.colorMaxOmissions?.red || last.colorOmissions.red,
-                    last.colorMaxOmissions?.blue || last.colorOmissions.blue,
-                    last.colorMaxOmissions?.green || last.colorOmissions.green,
-                    10
-                );
-                const chartHeight = 50;
-                const redHeight = (last.colorOmissions.red / maxColorOm) * chartHeight;
-                const blueHeight = (last.colorOmissions.blue / maxColorOm) * chartHeight;
-                const greenHeight = (last.colorOmissions.green / maxColorOm) * chartHeight;
-
-                const redBar = document.querySelector('#colorRedChart .bar');
-                const blueBar = document.querySelector('#colorBlueChart .bar');
-                const greenBar = document.querySelector('#colorGreenChart .bar');
-
-                if (redBar) {
-                    redBar.style.height = Math.max(redHeight, 2) + 'px';
-                    redBar.style.background = last.colorOmissions.red >= 10 ? '#ff1744' : '#ff5252';
-                }
-                if (blueBar) {
-                    blueBar.style.height = Math.max(blueHeight, 2) + 'px';
-                    blueBar.style.background = last.colorOmissions.blue >= 10 ? '#448aff' : '#82b1ff';
-                }
-                if (greenBar) {
-                    greenBar.style.height = Math.max(greenHeight, 2) + 'px';
-                    greenBar.style.background = last.colorOmissions.green >= 10 ? '#00e676' : '#69f0ae';
-                }
-            }
-
-            if (last && last.colorMaxOmissions) {
-                document.getElementById('colorRedMaxOm').textContent = `最大:${last.colorMaxOmissions.red}`;
-                document.getElementById('colorBlueMaxOm').textContent = `最大:${last.colorMaxOmissions.blue}`;
-                document.getElementById('colorGreenMaxOm').textContent = `最大:${last.colorMaxOmissions.green}`;
-            }
-
-            if (last && last.sizeOmissions) {
-                document.getElementById('sizeBigOm').textContent = last.sizeOmissions.big;
-                document.getElementById('sizeSmallOm').textContent = last.sizeOmissions.small;
-
-                const maxSizeOm = Math.max(
-                    last.sizeMaxOmissions?.big || last.sizeOmissions.big,
-                    last.sizeMaxOmissions?.small || last.sizeOmissions.small,
-                    10
-                );
-                const chartHeight = 35;
-                const bigHeight = (last.sizeOmissions.big / maxSizeOm) * chartHeight;
-                const smallHeight = (last.sizeOmissions.small / maxSizeOm) * chartHeight;
-
-                const bigBar = document.getElementById('sizeBigBar');
-                const smallBar = document.getElementById('sizeSmallBar');
-
-                if (bigBar) {
-                    bigBar.style.height = Math.max(bigHeight, 2) + 'px';
-                    bigBar.style.background = last.sizeOmissions.big >= 10 ? 'linear-gradient(180deg, #ff1744, #d50000)' : 'linear-gradient(180deg, #00e676, #00c853)';
-                }
-                if (smallBar) {
-                    smallBar.style.height = Math.max(smallHeight, 2) + 'px';
-                    smallBar.style.background = last.sizeOmissions.small >= 10 ? 'linear-gradient(180deg, #ff1744, #d50000)' : 'linear-gradient(180deg, #00d4ff, #0091ea)';
-                }
-            }
-
-            if (last && last.sizeMaxOmissions) {
-                document.getElementById('sizeBigMaxOm').textContent = `最大:${last.sizeMaxOmissions.big}`;
-                document.getElementById('sizeSmallMaxOm').textContent = `最大:${last.sizeMaxOmissions.small}`;
-            }
 
             generateRecommendations();
         }

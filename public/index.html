@@ -430,79 +430,6 @@
             </div>
         </div>
 
-        <div class="sidebar-card">
-            <h3>🔴🔵🟢 波色遗漏</h3>
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; text-align: center;">
-                <div>
-                    <div class="omission-bar-chart" id="colorRedChart"
-                        style="height: 60px; display: flex; align-items: flex-end; justify-content: center; gap: 3px; margin-bottom: 6px;">
-                        <div class="bar"
-                            style="width: 8px; background: #ff1744; border-radius: 2px 2px 0 0; transition: height 0.3s;">
-                        </div>
-                    </div>
-                    <div style="font-size: 18px; font-weight: 700; color: #ff1744;" id="colorRedOm">0</div>
-                    <div style="font-size: 10px; color: var(--text-secondary);">红波</div>
-                    <div style="font-size: 9px; color: var(--text-secondary); opacity: 0.7;" id="colorRedMaxOm">最大:0
-                    </div>
-                </div>
-                <div>
-                    <div class="omission-bar-chart" id="colorBlueChart"
-                        style="height: 60px; display: flex; align-items: flex-end; justify-content: center; gap: 3px; margin-bottom: 6px;">
-                        <div class="bar"
-                            style="width: 8px; background: #448aff; border-radius: 2px 2px 0 0; transition: height 0.3s;">
-                        </div>
-                    </div>
-                    <div style="font-size: 18px; font-weight: 700; color: #448aff;" id="colorBlueOm">0</div>
-                    <div style="font-size: 10px; color: var(--text-secondary);">蓝波</div>
-                    <div style="font-size: 9px; color: var(--text-secondary); opacity: 0.7;" id="colorBlueMaxOm">最大:0
-                    </div>
-                </div>
-                <div>
-                    <div class="omission-bar-chart" id="colorGreenChart"
-                        style="height: 60px; display: flex; align-items: flex-end; justify-content: center; gap: 3px; margin-bottom: 6px;">
-                        <div class="bar"
-                            style="width: 8px; background: #00e676; border-radius: 2px 2px 0 0; transition: height 0.3s;">
-                        </div>
-                    </div>
-                    <div style="font-size: 18px; font-weight: 700; color: #00e676;" id="colorGreenOm">0</div>
-                    <div style="font-size: 10px; color: var(--text-secondary);">绿波</div>
-                    <div style="font-size: 9px; color: var(--text-secondary); opacity: 0.7;" id="colorGreenMaxOm">最大:0
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="sidebar-card">
-            <h3>📊 大小遗漏</h3>
-            <div class="omission-bar-chart" id="sizeChart"
-                style="height: 40px; display: flex; align-items: flex-end; justify-content: center; gap: 20px; margin-bottom: 12px;">
-                <div style="text-align: center;">
-                    <div id="sizeBigBar" class="bar"
-                        style="width: 24px; background: linear-gradient(180deg, #00e676, #00c853); border-radius: 3px 3px 0 0; transition: height 0.3s; margin: 0 auto;">
-                    </div>
-                </div>
-                <div style="text-align: center;">
-                    <div id="sizeSmallBar" class="bar"
-                        style="width: 24px; background: linear-gradient(180deg, #00d4ff, #0091ea); border-radius: 3px 3px 0 0; transition: height 0.3s; margin: 0 auto;">
-                    </div>
-                </div>
-            </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; text-align: center;">
-                <div>
-                    <div style="font-size: 20px; font-weight: 700; color: var(--up);" id="sizeBigOm">0</div>
-                    <div style="font-size: 10px; color: var(--text-secondary);">大数(≥25)</div>
-                    <div style="font-size: 9px; color: var(--text-secondary); opacity: 0.7;" id="sizeBigMaxOm">最大:0
-                    </div>
-                </div>
-                <div>
-                    <div style="font-size: 20px; font-weight: 700; color: var(--accent);" id="sizeSmallOm">0</div>
-                    <div style="font-size: 10px; color: var(--text-secondary);">小数(&lt;25)</div>
-                    <div style="font-size: 9px; color: var(--text-secondary); opacity: 0.7;" id="sizeSmallMaxOm">最大:0
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <div class="sidebar-card" style="border-color: var(--accent);">
             <h3 style="color: var(--warn);">🎯 智能推荐</h3>
             <div style="margin-bottom: 10px;">
@@ -598,16 +525,6 @@
                 <button onclick="runBacktest()" class="primary" style="font-size:11px;padding:6px 12px;">回测</button>
             </div>
             <div id="backtestResult" style="font-size:11px;color:var(--text-secondary);min-height:40px;line-height:1.7;">选择期数后点击回测，统计当前模式的近期表现</div>
-        </div>
-
-        <div class="sidebar-card" id="warningPanel">
-            <h3 style="color: var(--down);">⚠️ 风险预警 <span id="warnCount"
-                    style="background: var(--down); color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 10px;">0</span>
-            </h3>
-            <div id="warningList" style="min-height: 30px;">
-                <div style="text-align: center; color: var(--text-secondary); font-size: 11px; padding: 10px;">扫描中...
-                </div>
-            </div>
         </div>
 
         <div style="height: 20px; flex-shrink: 0;"></div>
