@@ -2233,6 +2233,8 @@
         }
         body.light-theme button.primary {
             color: #fff;
+            background: linear-gradient(135deg, var(--accent) 0%, #7c4dff 100%);
+            border-color: transparent;
         }
         body.light-theme .top-bar .ball {
             border: 1px solid var(--border);
