@@ -2162,29 +2162,29 @@
 
         /* ==================== 浅色主题 (2026-08) ==================== */
         body.light-theme {
-            --bg: #f2f4f8;
-            --side: #ffffff;
-            --border: #d8dee8;
+            --bg: #e8ecf2;
+            --side: #f3f5f9;
+            --border: #d2d9e3;
             --up: #0ba360;
             --down: #e03131;
             --accent: #0084d6;
             --warn: #b26a00;
-            --card-bg: #ffffff;
-            --card-hover: #eef1f6;
-            --text-primary: #1c2530;
-            --text-secondary: #5b6675;
-            --glass: rgba(255, 255, 255, 0.9);
-            color: #1c2530;
+            --card-bg: #fbfcfe;
+            --card-hover: #e9edf4;
+            --text-primary: #1a2230;
+            --text-secondary: #5a6575;
+            --glass: rgba(243, 245, 249, 0.94);
+            color: #1a2230;
         }
         body.light-theme input,
         body.light-theme select,
         body.light-theme textarea {
-            background: #ffffff;
-            color: #1c2530;
+            background: #fdfdfe;
+            color: #1a2230;
             border-color: var(--border);
         }
         body.light-theme .chart-section {
-            background: radial-gradient(ellipse at top, #f8fafd 0%, #e4e9f1 100%);
+            background: radial-gradient(ellipse at top, #f2f5f9 0%, #dfe5ee 100%);
         }
         body.light-theme .kline-tooltip {
             background: rgba(255, 255, 255, 0.97);
@@ -2213,8 +2213,11 @@
             color: var(--text-secondary);
         }
         body.light-theme .mode-quick-bar button {
-            background: #ffffff;
+            background: #fbfcfe;
             color: var(--text-secondary);
+        }
+        body.light-theme .kline-tooltip .tooltip-content {
+            color: var(--text-primary);
         }
         body.light-theme .mode-quick-bar button.active {
             color: #fff;
