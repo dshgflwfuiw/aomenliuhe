@@ -545,7 +545,7 @@
                 tailCounts[t] = 0;
                 state.tailGlobalMaxOm[t] = 0;
             }
-            const overlayItems = (state.overlay && state.overlay.enabled && state.overlay.items) || [];
+            const overlayItems = (state.overlay && state.overlay.enabled && state.overlay.type !== 'cold' && state.overlay.items) || [];
             const overlayScores = {};
 
             let colorOmissions = { red: 0, blue: 0, green: 0 };
@@ -595,36 +595,10 @@
                     const segment = getSegmentKey(winNum);
                     const jiaYe = getJiaYe(winZ);
 
-                    if (cold.types.includes('numbers') && rollingColdSets.numbers.includes(numStr)) matches++;
-                    if (cold.types.includes('zodiacs') && rollingColdSets.zodiacs.includes(winZ)) matches++;
-                    if (cold.types.includes('hotNumbers') && rollingColdSets.hotNumbers.includes(numStr)) matches++;
-                    if (cold.types.includes('coldNumbers') && rollingColdSets.coldNumbers.includes(numStr)) matches++;
-                    if (cold.types.includes('hotZodiacs') && rollingColdSets.hotZodiacs.includes(winZ)) matches++;
-                    if (cold.types.includes('coldZodiacs') && rollingColdSets.coldZodiacs.includes(winZ)) matches++;
-                    if (cold.types.includes('allHotNumbers') && rollingColdSets.allHotNumbers.includes(numStr)) matches++;
-                    if (cold.types.includes('allColdNumbers') && rollingColdSets.allColdNumbers.includes(numStr)) matches++;
-                    if (cold.types.includes('allHotZodiacs') && rollingColdSets.allHotZodiacs.includes(winZ)) matches++;
-                    if (cold.types.includes('allColdZodiacs') && rollingColdSets.allColdZodiacs.includes(winZ)) matches++;
-                    if (cold.types.includes('selectZodiacs') && cold.selectedZodiacs && cold.selectedZodiacs.includes(winZ)) matches++;
-                    if (cold.types.includes('selectedWaves') && cold.selectedWaves && cold.selectedWaves.includes(color)) matches++;
-                    if (cold.types.includes('inputNumbers')) {
-                        const t = cold.inputTerms || { numbers: cold.selectedNumbers || [] };
-                        if (
-                            t.numbers.includes(numStr) ||
-                            t.zodiacs.includes(winZ) ||
-                            t.tails.includes(winNum % 10) ||
-                            t.heads.includes(Math.floor(winNum / 10)) ||
-                            t.waves.includes(color) ||
-                            t.segments.includes(Math.ceil(winNum / 7))
-                        ) matches++;
-                    }
-                    if (cold.types.includes('wave') && rollingColdSets.wave.includes(color)) matches++;
-                    if (cold.types.includes('halfwave') && rollingColdSets.halfwave.includes(halfWaveKey)) matches++;
-                    if (cold.types.includes('jiaYe') && rollingColdSets.jiaYe.includes(jiaYe)) matches++;
-                    if (cold.types.includes('head') && rollingColdSets.head.includes(headKey)) matches++;
-                    if (cold.types.includes('tail') && rollingColdSets.tail.includes(tailKey)) matches++;
-                    if (cold.types.includes('wuxing') && rollingColdSets.wuxing.includes(segment)) matches++;
-                    if (cold.types.includes('halfHead') && rollingColdSets.halfHead.includes(halfHeadKey)) matches++;
+                    matches = countColdConditionMatches(cold, rollingColdSets, {
+                        numStr, winZ, winNum, color,
+                        headKey, tailKey, halfWaveKey, halfHeadKey, segment, jiaYe
+                    });
 
                     step = matches > 0 ? 1 : -1;
                     coldMatchesForPoint = matches;
@@ -761,6 +735,21 @@
                     }
                     overlayScores[item] = (overlayScores[item] || 0) + (ovHit ? 1 : -1);
                 });
+                if (state.overlay && state.overlay.enabled && state.overlay.type === 'cold' && state.coldSelection && state.coldSelection.types.length) {
+                    const cold = state.coldSelection;
+                    const rolling = calculateColdSets(cold.types, getRollingColdSourceData(state.historyData, idx), cold.counts || {});
+                    const numStrC = winNum.toString().padStart(2, '0');
+                    const m = countColdConditionMatches(cold, rolling, {
+                        numStr: numStrC, winZ, winNum, color,
+                        headKey: `${Math.floor(winNum / 10)}头`,
+                        tailKey: `${winNum % 10}尾`,
+                        halfWaveKey: getHalfWaveKey(cList[6]),
+                        halfHeadKey: getHalfHeadKey(winNum),
+                        segment: getSegmentKey(winNum),
+                        jiaYe: getJiaYe(winZ)
+                    });
+                    overlayScores['cold'] = (overlayScores['cold'] || 0) + (m > 0 ? 1 : -1);
+                }
 
                 const historyPoint = {
                     expect: item.expect,
@@ -1114,7 +1103,10 @@
                     ctx.fill();
                 });
             }
-            if (state.overlay && state.overlay.enabled && state.overlay.items.length >= 2) {
+            const overlayOk = state.overlay && state.overlay.enabled &&
+                ((state.overlay.type === 'cold' && state.overlay.items.length >= 1) ||
+                 (state.overlay.type !== 'cold' && state.overlay.items.length >= 2));
+            if (overlayOk) {
                 const ovItems = state.overlay.items.slice(0, 3);
                 const palette = ['#ff9800', '#e040fb', '#00c4ff'];
                 ovItems.forEach((item, idx) => {
@@ -1139,6 +1131,7 @@
                 ovItems.forEach((item, idx) => {
                     const label = state.overlay.type === 'zodiac' ? item
                         : state.overlay.type === 'tail' ? parseInt(item, 10) + '尾'
+                        : state.overlay.type === 'cold' ? '特码自由K线'
                         : parseInt(item, 10);
                     ctx.fillStyle = palette[idx % 3];
                     ctx.fillText(String(label), 8, 16 + idx * 14);
@@ -2194,6 +2187,42 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
             return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, count).map(item => item[0]);
         }
 
+        function countColdConditionMatches(cold, rollingColdSets, ctx) {
+            const { numStr, winZ, winNum, color, headKey, tailKey, halfWaveKey, halfHeadKey, segment, jiaYe } = ctx;
+            let matches = 0;
+            if (cold.types.includes('numbers') && rollingColdSets.numbers.includes(numStr)) matches++;
+            if (cold.types.includes('zodiacs') && rollingColdSets.zodiacs.includes(winZ)) matches++;
+            if (cold.types.includes('hotNumbers') && rollingColdSets.hotNumbers.includes(numStr)) matches++;
+            if (cold.types.includes('coldNumbers') && rollingColdSets.coldNumbers.includes(numStr)) matches++;
+            if (cold.types.includes('hotZodiacs') && rollingColdSets.hotZodiacs.includes(winZ)) matches++;
+            if (cold.types.includes('coldZodiacs') && rollingColdSets.coldZodiacs.includes(winZ)) matches++;
+            if (cold.types.includes('allHotNumbers') && rollingColdSets.allHotNumbers.includes(numStr)) matches++;
+            if (cold.types.includes('allColdNumbers') && rollingColdSets.allColdNumbers.includes(numStr)) matches++;
+            if (cold.types.includes('allHotZodiacs') && rollingColdSets.allHotZodiacs.includes(winZ)) matches++;
+            if (cold.types.includes('allColdZodiacs') && rollingColdSets.allColdZodiacs.includes(winZ)) matches++;
+            if (cold.types.includes('selectZodiacs') && cold.selectedZodiacs && cold.selectedZodiacs.includes(winZ)) matches++;
+            if (cold.types.includes('selectedWaves') && cold.selectedWaves && cold.selectedWaves.includes(color)) matches++;
+            if (cold.types.includes('inputNumbers')) {
+                const t = cold.inputTerms || { numbers: cold.selectedNumbers || [] };
+                if (
+                    t.numbers.includes(numStr) ||
+                    t.zodiacs.includes(winZ) ||
+                    t.tails.includes(winNum % 10) ||
+                    t.heads.includes(Math.floor(winNum / 10)) ||
+                    t.waves.includes(color) ||
+                    t.segments.includes(Math.ceil(winNum / 7))
+                ) matches++;
+            }
+            if (cold.types.includes('wave') && rollingColdSets.wave.includes(color)) matches++;
+            if (cold.types.includes('halfwave') && rollingColdSets.halfwave.includes(halfWaveKey)) matches++;
+            if (cold.types.includes('jiaYe') && rollingColdSets.jiaYe.includes(jiaYe)) matches++;
+            if (cold.types.includes('head') && rollingColdSets.head.includes(headKey)) matches++;
+            if (cold.types.includes('tail') && rollingColdSets.tail.includes(tailKey)) matches++;
+            if (cold.types.includes('wuxing') && rollingColdSets.wuxing.includes(segment)) matches++;
+            if (cold.types.includes('halfHead') && rollingColdSets.halfHead.includes(halfHeadKey)) matches++;
+            return matches;
+        }
+
         function calculateColdSets(types, sourceData = state.historyData, counts = {}) {
             const defaultCounts = { zodiacs: 3, numbers: 10, hotNumbers: 10, coldNumbers: 10, allHotNumbers: 10, allColdNumbers: 10, ...counts };
             const sets = {};
@@ -3066,13 +3095,15 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
             const z = document.getElementById('overlayZodiacWrap');
             const t = document.getElementById('overlayTailWrap');
             const n = document.getElementById('overlayNumberWrap');
+            const c = document.getElementById('overlayColdWrap');
             if (z) z.style.display = type === 'zodiac' ? 'grid' : 'none';
             if (t) t.style.display = type === 'tail' ? 'grid' : 'none';
             if (n) n.style.display = type === 'number' ? 'block' : 'none';
+            if (c) c.style.display = type === 'cold' ? 'block' : 'none';
         }
         function changeOverlayType(val) {
             state.overlay.type = val;
-            state.overlay.items = [];
+            state.overlay.items = val === 'cold' ? ['cold'] : [];
             const input = document.getElementById('overlayNumbersInput');
             if (input) input.value = '';
             buildOverlayOptions();
@@ -3113,6 +3144,19 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
         function updateOverlayHint() {
             const hint = document.getElementById('overlayHint');
             if (!hint) return;
+            const coldInfo = document.getElementById('overlayColdInfo');
+            if (state.overlay.type === 'cold') {
+                if (coldInfo) {
+                    coldInfo.textContent = state.coldSelection && state.coldSelection.types.length
+                        ? '当前条件：' + state.coldSelection.types.join('、')
+                        : '尚未生成条件，请先在「特码自由K线」模式点击生成';
+                }
+                hint.textContent = state.coldSelection && state.coldSelection.types.length
+                    ? '勾选「在图上叠加显示」即可叠加该条件线'
+                    : '先到特码自由K线模式生成条件';
+                return;
+            }
+            if (coldInfo) coldInfo.textContent = '';
             const n = (state.overlay.items || []).length;
             if (n < 2) {
                 hint.textContent = '请选择2~3项（当前' + n + '项）';

@@ -547,11 +547,16 @@
                 <option value="zodiac" selected>生肖</option>
                 <option value="tail">尾数</option>
                 <option value="number">号码</option>
+                <option value="cold">特码自由K线</option>
             </select>
             <div id="overlayZodiacWrap" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;font-size:12px;margin-bottom:8px;"></div>
             <div id="overlayTailWrap" style="display:none;grid-template-columns:repeat(5,1fr);gap:6px;font-size:12px;margin-bottom:8px;"></div>
             <div id="overlayNumberWrap" style="display:none;margin-bottom:8px;">
                 <input type="text" id="overlayNumbersInput" placeholder="号码，逗号分隔，最多3个" style="width:100%;font-size:11px;padding:6px;background:#0d1117;border:1px solid var(--border);border-radius:6px;color:#e6edf3;outline:none;" onchange="applyOverlayNumbers()">
+            </div>
+            <div id="overlayColdWrap" style="display:none;margin-bottom:8px;">
+                <div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">叠加当前特码自由K线条件（需先在特码自由K线模式生成条件）</div>
+                <div id="overlayColdInfo" style="font-size:10px;color:var(--accent);word-break:break-all;"></div>
             </div>
             <div id="overlayHint" style="font-size:10px;color:var(--accent);"></div>
         </div>
