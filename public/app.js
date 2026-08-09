@@ -2475,16 +2475,18 @@ function copyRecommendations() {
                 return alert('当前选项之间没有相同号码，无法生成共同号码K线');
             }
             state.coldSelection = {
-                ...state.coldSelection,
-                types: state.coldSelection.types.includes('commonNumbers')
-                    ? state.coldSelection.types
-                    : [...state.coldSelection.types, 'commonNumbers'],
+                types: ['commonNumbers'],
                 commonNumbers: common,
-                sets: { ...state.coldSelection.sets, commonNumbers: common }
+                sets: { commonNumbers: common },
+                counts: {},
+                selectedZodiacs: [],
+                selectedWaves: [],
+                selectedNumbers: [],
+                inputTerms: null
             };
             state.currentMode = 'cold_custom';
             document.getElementById('trendModeSel').value = 'cold_custom';
-            document.getElementById('info-mode').textContent = '特码自由K线';
+            document.getElementById('info-mode').textContent = '共同号码K线';
             const followWrap = document.getElementById('followWrap');
             if (followWrap) followWrap.style.display = 'none';
             const coldCard = document.getElementById('coldCard');
