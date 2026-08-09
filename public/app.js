@@ -602,7 +602,7 @@
                     const jiaYe = getJiaYe(winZ);
 
                     matches = countColdConditionMatches(cold, rollingColdSets, {
-                        numStr, winZ, winNum, color,
+                        numStr, winZ, winNum, color, cList,
                         headKey, tailKey, halfWaveKey, halfHeadKey, segment, jiaYe
                     });
 
@@ -757,7 +757,7 @@
                         const rolling = calculateColdSets(set.types, getRollingColdSourceData(state.historyData, idx), set.counts || {});
                         const numStrC = winNum.toString().padStart(2, '0');
                         const m = countColdConditionMatches(set, rolling, {
-                            numStr: numStrC, winZ, winNum, color,
+                            numStr: numStrC, winZ, winNum, color, cList,
                             headKey: `${Math.floor(winNum / 10)}头`,
                             tailKey: `${winNum % 10}尾`,
                             halfWaveKey: getHalfWaveKey(cList[6]),
@@ -814,6 +814,9 @@
                 }
                 if (state.currentMode === 'cold_custom' && state.coldSelection && state.coldSelection.types.includes('inputNumbers') && state.coldSelection.inputTerms) {
                     historyPoint.coldSets.inputNumbers = formatInputTerms(state.coldSelection.inputTerms);
+                }
+                if (state.currentMode === 'cold_custom' && state.coldSelection && state.coldSelection.commonNumbers && state.coldSelection.commonNumbers.length) {
+                    historyPoint.coldSets.commonNumbers = state.coldSelection.commonNumbers.map(n => parseInt(n, 10));
                 }
 
                 prevFollowZodiac = zList[state.followPosition] || null;
@@ -2162,8 +2165,11 @@ function copyRecommendations() {
         }
 
         function countColdConditionMatches(cold, rollingColdSets, ctx) {
-            const { numStr, winZ, winNum, color, headKey, tailKey, halfWaveKey, halfHeadKey, segment, jiaYe } = ctx;
+            const { numStr, winZ, winNum, color, cList, headKey, tailKey, halfWaveKey, halfHeadKey, segment, jiaYe } = ctx;
             let matches = 0;
+            if (cold.types.includes('commonNumbers') && cold.commonNumbers && cold.commonNumbers.length) {
+                if (cold.commonNumbers.every(n => cList.includes(n))) matches++;
+            }
             if (cold.types.includes('numbers') && rollingColdSets.numbers.includes(numStr)) matches++;
             if (cold.types.includes('zodiacs') && rollingColdSets.zodiacs.includes(winZ)) matches++;
             if (cold.types.includes('hotNumbers') && rollingColdSets.hotNumbers.includes(numStr)) matches++;
@@ -2266,13 +2272,17 @@ function copyRecommendations() {
                 it.waves.forEach(w => addNumbersByFilter(num => getColor(num) === w));
                 it.segments.forEach(s => addNumbersByFilter(num => Math.ceil(parseInt(num, 10) / 7) === s));
             }
+            if (sets.commonNumbers && sets.commonNumbers.length) sets.commonNumbers.forEach(addNumber);
 
             const sortedNumbers = Array.from(numberUnion).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
             const inputDesc = formatInputTerms(sets.inputTerms);
             summary.innerHTML = (sortedNumbers.length
                 ? `<div>扣选包含号码（共${sortedNumbers.length}个）: ${sortedNumbers.join(' ')}</div>`
                 : '已生成自由K线')
-                + (inputDesc.length ? `<div style="margin-top:4px;">输入条件: ${inputDesc.join(' ')}</div>` : '');
+                + (inputDesc.length ? `<div style="margin-top:4px;">输入条件: ${inputDesc.join(' ')}</div>` : '')
+                + (state.coldSelection && state.coldSelection.commonNumbers && state.coldSelection.commonNumbers.length
+                    ? `<div style="margin-top:4px;color:var(--warn);">共同号码（${state.coldSelection.commonNumbers.length}个）: ${state.coldSelection.commonNumbers.map(n => parseInt(n, 10)).join(' ')}</div>`
+                    : '');
 
             // Show inline selection results next to each checked option (skip zodiac types - self-explanatory)
             const skipTypes = ['zodiacs', 'hotZodiacs', 'coldZodiacs', 'allHotZodiacs', 'allColdZodiacs', 'selectZodiacs'];
@@ -2409,6 +2419,79 @@ function copyRecommendations() {
             if (coldCard) coldCard.style.display = 'block';
             updateColdSummary();
             recalcData();
+        }
+
+        function getColdOptionNumberSets(sets) {
+            const allNumbers = Array.from({ length: 49 }, (_, i) => (i + 1).toString().padStart(2, '0'));
+            const out = [];
+            const add = (values, filterFn) => { if (values && values.length) out.push(allNumbers.filter(filterFn)); };
+            add(sets.numbers, num => sets.numbers.includes(num));
+            add(sets.hotNumbers, num => sets.hotNumbers.includes(num));
+            add(sets.coldNumbers, num => sets.coldNumbers.includes(num));
+            add(sets.allHotNumbers, num => sets.allHotNumbers.includes(num));
+            add(sets.allColdNumbers, num => sets.allColdNumbers.includes(num));
+            add(sets.zodiacs, num => sets.zodiacs.includes(getZodiac(parseInt(num, 10))));
+            add(sets.hotZodiacs, num => sets.hotZodiacs.includes(getZodiac(parseInt(num, 10))));
+            add(sets.coldZodiacs, num => sets.coldZodiacs.includes(getZodiac(parseInt(num, 10))));
+            add(sets.allHotZodiacs, num => sets.allHotZodiacs.includes(getZodiac(parseInt(num, 10))));
+            add(sets.allColdZodiacs, num => sets.allColdZodiacs.includes(getZodiac(parseInt(num, 10))));
+            add(sets.selectZodiacs, num => sets.selectZodiacs.includes(getZodiac(parseInt(num, 10))));
+            add(sets.selectedWaves, num => sets.selectedWaves.includes(getColor(num)));
+            add(sets.wave, num => sets.wave.includes(getColor(num)));
+            add(sets.halfwave, num => sets.halfwave.includes(getHalfWaveKey(num)));
+            add(sets.jiaYe, num => sets.jiaYe.includes(getJiaYe(getZodiac(parseInt(num, 10)))));
+            add(sets.head, num => sets.head.includes(`${Math.floor(parseInt(num, 10) / 10)}头`));
+            add(sets.tail, num => sets.tail.includes(`${parseInt(num, 10) % 10}尾`));
+            add(sets.wuxing, num => sets.wuxing.includes(getSegmentKey(parseInt(num, 10))));
+            add(sets.halfHead, num => sets.halfHead.includes(getHalfHeadKey(parseInt(num, 10))));
+            if (sets.inputNumbers && sets.inputNumbers.length) out.push(sets.inputNumbers.slice());
+            if (sets.inputTerms) {
+                const it = sets.inputTerms;
+                if (it.numbers && it.numbers.length) out.push(it.numbers.slice());
+                if (it.zodiacs && it.zodiacs.length) out.push(allNumbers.filter(n => it.zodiacs.includes(getZodiac(parseInt(n, 10)))));
+                if (it.tails && it.tails.length) out.push(allNumbers.filter(n => it.tails.includes(parseInt(n, 10) % 10)));
+                if (it.heads && it.heads.length) out.push(allNumbers.filter(n => it.heads.includes(Math.floor(parseInt(n, 10) / 10))));
+                if (it.waves && it.waves.length) out.push(allNumbers.filter(n => it.waves.includes(getColor(n))));
+                if (it.segments && it.segments.length) out.push(allNumbers.filter(n => it.segments.includes(Math.ceil(parseInt(n, 10) / 7))));
+            }
+            return out;
+        }
+
+        function generateCommonNumbersKline() {
+            if (!state.coldSelection || !state.coldSelection.types.length) {
+                return alert('请先生成特码自由K线，再生成共同号码K线');
+            }
+            const optionSets = getColdOptionNumberSets(state.coldSelection.sets);
+            if (optionSets.length < 2) {
+                return alert('需要至少两个选项才有「共同号码」，请多勾选几个选项后重新生成');
+            }
+            const counts = {};
+            optionSets.forEach(set => set.forEach(n => { counts[n] = (counts[n] || 0) + 1; }));
+            const common = Object.entries(counts)
+                .filter(([, c]) => c >= 2)
+                .map(([n]) => n)
+                .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+            if (!common.length) {
+                return alert('当前选项之间没有相同号码，无法生成共同号码K线');
+            }
+            state.coldSelection = {
+                ...state.coldSelection,
+                types: state.coldSelection.types.includes('commonNumbers')
+                    ? state.coldSelection.types
+                    : [...state.coldSelection.types, 'commonNumbers'],
+                commonNumbers: common,
+                sets: { ...state.coldSelection.sets, commonNumbers: common }
+            };
+            state.currentMode = 'cold_custom';
+            document.getElementById('trendModeSel').value = 'cold_custom';
+            document.getElementById('info-mode').textContent = '特码自由K线';
+            const followWrap = document.getElementById('followWrap');
+            if (followWrap) followWrap.style.display = 'none';
+            const coldCard = document.getElementById('coldCard');
+            if (coldCard) coldCard.style.display = 'block';
+            updateColdSummary();
+            recalcData();
+            showNotification('共同号码 ' + common.length + ' 个：' + common.map(n => parseInt(n, 10)).join(' '));
         }
 
         function resetColdSelection() {
@@ -3448,7 +3531,8 @@ function copyRecommendations() {
                 wuxing: '遗漏最多段位',
                 halfHead: '遗漏最多半头',
                 selectedWaves: '选择波色',
-                inputNumbers: '输入条件'
+                inputNumbers: '输入条件',
+                commonNumbers: '共同号码'
             };
 
             const rows = types
