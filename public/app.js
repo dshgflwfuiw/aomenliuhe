@@ -547,6 +547,11 @@
             }
             const overlayItems = (state.overlay && state.overlay.enabled && state.overlay.type !== 'cold' && state.overlay.items) || [];
             const overlayScores = {};
+            const colorStreaks = {
+                red: { up: 0, down: 0, maxUp: 0, maxDown: 0 },
+                blue: { up: 0, down: 0, maxUp: 0, maxDown: 0 },
+                green: { up: 0, down: 0, maxUp: 0, maxDown: 0 }
+            };
 
             let colorOmissions = { red: 0, blue: 0, green: 0 };
             let sizeOmissions = { big: 0, small: 0 };
@@ -684,6 +689,17 @@
                         colorMaxOmissions[c] = Math.max(colorMaxOmissions[c], colorOmissions[c]);
                     }
                 });
+                ['red', 'blue', 'green'].forEach(c => {
+                    if (c === color) {
+                        colorStreaks[c].up++;
+                        colorStreaks[c].down = 0;
+                        colorStreaks[c].maxUp = Math.max(colorStreaks[c].maxUp, colorStreaks[c].up);
+                    } else {
+                        colorStreaks[c].down++;
+                        colorStreaks[c].up = 0;
+                        colorStreaks[c].maxDown = Math.max(colorStreaks[c].maxDown, colorStreaks[c].down);
+                    }
+                });
 
                 if (winNum >= 25) {
                     sizeOmissions.big = 0;
@@ -770,6 +786,11 @@
                     colorScores: { ...colorScores },
                     colorOmissions: { ...colorOmissions },
                     colorMaxOmissions: { ...colorMaxOmissions },
+                    colorStreaks: {
+                        red: { ...colorStreaks.red },
+                        blue: { ...colorStreaks.blue },
+                        green: { ...colorStreaks.green }
+                    },
                     sizeOmissions: { ...sizeOmissions },
                     sizeMaxOmissions: { ...sizeMaxOmissions },
                     currentColor: color,
@@ -1193,7 +1214,8 @@
                 if (last && last.colorScores) {
                     const sc = last.colorScores[item.key];
                     const om = last.colorOmissions ? last.colorOmissions[item.key] : null;
-                    info += ' ' + (sc != null ? sc.toFixed(1) : '-') + (om != null ? '·遗' + om : '');
+                    const st = last.colorStreaks ? last.colorStreaks[item.key] : null;
+                    info += ' ' + (sc != null ? sc.toFixed(1) : '-') + (om != null ? '·遗' + om : '') + (st ? '·涨' + st.maxUp + '跌' + st.maxDown : '');
                 }
                 ctx.fillStyle = item.color;
                 ctx.fillText(info, width - 58, item.y + 3);
