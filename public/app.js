@@ -591,7 +591,26 @@
                 } else if (state.currentMode === 'cold_custom' && state.coldSelection && state.coldSelection.types.length) {
                     const cold = state.coldSelection;
                     if (cold.setKline) {
-                        const nums = cold.setNumbers || [];
+                        const rollingSets = calculateColdSets(cold.setTypes || [], getRollingColdSourceData(state.historyData, idx), cold.setCounts || {});
+                        const optionSets = getColdOptionNumberSets({
+                            ...rollingSets,
+                            inputNumbers: cold.selectedNumbers,
+                            inputTerms: cold.inputTerms,
+                            selectedZodiacs: cold.selectedZodiacs,
+                            selectedWaves: cold.selectedWaves
+                        });
+                        const cntMap = {};
+                        optionSets.forEach(set => set.forEach(n => { cntMap[n] = (cntMap[n] || 0) + 1; }));
+                        const smode = cold.setMode || 'all';
+                        let nums;
+                        if (smode === 'same') {
+                            nums = Object.entries(cntMap).filter(([, c]) => c >= 2).map(([n]) => n);
+                        } else if (smode === 'diff') {
+                            nums = Object.entries(cntMap).filter(([, c]) => c === 1).map(([n]) => n);
+                        } else {
+                            nums = Object.keys(cntMap);
+                        }
+                        nums.sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
                         coldHitSetsForPoint = { setKline: nums.map(n => parseInt(n, 10)) };
                         if (nums.length >= 1) {
                             followTargetForPoint = nums.map(n => parseInt(n, 10)).join('、');
@@ -2450,6 +2469,8 @@ function copyRecommendations() {
                 setKline: true,
                 setMode: mode,
                 setNumbers,
+                setTypes: types,
+                setCounts: counts,
                 sets: { setNumbers },
                 counts,
                 selectedZodiacs,
