@@ -588,26 +588,53 @@
                     step = 0;
                 } else if (state.currentMode === 'cold_custom' && state.coldSelection && state.coldSelection.types.length) {
                     const cold = state.coldSelection;
-                    const rollingColdSets = calculateColdSets(cold.types, getRollingColdSourceData(state.historyData, idx), cold.counts || {});
-                    coldHitSetsForPoint = rollingColdSets;
-                    let matches = 0;
-                    const numStr = winNum.toString().padStart(2, '0');
-                    const allNums = cList.map(n => n.toString().padStart(2, '0'));
-                    const allZodiacs = zList.filter(Boolean);
-                    const headKey = `${Math.floor(winNum / 10)}头`;
-                    const tailKey = `${winNum % 10}尾`;
-                    const halfWaveKey = getHalfWaveKey(cList[6]);
-                    const halfHeadKey = getHalfHeadKey(winNum);
-                    const segment = getSegmentKey(winNum);
-                    const jiaYe = getJiaYe(winZ);
+                    if (cold.commonKline) {
+                        const rollingSets = calculateColdSets(cold.commonTypes || [], getRollingColdSourceData(state.historyData, idx), cold.commonCounts || {});
+                        const optionSets = getColdOptionNumberSets({
+                            ...rollingSets,
+                            inputNumbers: cold.selectedNumbers,
+                            inputTerms: cold.inputTerms,
+                            selectedZodiacs: cold.selectedZodiacs,
+                            selectedWaves: cold.selectedWaves
+                        });
+                        const cntMap = {};
+                        optionSets.forEach(set => set.forEach(n => { cntMap[n] = (cntMap[n] || 0) + 1; }));
+                        const common = Object.entries(cntMap)
+                            .filter(([, c]) => c >= 2)
+                            .map(([n]) => n)
+                            .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+                        coldHitSetsForPoint = { commonNumbers: common.map(n => parseInt(n, 10)) };
+                        if (common.length >= 1) {
+                            followTargetForPoint = common.map(n => parseInt(n, 10)).join('、');
+                            step = common.every(n => cList.includes(n)) ? 1 : -1;
+                            coldMatchesForPoint = step > 0 ? 1 : 0;
+                        } else {
+                            followTargetForPoint = '';
+                            step = 0;
+                            coldMatchesForPoint = 0;
+                        }
+                    } else {
+                        const rollingColdSets = calculateColdSets(cold.types, getRollingColdSourceData(state.historyData, idx), cold.counts || {});
+                        coldHitSetsForPoint = rollingColdSets;
+                        let matches = 0;
+                        const numStr = winNum.toString().padStart(2, '0');
+                        const allNums = cList.map(n => n.toString().padStart(2, '0'));
+                        const allZodiacs = zList.filter(Boolean);
+                        const headKey = `${Math.floor(winNum / 10)}头`;
+                        const tailKey = `${winNum % 10}尾`;
+                        const halfWaveKey = getHalfWaveKey(cList[6]);
+                        const halfHeadKey = getHalfHeadKey(winNum);
+                        const segment = getSegmentKey(winNum);
+                        const jiaYe = getJiaYe(winZ);
 
-                    matches = countColdConditionMatches(cold, rollingColdSets, {
-                        numStr, winZ, winNum, color, cList,
-                        headKey, tailKey, halfWaveKey, halfHeadKey, segment, jiaYe
-                    });
+                        matches = countColdConditionMatches(cold, rollingColdSets, {
+                            numStr, winZ, winNum, color, cList,
+                            headKey, tailKey, halfWaveKey, halfHeadKey, segment, jiaYe
+                        });
 
-                    step = matches > 0 ? 1 : -1;
-                    coldMatchesForPoint = matches;
+                        step = matches > 0 ? 1 : -1;
+                        coldMatchesForPoint = matches;
+                    }
                 } else if (state.currentMode === 'pingxiao_follow') {
                     if (state.followMode === 'missnum') {
                         const ranks = (state.followMissRanks || [])
@@ -806,17 +833,21 @@
                 state.historyData.push(historyPoint);
 
                 if (state.currentMode === 'cold_custom' && state.coldSelection && state.coldSelection.types.length) {
-                    historyPoint.coldSets = calculateColdSets(
-                        state.coldSelection.types,
-                        getCurrentColdSourceData(state.historyData),
-                        state.coldSelection.counts || {}
-                    );
-                }
-                if (state.currentMode === 'cold_custom' && state.coldSelection && state.coldSelection.types.includes('inputNumbers') && state.coldSelection.inputTerms) {
-                    historyPoint.coldSets.inputNumbers = formatInputTerms(state.coldSelection.inputTerms);
-                }
-                if (state.currentMode === 'cold_custom' && state.coldSelection && state.coldSelection.commonNumbers && state.coldSelection.commonNumbers.length) {
-                    historyPoint.coldSets.commonNumbers = state.coldSelection.commonNumbers.map(n => parseInt(n, 10));
+                    if (state.coldSelection.commonKline) {
+                        historyPoint.coldSets = coldHitSetsForPoint || {};
+                    } else {
+                        historyPoint.coldSets = calculateColdSets(
+                            state.coldSelection.types,
+                            getCurrentColdSourceData(state.historyData),
+                            state.coldSelection.counts || {}
+                        );
+                        if (state.coldSelection.types.includes('inputNumbers') && state.coldSelection.inputTerms) {
+                            historyPoint.coldSets.inputNumbers = formatInputTerms(state.coldSelection.inputTerms);
+                        }
+                        if (state.coldSelection.commonNumbers && state.coldSelection.commonNumbers.length) {
+                            historyPoint.coldSets.commonNumbers = state.coldSelection.commonNumbers.map(n => parseInt(n, 10));
+                        }
+                    }
                 }
 
                 prevFollowZodiac = zList[state.followPosition] || null;
@@ -1389,6 +1420,9 @@
             if (state.currentMode === 'cold_custom' && typeof d.coldMatches !== 'undefined') {
                 ballsHtml += `<div style="margin-top:6px;font-size:11px;color:var(--warn);">条件命中: ${d.coldMatches}/${state.coldSelection?.types.length || 0}</div>`;
             }
+            if (state.currentMode === 'cold_custom' && state.coldSelection && state.coldSelection.commonKline && d.followZodiac) {
+                ballsHtml += `<div style="margin-top:6px;font-size:11px;color:var(--accent);">共同号码: ${d.followZodiac}</div>`;
+            }
 
             if (state.currentMode === 'pingxiao_follow' && d.followZodiac) {
                 const hitText = state.followMode === 'missnum'
@@ -1434,6 +1468,9 @@
 
             if (state.currentMode === 'cold_custom' && typeof d.coldMatches !== 'undefined') {
                 topHtml += ` <span style="margin-left:8px;font-size:10px;color:var(--warn);">(${d.coldMatches}/${state.coldSelection?.types.length || 0})</span>`;
+            }
+            if (state.currentMode === 'cold_custom' && state.coldSelection && state.coldSelection.commonKline && d.followZodiac) {
+                topHtml += ` <span style="margin-left:8px;font-size:10px;color:var(--accent);">共同:${d.followZodiac}${d.followHit ? '✓' : '✗'}</span>`;
             }
 
             if (state.currentMode === 'pingxiao_follow' && d.followZodiac) {
@@ -2474,15 +2511,20 @@ function copyRecommendations() {
             if (!common.length) {
                 return alert('当前选项之间没有相同号码，无法生成共同号码K线');
             }
+            const origTypes = state.coldSelection.types.slice();
+            const origCounts = { ...(state.coldSelection.counts || {}) };
             state.coldSelection = {
                 types: ['commonNumbers'],
+                commonKline: true,
+                commonTypes: origTypes,
+                commonCounts: origCounts,
                 commonNumbers: common,
                 sets: { commonNumbers: common },
                 counts: {},
-                selectedZodiacs: [],
-                selectedWaves: [],
-                selectedNumbers: [],
-                inputTerms: null
+                selectedZodiacs: [...(state.coldSelection.selectedZodiacs || [])],
+                selectedWaves: [...(state.coldSelection.selectedWaves || [])],
+                selectedNumbers: [...(state.coldSelection.selectedNumbers || [])],
+                inputTerms: state.coldSelection.inputTerms ? JSON.parse(JSON.stringify(state.coldSelection.inputTerms)) : null
             };
             state.currentMode = 'cold_custom';
             document.getElementById('trendModeSel').value = 'cold_custom';
