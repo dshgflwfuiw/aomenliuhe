@@ -606,7 +606,8 @@
                         coldHitSetsForPoint = { commonNumbers: common.map(n => parseInt(n, 10)) };
                         if (common.length >= 1) {
                             followTargetForPoint = common.map(n => parseInt(n, 10)).join('、');
-                            step = common.every(n => cList.includes(n)) ? 1 : -1;
+                            const numStrC = winNum.toString().padStart(2, '0');
+                            step = common.includes(numStrC) ? 1 : -1;
                             coldMatchesForPoint = step > 0 ? 1 : 0;
                         } else {
                             followTargetForPoint = '';
