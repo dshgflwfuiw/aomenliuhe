@@ -47,6 +47,7 @@
             tableSort: { key: null, dir: 1 },
             lastRenderedData: null,
             overlay: { type: 'zodiac', items: [], enabled: false },
+            matrixMode: 'pingte',
             loadedYears: new Set(),
             canvas: null,
             ctx: null,
@@ -3123,6 +3124,20 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
         }
 
         // ==================== 号码冷热矩阵 ====================
+        function setMatrixMode(mode) {
+            state.matrixMode = mode === 'special' ? 'special' : 'pingte';
+            const pingteBtn = document.getElementById('matrixModePingte');
+            const specialBtn = document.getElementById('matrixModeSpecial');
+            const active = (btn, on) => {
+                if (!btn) return;
+                btn.style.background = on ? 'var(--accent)' : 'transparent';
+                btn.style.color = on ? '#000' : 'var(--text-secondary)';
+                btn.style.fontWeight = on ? '700' : '400';
+            };
+            active(pingteBtn, state.matrixMode === 'pingte');
+            active(specialBtn, state.matrixMode === 'special');
+            renderHotColdMatrix();
+        }
         function renderHotColdMatrix() {
             const grid = document.getElementById('matrixGrid');
             if (!grid) return;
@@ -3131,6 +3146,11 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
             const counts = {};
             for (let n = 1; n <= 49; n++) counts[n] = 0;
             data.forEach(d => {
+                if (state.matrixMode === 'special') {
+                    const num = d.winNum;
+                    if (num >= 1 && num <= 49) counts[num]++;
+                    return;
+                }
                 (d.codes || []).forEach(c => {
                     const num = parseInt(c.num, 10);
                     if (num >= 1 && num <= 49) counts[num]++;

@@ -566,6 +566,13 @@
                     <option value="100">100期</option>
                 </select>
             </div>
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+                <span style="font-size:11px;color:var(--text-secondary);">范围</span>
+                <div style="display:flex;flex:1;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+                    <button id="matrixModePingte" onclick="setMatrixMode('pingte')" style="flex:1;font-size:11px;padding:6px;background:var(--accent);color:#000;font-weight:700;border:none;border-radius:0;">平特</button>
+                    <button id="matrixModeSpecial" onclick="setMatrixMode('special')" style="flex:1;font-size:11px;padding:6px;background:transparent;color:var(--text-secondary);border:none;border-radius:0;">特码</button>
+                </div>
+            </div>
             <div id="matrixGrid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;"></div>
             <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text-secondary);margin-top:4px;">
                 <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#24d05a;display:inline-block;"></span>冷</span>
