@@ -46,7 +46,7 @@
             maWindow: 5,
             tableSort: { key: null, dir: 1 },
             lastRenderedData: null,
-            overlay: { type: 'zodiac', items: [], enabled: false },
+            overlay: { type: 'zodiac', items: [], enabled: false, coldSets: [] },
             matrixMode: 'pingte',
             loadedYears: new Set(),
             canvas: null,
@@ -735,20 +735,21 @@
                     }
                     overlayScores[item] = (overlayScores[item] || 0) + (ovHit ? 1 : -1);
                 });
-                if (state.overlay && state.overlay.enabled && state.overlay.type === 'cold' && state.coldSelection && state.coldSelection.types.length) {
-                    const cold = state.coldSelection;
-                    const rolling = calculateColdSets(cold.types, getRollingColdSourceData(state.historyData, idx), cold.counts || {});
-                    const numStrC = winNum.toString().padStart(2, '0');
-                    const m = countColdConditionMatches(cold, rolling, {
-                        numStr: numStrC, winZ, winNum, color,
-                        headKey: `${Math.floor(winNum / 10)}头`,
-                        tailKey: `${winNum % 10}尾`,
-                        halfWaveKey: getHalfWaveKey(cList[6]),
-                        halfHeadKey: getHalfHeadKey(winNum),
-                        segment: getSegmentKey(winNum),
-                        jiaYe: getJiaYe(winZ)
+                if (state.overlay && state.overlay.enabled && state.overlay.type === 'cold' && state.overlay.coldSets && state.overlay.coldSets.length) {
+                    state.overlay.coldSets.forEach((set, si) => {
+                        const rolling = calculateColdSets(set.types, getRollingColdSourceData(state.historyData, idx), set.counts || {});
+                        const numStrC = winNum.toString().padStart(2, '0');
+                        const m = countColdConditionMatches(set, rolling, {
+                            numStr: numStrC, winZ, winNum, color,
+                            headKey: `${Math.floor(winNum / 10)}头`,
+                            tailKey: `${winNum % 10}尾`,
+                            halfWaveKey: getHalfWaveKey(cList[6]),
+                            halfHeadKey: getHalfHeadKey(winNum),
+                            segment: getSegmentKey(winNum),
+                            jiaYe: getJiaYe(winZ)
+                        });
+                        overlayScores['cold_' + si] = (overlayScores['cold_' + si] || 0) + (m > 0 ? 1 : -1);
                     });
-                    overlayScores['cold'] = (overlayScores['cold'] || 0) + (m > 0 ? 1 : -1);
                 }
 
                 const historyPoint = {
@@ -1131,7 +1132,7 @@
                 ovItems.forEach((item, idx) => {
                     const label = state.overlay.type === 'zodiac' ? item
                         : state.overlay.type === 'tail' ? parseInt(item, 10) + '尾'
-                        : state.overlay.type === 'cold' ? '特码自由K线'
+                        : state.overlay.type === 'cold' ? '条件' + (parseInt(item.replace('cold_', ''), 10) + 1)
                         : parseInt(item, 10);
                     ctx.fillStyle = palette[idx % 3];
                     ctx.fillText(String(label), 8, 16 + idx * 14);
@@ -3087,6 +3088,18 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
                     `<label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;"><input type="checkbox" id="overlayTail_${i}" onchange="toggleOverlayItem('${i}')" ${selected.has(String(i)) ? 'checked' : ''}> ${i}尾</label>`
                 ).join('');
             }
+            const coldList = document.getElementById('overlayColdList');
+            if (coldList) {
+                const sets = state.overlay.coldSets || [];
+                const palette = ['#ff9800', '#e040fb', '#00c4ff'];
+                coldList.innerHTML = sets.map((set, i) => `
+                    <div style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:10px;">
+                        <span style="color:${palette[i % 3]};font-weight:700;flex-shrink:0;">条件${i + 1}</span>
+                        <span style="flex:1;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${(set.types || []).join('、')}</span>
+                        <button onclick="removeColdOverlay(${i})" style="padding:2px 6px;font-size:10px;flex-shrink:0;">✕</button>
+                    </div>
+                `).join('') || '<div style="font-size:10px;color:var(--text-secondary);">暂无，去特码自由K线卡片添加</div>';
+            }
             syncOverlayTypeWrap();
             updateOverlayHint();
         }
@@ -3103,7 +3116,9 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
         }
         function changeOverlayType(val) {
             state.overlay.type = val;
-            state.overlay.items = val === 'cold' ? ['cold'] : [];
+            state.overlay.items = val === 'cold'
+                ? (state.overlay.coldSets || []).map((_, i) => 'cold_' + i)
+                : [];
             const input = document.getElementById('overlayNumbersInput');
             if (input) input.value = '';
             buildOverlayOptions();
@@ -3141,22 +3156,46 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
             updateOverlayHint();
             recalcData();
         }
+        function addColdToOverlay() {
+            if (!state.coldSelection || !state.coldSelection.types.length) {
+                return alert('请先在特码自由K线模式生成条件，再加入叠加');
+            }
+            if (!state.overlay.coldSets) state.overlay.coldSets = [];
+            if (state.overlay.coldSets.length >= 3) {
+                return alert('最多叠加3条特码自由K线');
+            }
+            const set = {
+                types: [...state.coldSelection.types],
+                counts: { ...(state.coldSelection.counts || {}) },
+                selectedZodiacs: [...(state.coldSelection.selectedZodiacs || [])],
+                selectedWaves: [...(state.coldSelection.selectedWaves || [])],
+                inputTerms: state.coldSelection.inputTerms ? JSON.parse(JSON.stringify(state.coldSelection.inputTerms)) : null,
+                selectedNumbers: [...(state.coldSelection.selectedNumbers || [])]
+            };
+            state.overlay.coldSets.push(set);
+            state.overlay.type = 'cold';
+            state.overlay.items = state.overlay.coldSets.map((_, i) => 'cold_' + i);
+            buildOverlayOptions();
+            recalcData();
+            showNotification('已加入叠加，共 ' + state.overlay.coldSets.length + ' 条');
+        }
+        function removeColdOverlay(i) {
+            if (!state.overlay.coldSets) return;
+            state.overlay.coldSets.splice(i, 1);
+            state.overlay.items = state.overlay.coldSets.map((_, idx) => 'cold_' + idx);
+            buildOverlayOptions();
+            recalcData();
+        }
         function updateOverlayHint() {
             const hint = document.getElementById('overlayHint');
             if (!hint) return;
-            const coldInfo = document.getElementById('overlayColdInfo');
             if (state.overlay.type === 'cold') {
-                if (coldInfo) {
-                    coldInfo.textContent = state.coldSelection && state.coldSelection.types.length
-                        ? '当前条件：' + state.coldSelection.types.join('、')
-                        : '尚未生成条件，请先在「特码自由K线」模式点击生成';
-                }
-                hint.textContent = state.coldSelection && state.coldSelection.types.length
-                    ? '勾选「在图上叠加显示」即可叠加该条件线'
-                    : '先到特码自由K线模式生成条件';
+                const n = (state.overlay.coldSets || []).length;
+                hint.textContent = n > 0
+                    ? '已加入 ' + n + ' 条条件线，勾选「在图上叠加显示」即可显示'
+                    : '到特码自由K线卡片生成条件后点「加入叠加」';
                 return;
             }
-            if (coldInfo) coldInfo.textContent = '';
             const n = (state.overlay.items || []).length;
             if (n < 2) {
                 hint.textContent = '请选择2~3项（当前' + n + '项）';

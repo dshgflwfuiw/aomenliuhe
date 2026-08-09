@@ -188,6 +188,7 @@
         <div class="sidebar-card" id="coldCard" style="display: none;">
             <h3>❄️ 特码自由K线</h3>
             <button class="primary" style="width: 100%; margin-top: 10px;" onclick="generateColdKline()">生成特码自由K线</button>
+            <button style="width: 100%; margin-top: 8px;" onclick="addColdToOverlay()">➕ 加入叠加（多条件对比）</button>
             <button style="width: 100%; margin-top: 8px;" onclick="resetColdSelection()">重置选择</button>
             <div id="coldSelectionSummary" style="margin-top: 10px; font-size: 11px; color: var(--text-secondary); min-height: 48px;">请选择特码自由K线选项后点击生成</div>
 
@@ -555,8 +556,8 @@
                 <input type="text" id="overlayNumbersInput" placeholder="号码，逗号分隔，最多3个" style="width:100%;font-size:11px;padding:6px;background:#0d1117;border:1px solid var(--border);border-radius:6px;color:#e6edf3;outline:none;" onchange="applyOverlayNumbers()">
             </div>
             <div id="overlayColdWrap" style="display:none;margin-bottom:8px;">
-                <div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">叠加当前特码自由K线条件（需先在特码自由K线模式生成条件）</div>
-                <div id="overlayColdInfo" style="font-size:10px;color:var(--accent);word-break:break-all;"></div>
+                <div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">已加入的特码自由K线条件（去特码自由K线卡片点「加入叠加」，最多3条）</div>
+                <div id="overlayColdList" style="display:flex;flex-direction:column;gap:4px;"></div>
             </div>
             <div id="overlayHint" style="font-size:10px;color:var(--accent);"></div>
         </div>
