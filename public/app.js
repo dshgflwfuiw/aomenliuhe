@@ -2326,11 +2326,12 @@ function copyRecommendations() {
                 const nums = state.coldSelection.setNumbers || [];
                 setLine = `<div style="margin-top:4px;color:var(--warn);">${label}（${nums.length}个）: ${nums.map(n => parseInt(n, 10)).join(' ')}</div>`;
             }
-            summary.innerHTML = (sortedNumbers.length
-                ? `<div>扣选包含号码（共${sortedNumbers.length}个）: ${sortedNumbers.join(' ')}</div>`
-                : '已生成自由K线')
-                + (inputDesc.length ? `<div style="margin-top:4px;">输入条件: ${inputDesc.join(' ')}</div>` : '')
-                + setLine;
+            summary.innerHTML = (state.coldSelection && state.coldSelection.setKline)
+                ? (setLine || '已生成自由K线')
+                : (sortedNumbers.length
+                    ? `<div>扣选包含号码（共${sortedNumbers.length}个）: ${sortedNumbers.join(' ')}</div>`
+                    : '已生成自由K线')
+                  + (inputDesc.length ? `<div style="margin-top:4px;">输入条件: ${inputDesc.join(' ')}</div>` : '');
 
             // Show inline selection results next to each checked option (skip zodiac types - self-explanatory)
             const skipTypes = ['zodiacs', 'hotZodiacs', 'coldZodiacs', 'allHotZodiacs', 'allColdZodiacs', 'selectZodiacs'];
