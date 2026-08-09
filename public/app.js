@@ -1175,11 +1175,13 @@
             });
 
             const legendItems = [
-                { label: '红波', color: '#ff1744', y: 20 },
-                { label: '蓝波', color: '#448aff', y: 35 },
-                { label: '绿波', color: '#00e676', y: 50 }
+                { key: 'red', label: '红波', color: '#ff1744', y: 20 },
+                { key: 'blue', label: '蓝波', color: '#448aff', y: 35 },
+                { key: 'green', label: '绿波', color: '#00e676', y: 50 }
             ];
+            const last = data[data.length - 1];
             ctx.font = '11px sans-serif';
+            ctx.textAlign = 'right';
             legendItems.forEach(item => {
                 ctx.strokeStyle = item.color;
                 ctx.lineWidth = 3;
@@ -1187,9 +1189,23 @@
                 ctx.moveTo(width - 54, item.y - 2);
                 ctx.lineTo(width - 40, item.y - 2);
                 ctx.stroke();
+                let info = item.label;
+                if (last && last.colorScores) {
+                    const sc = last.colorScores[item.key];
+                    const om = last.colorOmissions ? last.colorOmissions[item.key] : null;
+                    info += ' ' + (sc != null ? sc.toFixed(1) : '-') + (om != null ? '·遗' + om : '');
+                }
                 ctx.fillStyle = item.color;
-                ctx.fillText(item.label, width - 36, item.y + 3);
+                ctx.fillText(info, width - 58, item.y + 3);
             });
+            if (last && last.codes) {
+                const cnt = { red: 0, blue: 0, green: 0 };
+                last.codes.forEach(c => { if (cnt[c.wave] != null) cnt[c.wave]++; });
+                ctx.font = '10px sans-serif';
+                ctx.fillStyle = themeText(0.6);
+                ctx.fillText(`本期红${cnt.red} 蓝${cnt.blue} 绿${cnt.green}`, width - 58, 68);
+            }
+            ctx.textAlign = 'center';
         }
 
         function drawHoverEffect(ctx, data, width, height) {
