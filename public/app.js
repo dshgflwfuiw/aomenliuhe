@@ -2044,7 +2044,7 @@ function copyRecommendations() {
         function getCold10NumbersByFrequency(sourceData, count = 10) {
             const keys = Array.from({ length: 49 }, (_, i) => (i + 1).toString().padStart(2, '0'));
             const counts = calculateFrequencyCounts(keys, item => getAllDrawNumbers(item), sourceData);
-            return Object.entries(counts).sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0])).slice(0, count).map(item => item[0]);
+            return Object.entries(counts).sort((a, b) => a[1] - b[1] || b[0].localeCompare(a[0])).slice(0, count).map(item => item[0]);
         }
 
         
@@ -2056,11 +2056,11 @@ function copyRecommendations() {
                 .slice(0, count)
                 .map(item => item[0]);
         }
-function getCold3ZodiacsByFrequency(sourceData, count = 3) {
+        function getCold3ZodiacsByFrequency(sourceData, count = 3) {
             const keys = CONFIG.zodiacMap[state.currentYear];
             const counts = calculateFrequencyCounts(keys, item => getAllDrawZodiacs(item), sourceData);
             return Object.entries(counts)
-                .sort((a, b) => a[1] - b[1] || keys.indexOf(a[0]) - keys.indexOf(b[0]))
+                .sort((a, b) => a[1] - b[1] || keys.indexOf(b[0]) - keys.indexOf(a[0]))
                 .slice(0, count)
                 .map(item => item[0]);
         }
@@ -2091,7 +2091,7 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
         function getAllCold10Numbers(sourceData, count = 10) {
             const keys = Array.from({ length: 49 }, (_, i) => (i + 1).toString().padStart(2, '0'));
             const counts = calculateFrequencyCounts(keys, item => item.winNum.toString().padStart(2, '0'), sourceData);
-            return Object.entries(counts).sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0])).slice(0, count).map(item => item[0]);
+            return Object.entries(counts).sort((a, b) => a[1] - b[1] || b[0].localeCompare(a[0])).slice(0, count).map(item => item[0]);
         }
 
         function getAllHot3Zodiacs(sourceData, count = 3) {
@@ -2107,7 +2107,7 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
             const keys = CONFIG.zodiacMap[state.currentYear];
             const counts = calculateFrequencyCounts(keys, item => item.win, sourceData);
             return Object.entries(counts)
-                .sort((a, b) => a[1] - b[1] || keys.indexOf(a[0]) - keys.indexOf(b[0]))
+                .sort((a, b) => a[1] - b[1] || keys.indexOf(b[0]) - keys.indexOf(a[0]))
                 .slice(0, count)
                 .map(item => item[0]);
         }
