@@ -856,9 +856,18 @@
             const overall = computeMaxRiseFall(state.historyData);
             state.overallMaxRise = overall.maxRiseCount;
             state.overallMaxFall = overall.maxFallCount;
-            updateChartLegend();
-            renderHotColdMatrix();
-            runBacktest();
+            schedulePanelUpdates();
+        }
+
+        let panelUpdateTimer = null;
+        function schedulePanelUpdates() {
+            if (panelUpdateTimer) clearTimeout(panelUpdateTimer);
+            panelUpdateTimer = setTimeout(() => {
+                panelUpdateTimer = null;
+                updateChartLegend();
+                renderHotColdMatrix();
+                runBacktest();
+            }, 150);
         }
 
         // ==================== 动态冷热数据拦截计算 ====================
@@ -1051,8 +1060,27 @@
         function drawNormalModeFixed(ctx, data, width, height, spacing, startX) {
             const baseScore = data.length > 0 ? data[0].displayScore : 0;
             const scores = data.map(d => d.displayScore - baseScore);
-            const maxScore = Math.max(...scores, 5);
-            const minScore = Math.min(...scores, -5);
+            let maxScore = Math.max(...scores, 5);
+            let minScore = Math.min(...scores, -5);
+            const overlayOk = state.overlay && state.overlay.enabled &&
+                ((state.overlay.type === 'cold' && (state.overlay.coldSets || []).length >= 1) ||
+                 (state.overlay.type !== 'cold' && state.overlay.items.length >= 2));
+            if (overlayOk) {
+                const ovItems = (state.overlay.type === 'cold'
+                    ? (state.overlay.coldSets || []).map((_, i) => 'cold_' + i)
+                    : state.overlay.items || []).slice(0, 3);
+                data.forEach(d => {
+                    ovItems.forEach(item => {
+                        if (state.overlay.hidden && state.overlay.hidden[item]) return;
+                        const v = d.overlayScores ? d.overlayScores[item] : null;
+                        if (v == null) return;
+                        const first = data[0].overlayScores ? data[0].overlayScores[item] : 0;
+                        const off = v - first;
+                        if (off > maxScore) maxScore = off;
+                        if (off < minScore) minScore = off;
+                    });
+                });
+            }
             const range = maxScore - minScore;
             const chartHeight = height * 0.6;
             const centerY = height / 2;
@@ -1125,13 +1153,13 @@
                     ctx.fill();
                 });
             }
-            const overlayOk = state.overlay && state.overlay.enabled &&
-                ((state.overlay.type === 'cold' && state.overlay.items.length >= 1) ||
-                 (state.overlay.type !== 'cold' && state.overlay.items.length >= 2));
             if (overlayOk) {
-                const ovItems = state.overlay.items.slice(0, 3);
+                const ovItems = (state.overlay.type === 'cold'
+                    ? (state.overlay.coldSets || []).map((_, i) => 'cold_' + i)
+                    : state.overlay.items || []).slice(0, 3);
                 const palette = ['#ff9800', '#e040fb', '#00c4ff'];
                 ovItems.forEach((item, idx) => {
+                    if (state.overlay.hidden && state.overlay.hidden[item]) return;
                     const firstVal = data.length && data[0].overlayScores ? data[0].overlayScores[item] : 0;
                     ctx.strokeStyle = palette[idx % 3];
                     ctx.lineWidth = 1.8;
@@ -1151,6 +1179,7 @@
                 ctx.font = '10px sans-serif';
                 ctx.textAlign = 'left';
                 ovItems.forEach((item, idx) => {
+                    if (state.overlay.hidden && state.overlay.hidden[item]) return;
                     const label = state.overlay.type === 'zodiac' ? item
                         : state.overlay.type === 'tail' ? parseInt(item, 10) + '尾'
                         : state.overlay.type === 'cold' ? '条件' + (parseInt(item.replace('cold_', ''), 10) + 1)
@@ -1548,13 +1577,13 @@
 
             switch (strategy) {
                 case 'omission':
-                    recommendations = getOmissionBasedRecommendations(snapshot, maxOm);
+                    recommendations = getOmissionBasedRecommendations(snapshot, maxOm, state.globalMaxOm, last.currentColor);
                     break;
                 case 'balance':
-                    recommendations = getBalanceRecommendations(snapshot, colorOm, sizeOm);
+                    recommendations = getBalanceRecommendations(snapshot, colorOm, sizeOm, last.counts, state.historyData.length);
                     break;
                 case 'hot':
-                    recommendations = getHotRecommendations(snapshot);
+                    recommendations = getHotRecommendations(snapshot, last.counts, state.historyData.length);
                     break;
                 case 'color':
                     recommendations = getColorRecommendations(colorOm, maxOm);
@@ -1566,17 +1595,62 @@
             }
 
             renderRecommendations(container, recommendations, strategy);
+
+            const hitStats = computeRecommendationStats(strategy, 10);
+            const hitEl = document.getElementById('recommendHitRate');
+            if (hitEl) {
+                hitEl.innerHTML = hitStats.total
+                    ? `最近10期推荐命中：<b style="color:${hitStats.rate >= 50 ? 'var(--up)' : 'var(--down)'};">${hitStats.hit}/${hitStats.total}</b>（${hitStats.rate.toFixed(0)}%）`
+                    : '最近10期推荐命中：数据不足';
+            }
         }
 
-        function getOmissionBasedRecommendations(snapshot, colorMaxOm) {
+        function computeRecommendationsForPoint(p, strategy, globalMaxOm) {
+            const snapshot = p.snapshot || {};
+            const colorOm = p.colorOmissions || { red: 0, blue: 0, green: 0 };
+            const sizeOm = p.sizeOmissions || { big: 0, small: 0 };
+            const colorMaxOm = p.colorMaxOmissions || { red: 0, blue: 0, green: 0 };
+            const counts = p.counts || {};
+            const total = p.total || 1;
+            switch (strategy) {
+                case 'omission': return getOmissionBasedRecommendations(snapshot, colorMaxOm, globalMaxOm, p.currentColor || 'red');
+                case 'balance': return getBalanceRecommendations(snapshot, colorOm, sizeOm, counts, total);
+                case 'hot': return getHotRecommendations(snapshot, counts, total);
+                case 'color': return getColorRecommendations(colorOm, colorMaxOm);
+                case 'size': return getSizeRecommendations(sizeOm);
+                default: return [];
+            }
+        }
+
+        function computeRecommendationStats(strategy, n = 10) {
+            const data = state.historyData;
+            if (data.length < 2) return { hit: 0, total: 0, rate: 0 };
+            const globalMaxOm = state.globalMaxOm || {};
+            let hit = 0, total = 0;
+            const start = Math.max(0, data.length - 1 - n);
+            for (let i = start; i < data.length - 1; i++) {
+                const rec = computeRecommendationsForPoint(data[i], strategy, globalMaxOm);
+                if (!rec || !rec.length) continue;
+                const top = rec[0];
+                const next = data[i + 1];
+                let isHit = false;
+                if (top.zodiac) isHit = top.zodiac === next.win;
+                else if (top.color) isHit = top.color === next.currentColor;
+                else if (top.type) isHit = top.type === next.currentSize;
+                total++;
+                if (isHit) hit++;
+            }
+            return { hit, total, rate: total ? hit / total * 100 : 0 };
+        }
+
+        function getOmissionBasedRecommendations(snapshot, colorMaxOm, globalMaxOm, currentColor) {
             const zodiacs = CONFIG.zodiacMap[state.currentYear];
-            const last = state.historyData[state.historyData.length - 1];
 
             const scored = zodiacs.map(z => {
                 const currentOm = snapshot[z] || 0;
-                const maxRecord = state.globalMaxOm[z] || 0;
+                const maxRecord = (globalMaxOm || {})[z] || 0;
                 const ratio = maxRecord > 0 ? currentOm / maxRecord : 0;
-                const color = last?.currentColor || 'red';
+                const color = currentColor || 'red';
 
                 let score = currentOm * 10 + ratio * 50;
 
@@ -1591,14 +1665,12 @@
             return scored.sort((a, b) => b.score - a.score).slice(0, 6);
         }
 
-        function getBalanceRecommendations(snapshot, colorOm, sizeOm) {
+        function getBalanceRecommendations(snapshot, colorOm, sizeOm, counts, total) {
             const zodiacs = CONFIG.zodiacMap[state.currentYear];
-            const last = state.historyData[state.historyData.length - 1];
-            const total = state.historyData.length;
 
             const scored = zodiacs.map(z => {
                 const currentOm = snapshot[z] || 0;
-                const count = last?.counts?.[z] || 0;
+                const count = (counts || {})[z] || 0;
                 const avgCycle = total / (count || 1);
                 const deviation = currentOm - avgCycle;
 
@@ -1610,14 +1682,12 @@
             return scored.sort((a, b) => b.score - a.score).slice(0, 6);
         }
 
-        function getHotRecommendations(snapshot) {
+        function getHotRecommendations(snapshot, counts, total) {
             const zodiacs = CONFIG.zodiacMap[state.currentYear];
-            const last = state.historyData[state.historyData.length - 1];
-            const total = state.historyData.length;
 
             const scored = zodiacs.map(z => {
                 const currentOm = snapshot[z] || 0;
-                const count = last?.counts?.[z] || 0;
+                const count = (counts || {})[z] || 0;
                 const avgCycle = total / (count || 1);
 
                 let score = (avgCycle - currentOm) * 15 + count;
@@ -3003,6 +3073,32 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
                     </div>
                 `).join('') || '<div style="font-size:10px;color:var(--text-secondary);">暂无，去特码自由K线卡片添加</div>';
             }
+            const legendList = document.getElementById('overlayLegendList');
+            if (legendList) {
+                const items = state.overlay.type === 'cold'
+                    ? (state.overlay.coldSets || []).map((_, i) => 'cold_' + i)
+                    : (state.overlay.items || []).slice(0, 3);
+                const minItems = state.overlay.type === 'cold' ? 1 : 2;
+                const palette = ['#ff9800', '#e040fb', '#00c4ff'];
+                if (items.length >= minItems) {
+                    legendList.style.display = 'flex';
+                    legendList.innerHTML = items.map((item, i) => {
+                        const hidden = !!(state.overlay.hidden && state.overlay.hidden[item]);
+                        const label = state.overlay.type === 'zodiac' ? item
+                            : state.overlay.type === 'tail' ? parseInt(item, 10) + '尾'
+                            : state.overlay.type === 'cold' ? '条件' + (i + 1)
+                            : parseInt(item, 10);
+                        return `<div style="display:flex;align-items:center;gap:6px;font-size:10px;${hidden ? 'opacity:0.45;' : ''}">
+                            <span style="width:10px;height:10px;border-radius:2px;background:${palette[i % 3]};display:inline-block;flex-shrink:0;"></span>
+                            <span style="flex:1;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${label}</span>
+                            <button onclick="toggleOverlayVisibility('${item}')" style="padding:2px 8px;font-size:10px;flex-shrink:0;">${hidden ? '显示' : '隐藏'}</button>
+                        </div>`;
+                    }).join('');
+                } else {
+                    legendList.style.display = 'none';
+                    legendList.innerHTML = '';
+                }
+            }
             syncOverlayTypeWrap();
             updateOverlayHint();
         }
@@ -3058,6 +3154,12 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
             state.overlay.enabled = !!checked;
             updateOverlayHint();
             recalcData();
+        }
+        function toggleOverlayVisibility(item) {
+            if (!state.overlay.hidden) state.overlay.hidden = {};
+            state.overlay.hidden[item] = !state.overlay.hidden[item];
+            buildOverlayOptions();
+            draw();
         }
         function addColdToOverlay() {
             if (!state.coldSelection || !state.coldSelection.types.length) {
@@ -3142,6 +3244,20 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
                     if (num >= 1 && num <= 49) counts[num]++;
                 });
             });
+            const allData = state.historyData;
+            const lastSeen = {};
+            for (let n = 1; n <= 49; n++) lastSeen[n] = -1;
+            allData.forEach((d, i) => {
+                if (state.matrixMode === 'special') {
+                    if (d.winNum >= 1 && d.winNum <= 49) lastSeen[d.winNum] = i;
+                } else {
+                    (d.codes || []).forEach(c => {
+                        const num = parseInt(c.num, 10);
+                        if (num >= 1 && num <= 49) lastSeen[num] = i;
+                    });
+                }
+            });
+            const totalLen = allData.length;
             const max = Math.max(...Object.values(counts), 1);
             grid.innerHTML = Array.from({ length: 49 }, (_, i) => {
                 const n = i + 1;
@@ -3149,33 +3265,61 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
                 const r = Math.round(28 + ratio * 220);
                 const g = Math.round(28 + (1 - ratio) * 195);
                 const b = 52;
-                return `<div style="aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:5px;background:rgb(${r},${g},${b});color:#fff;font-size:11px;font-weight:600;">${n}</div>`;
+                const om = totalLen > 0 ? totalLen - 1 - lastSeen[n] : 0;
+                const ring = om >= 20 ? 'box-shadow:inset 0 0 0 2px rgba(255,255,255,0.75);' : '';
+                return `<div style="aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:5px;background:rgb(${r},${g},${b});color:#fff;font-size:11px;font-weight:600;${ring}">
+                    <span>${n}</span>
+                    <span style="font-size:8px;font-weight:400;opacity:0.9;line-height:1;">遗${om}</span>
+                </div>`;
             }).join('');
         }
 
         // ==================== 策略回测 ====================
-        function runBacktest() {
-            const result = document.getElementById('backtestResult');
-            if (!result) return;
-            const win = document.getElementById('backtestWindow').value;
-            const N = win === 'all' ? state.historyData.length : parseInt(win);
-            const data = state.historyData.slice(-N);
-            if (data.length < 2) {
-                result.innerHTML = '数据不足，请先加载数据';
-                return;
-            }
+        function calcBacktestStats(slice) {
             let wins = 0, loss = 0, flat = 0, sum = 0, curUp = 0, maxUp = 0, curDown = 0, maxDown = 0;
-            data.forEach(d => {
+            slice.forEach(d => {
                 const s = d.step || 0;
                 sum += s;
                 if (s > 0) { wins++; curUp++; curDown = 0; maxUp = Math.max(maxUp, curUp); }
                 else if (s < 0) { loss++; curDown++; curUp = 0; maxDown = Math.max(maxDown, curDown); }
                 else { flat++; curUp = 0; curDown = 0; }
             });
-            const valid = data.length - flat;
-            const winRate = valid > 0 ? wins / valid * 100 : 0;
-            const conclusion = winRate >= 60 ? '表现优秀，可继续关注' : winRate >= 45 ? '表现一般，观察为主' : '表现偏弱，谨慎使用';
-            result.innerHTML = `近${data.length}期：胜率 <b style="color:${winRate >= 50 ? 'var(--up)' : 'var(--down)'};">${winRate.toFixed(1)}%</b>（${wins}胜/${loss}负）<br>累计 <b>${sum > 0 ? '+' : ''}${sum}</b> · 最大连涨 ${maxUp} · 最大连跌 ${maxDown}<br>结论：${conclusion}`;
+            const valid = slice.length - flat;
+            return {
+                wins, loss, flat, sum, maxUp, maxDown,
+                winRate: valid > 0 ? wins / valid * 100 : 0
+            };
+        }
+        function runBacktest() {
+            const result = document.getElementById('backtestResult');
+            if (!result) return;
+            const data = state.historyData;
+            if (data.length < 2) {
+                result.innerHTML = '数据不足，请先加载数据';
+                return;
+            }
+            const windows = [
+                { label: '近20期', n: 20 },
+                { label: '近50期', n: 50 },
+                { label: '近100期', n: 100 },
+                { label: '全部', n: data.length }
+            ];
+            const rows = windows.map(w => ({ label: w.label, n: w.n, ...calcBacktestStats(data.slice(-w.n)) }));
+            const best = rows.reduce((a, b) => (b.winRate > a.winRate ? b : a));
+            const conclusion = best.winRate >= 60 ? '表现优秀，可继续关注' : best.winRate >= 45 ? '表现一般，观察为主' : '表现偏弱，谨慎使用';
+            result.innerHTML = rows.map(r => `
+                <div style="display:flex;justify-content:space-between;gap:6px;${r === best ? 'color:var(--accent);font-weight:700;' : ''}">
+                    <span style="min-width:44px;">${r.label}</span>
+                    <span>胜率 ${r.winRate.toFixed(1)}%</span>
+                    <span>${r.wins}胜/${r.loss}负</span>
+                    <span>累计${r.sum > 0 ? '+' : ''}${r.sum}</span>
+                    <span>涨${r.maxUp}/跌${r.maxDown}</span>
+                </div>
+            `).join('') + `
+                <div style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px;color:var(--text-primary);">
+                    最佳：${best.label}（胜率 ${best.winRate.toFixed(1)}%）· ${conclusion}
+                </div>
+            `;
         }
 
         // ==================== 图例 + 近10期统计 ====================

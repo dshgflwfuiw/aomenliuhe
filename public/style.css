@@ -1446,7 +1446,7 @@
         @media screen and (max-width: 767px) and (orientation: landscape) {
             .sidebar {
             margin-top: 44px;
-                width: 50vw;
+                width: min(42vw, 300px);
                 padding: 10px;
                 gap: 6px;
                 padding-bottom: calc(12px + env(safe-area-inset-bottom));
@@ -1481,15 +1481,20 @@
             }
 
             .chart-header {
-                min-height: 52px;
+                min-height: 48px;
                 padding: 4px 8px;
-                padding-left: 50px;
+                padding-left: 46px;
                 gap: 4px;
                 font-size: 10px;
+                flex-wrap: nowrap;
             }
 
             .chart-header #info-left,
             .chart-header #info-mid {
+                display: none !important;
+            }
+
+            .chart-legend {
                 display: none !important;
             }
 
@@ -1532,7 +1537,7 @@
             }
 
             .chart-section {
-                flex: 2;
+                flex: 2.2;
                 min-height: 30dvh;
             }
 

@@ -442,6 +442,7 @@
                     <option value="size">大小策略</option>
                 </select>
             </div>
+            <div id="recommendHitRate" style="font-size:10px;color:var(--text-secondary);margin-bottom:8px;line-height:1.6;"></div>
             <div id="recommendationResult" style="min-height: 80px;">
                 <div style="text-align: center; color: var(--text-secondary); font-size: 11px; padding: 10px;">
                     加载数据后自动生成推荐
@@ -487,6 +488,7 @@
                 <div id="overlayColdList" style="display:flex;flex-direction:column;gap:4px;"></div>
             </div>
             <div id="overlayHint" style="font-size:10px;color:var(--accent);"></div>
+            <div id="overlayLegendList" style="display:none;flex-direction:column;gap:4px;margin-top:8px;"></div>
         </div>
 
         <div class="sidebar-card" id="matrixCard">
@@ -515,16 +517,10 @@
 
         <div class="sidebar-card" id="backtestCard">
             <h3>📊 策略回测</h3>
-            <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">
-                <select id="backtestWindow" style="font-size:11px;flex:1;">
-                    <option value="20">最近20期</option>
-                    <option value="50" selected>最近50期</option>
-                    <option value="100">最近100期</option>
-                    <option value="all">全部</option>
-                </select>
-                <button onclick="runBacktest()" class="primary" style="font-size:11px;padding:6px 12px;">回测</button>
+            <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
+                <button onclick="runBacktest()" class="primary" style="font-size:11px;padding:6px 14px;">🔄 回测</button>
             </div>
-            <div id="backtestResult" style="font-size:11px;color:var(--text-secondary);min-height:40px;line-height:1.7;">选择期数后点击回测，统计当前模式的近期表现</div>
+            <div id="backtestResult" style="font-size:11px;color:var(--text-secondary);min-height:40px;line-height:1.8;">数据加载后自动对比各窗口表现</div>
         </div>
 
         <div style="height: 20px; flex-shrink: 0;"></div>
