@@ -3140,9 +3140,9 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
             grid.innerHTML = Array.from({ length: 49 }, (_, i) => {
                 const n = i + 1;
                 const ratio = counts[n] / max;
-                const r = Math.round(28 + ratio * 220);
-                const g = Math.round(28 + (1 - ratio) * 195);
-                const b = 52;
+                const r = Math.round(30 + ratio * 220);
+                const g = Math.round(96 + (1 - Math.abs(ratio * 2 - 1)) * 60);
+                const b = Math.round(230 - ratio * 200);
                 return `<div style="aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:5px;background:rgb(${r},${g},${b});color:#fff;font-size:11px;font-weight:600;">${n}</div>`;
             }).join('');
         }
