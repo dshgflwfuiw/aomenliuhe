@@ -3303,7 +3303,8 @@ function getCold3ZodiacsByFrequency(sourceData, count = 3) {
                 sum += d.step || 0;
             });
             const recent = data.length ? ` · 近10期 ${wins}/${data.length} · 累计${sum > 0 ? '+' : ''}${sum}` : '';
-            el.textContent = maText + recent;
+            const maxInfo = ` · 最大连涨${state.overallMaxRise || 0} · 最大连跌${state.overallMaxFall || 0}`;
+            el.textContent = maText + recent + maxInfo;
         }
 
         function toggleSidebar() {
