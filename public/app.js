@@ -603,26 +603,34 @@
                     const cold = state.coldSelection;
                     if (cold.setKline) {
                         const rollingSets = calculateColdSets(cold.setTypes || [], getRollingColdSourceData(state.historyData, idx), cold.setCounts || {});
-                        const optionSets = getColdOptionNumberSets({
+                        const rollingOptionSets = getColdOptionNumberSets({
                             ...rollingSets,
                             inputNumbers: cold.selectedNumbers,
                             inputTerms: cold.inputTerms,
                             selectedZodiacs: cold.selectedZodiacs,
                             selectedWaves: cold.selectedWaves
                         });
-                        const cntMap = {};
-                        optionSets.forEach(set => set.forEach(n => { cntMap[n] = (cntMap[n] || 0) + 1; }));
                         const smode = cold.setMode || 'all';
-                        let nums;
-                        if (smode === 'same') {
-                            nums = Object.entries(cntMap).filter(([, c]) => c >= 2).map(([n]) => n);
-                        } else if (smode === 'diff') {
-                            nums = Object.entries(cntMap).filter(([, c]) => c === 1).map(([n]) => n);
-                        } else {
-                            nums = Object.keys(cntMap);
-                        }
-                        nums.sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
-                        coldHitSetsForPoint = { ...rollingSets, setKline: nums.map(n => parseInt(n, 10)) };
+                        const pickNums = optionSets => {
+                            const cntMap = {};
+                            optionSets.forEach(set => set.forEach(n => { cntMap[n] = (cntMap[n] || 0) + 1; }));
+                            let arr;
+                            if (smode === 'same') arr = Object.entries(cntMap).filter(([, c]) => c >= 2).map(([n]) => n);
+                            else if (smode === 'diff') arr = Object.entries(cntMap).filter(([, c]) => c === 1).map(([n]) => n);
+                            else arr = Object.keys(cntMap);
+                            return arr.sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+                        };
+                        const nums = pickNums(rollingOptionSets);
+                        // 悬浮显示用含本期的窗口（本期开奖后数据）
+                        const currentSets = calculateColdSets(cold.setTypes || [], getCurrentColdSourceData(state.historyData), cold.setCounts || {});
+                        const currentOptionSets = getColdOptionNumberSets({
+                            ...currentSets,
+                            inputNumbers: cold.selectedNumbers,
+                            inputTerms: cold.inputTerms,
+                            selectedZodiacs: cold.selectedZodiacs,
+                            selectedWaves: cold.selectedWaves
+                        });
+                        coldHitSetsForPoint = { ...currentSets, setKline: pickNums(currentOptionSets).map(n => parseInt(n, 10)) };
                         if (cold.inputTerms) coldHitSetsForPoint.inputNumbers = formatInputTerms(cold.inputTerms);
                         if (cold.selectedZodiacs && cold.selectedZodiacs.length) coldHitSetsForPoint.selectZodiacs = cold.selectedZodiacs;
                         if (cold.selectedWaves && cold.selectedWaves.length) coldHitSetsForPoint.selectedWaves = cold.selectedWaves;
