@@ -494,7 +494,18 @@
                     if (seen.has(item.expect)) return false;
                     seen.add(item.expect);
                     return true;
-                }).sort((a, b) => parseInt(a.expect) - parseInt(b.expect));
+                }).sort((a, b) => {
+                    const ka = parseInt(String(a.expect).replace(/\D/g, ''), 10);
+                    const kb = parseInt(String(b.expect).replace(/\D/g, ''), 10);
+                    if (!isNaN(ka) && !isNaN(kb)) return ka - kb;
+                    return String(a.expect).localeCompare(String(b.expect));
+                });
+                // 确保按时间从旧到新排列（防止上游返回新期在前导致遗漏统计反向）
+                const firstN = state.processedList.length ? parseInt(String(state.processedList[0].expect).replace(/\D/g, ''), 10) : NaN;
+                const lastN = state.processedList.length ? parseInt(String(state.processedList[state.processedList.length - 1].expect).replace(/\D/g, ''), 10) : NaN;
+                if (!isNaN(firstN) && !isNaN(lastN) && firstN > lastN) {
+                    state.processedList.reverse();
+                }
 
                 state.processedList.forEach(item => {
                     if (item.zodiac) {
