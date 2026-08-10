@@ -622,7 +622,13 @@
                         };
                         const nums = pickNums(rollingOptionSets);
                         // 悬浮显示用含本期的窗口（本期开奖后数据）
-                        const currentSets = calculateColdSets(cold.setTypes || [], getCurrentColdSourceData(state.historyData), cold.setCounts || {});
+                        const currentPointForSets = {
+                            winNum,
+                            win: winZ,
+                            codes: cList.map((n, i) => ({ num: n, wave: item.wave.split(',')[i] })),
+                            pingXiao: zList.slice(0, 6).join(' ')
+                        };
+                        const currentSets = calculateColdSets(cold.setTypes || [], getCurrentColdSourceData(state.historyData.concat([currentPointForSets])), cold.setCounts || {});
                         const currentOptionSets = getColdOptionNumberSets({
                             ...currentSets,
                             inputNumbers: cold.selectedNumbers,
