@@ -3617,12 +3617,18 @@ function copyRecommendations() {
 
             const rows = types
                 .filter(type => Array.isArray(sets[type]) && sets[type].length)
-                .map(type => `
-                    <div style="display:flex; justify-content:space-between; gap:10px; margin-top:4px; font-size:10px;">
-                        <span style="color:var(--text-secondary); flex-shrink:0;">${labels[type] || type}</span>
-                        <span style="color:var(--warn); text-align:right; word-break:break-word;">${sets[type].join(' ')}</span>
-                    </div>
-                `)
+                .map(type => {
+                    const values = sets[type];
+                    const label = (type === 'setKline' || type === 'setNumbers')
+                        ? `号码集（${values.length}个）`
+                        : (labels[type] || type);
+                    return `
+                        <div style="display:flex; justify-content:space-between; gap:10px; margin-top:4px; font-size:10px;">
+                            <span style="color:var(--text-secondary); flex-shrink:0;">${label}</span>
+                            <span style="color:var(--warn); text-align:right; word-break:break-word;">${values.join(' ')}</span>
+                        </div>
+                    `;
+                })
                 .join('');
 
             return rows ? `
