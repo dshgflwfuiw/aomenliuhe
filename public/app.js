@@ -3623,7 +3623,7 @@ function copyRecommendations() {
                         ? `号码集（${values.length}个）`
                         : (labels[type] || type);
                     return `
-                        <div style="display:flex; justify-content:space-between; gap:10px; margin-top:4px; font-size:10px;">
+                        <div style="display:flex; justify-content:space-between; gap:8px; margin-top:2px; font-size:10px;">
                             <span style="color:var(--text-secondary); flex-shrink:0;">${label}</span>
                             <span style="color:var(--warn); text-align:right; word-break:break-word;">${values.join(' ')}</span>
                         </div>
@@ -3632,7 +3632,7 @@ function copyRecommendations() {
                 .join('');
 
             return rows ? `
-                <div style="margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.05);">
+                <div style="margin-top:6px; padding-top:6px; border-top:1px solid rgba(255,255,255,0.05);">
                     <div style="font-size:11px; color:var(--accent); font-weight:700; margin-bottom:4px;">本期开奖后特码自由K线数据</div>
                     ${rows}
                 </div>
@@ -3659,7 +3659,7 @@ function copyRecommendations() {
                         .sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]))
                         .slice(0, 6);
                     zodiacOmissionHtml = `
-                        <div style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.05);">
+                        <div style="margin-top:7px; padding-top:7px; border-top:1px solid rgba(255,255,255,0.05);">
                             <div class="tooltip-row">
                                 <span class="tooltip-label">遗漏最少肖</span>
                                 <span class="tooltip-value" style="font-size:10px; color:var(--text-secondary);">${sortedZodiacOmissions.map(([z, om]) => `${z}(${om})`).join(' ')}</span>
@@ -3698,7 +3698,7 @@ function copyRecommendations() {
                 if (currentMode === 'zodiac_hotcold') {
                     const isZHot = hotZ.includes(data.win);
                     modeSpecificHtml = `
-                        <div style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.05);">
+                        <div style="margin-top:7px; padding-top:7px; border-top:1px solid rgba(255,255,255,0.05);">
                             <div style="font-size:11px; color:var(--text-secondary); margin-bottom:8px; display:flex; justify-content:space-between;">
                                 <span>基于前 <b>${windowData.length}</b> 期统计</span>
                                 <span>${isZHot ? '热肖命中' : '冷肖命中'}</span>
@@ -3718,7 +3718,7 @@ function copyRecommendations() {
                 } else {
                     const isNHot = hotN.includes(numStr);
                     modeSpecificHtml = `
-                        <div style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.05);">
+                        <div style="margin-top:7px; padding-top:7px; border-top:1px solid rgba(255,255,255,0.05);">
                             <div style="font-size:11px; color:var(--text-secondary); margin-bottom:8px; display:flex; justify-content:space-between;">
                                 <span>基于前 <b>${windowData.length}</b> 期统计</span>
                                 <span>${isNHot ? '热码命中' : '冷码命中'}</span>
@@ -3738,7 +3738,7 @@ function copyRecommendations() {
                 }
             } else if (currentMode === 'cold_custom') {
                 modeSpecificHtml = `
-                    <div style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.05);">
+                    <div style="margin-top:7px; padding-top:7px; border-top:1px solid rgba(255,255,255,0.05);">
                         <div class="tooltip-row">
                             <span class="tooltip-label">条件命中</span>
                             <span class="tooltip-value" style="color: ${data.coldMatches > 0 ? 'var(--up)' : 'var(--down)'}; font-weight:700;">${data.coldMatches || 0}/${state.coldSelection?.types.length || 0}</span>
@@ -3750,7 +3750,7 @@ function copyRecommendations() {
                 const isMulti = state.followMode === 'multi';
                 const isMissNum = state.followMode === 'missnum';
                 modeSpecificHtml = `
-                    <div style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.05);">
+                    <div style="margin-top:7px; padding-top:7px; border-top:1px solid rgba(255,255,255,0.05);">
                         <div class="tooltip-row">
                             <span class="tooltip-label">${getFollowLabel()}目标</span>
                             <span class="tooltip-value" style="color:var(--warn);font-weight:700;">${data.followZodiac || '首期待定'}</span>
@@ -3765,7 +3765,7 @@ function copyRecommendations() {
                 const isMulti = state.tailMode === 'multi';
                 const isMiss = state.tailMode === 'missrank';
                 modeSpecificHtml = `
-                    <div style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.05);">
+                    <div style="margin-top:7px; padding-top:7px; border-top:1px solid rgba(255,255,255,0.05);">
                         <div class="tooltip-row">
                             <span class="tooltip-label">${isMulti ? '连尾目标' : (isMiss ? '跟名次目标' : '跟尾目标')}</span>
                             <span class="tooltip-value" style="color:var(--warn);font-weight:700;">${data.followZodiac || '首期待定'}</span>
@@ -3778,7 +3778,7 @@ function copyRecommendations() {
                 `;
             } else if (currentMode === 'pingnum_absent') {
                 modeSpecificHtml = `
-                    <div style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.05);">
+                    <div style="margin-top:7px; padding-top:7px; border-top:1px solid rgba(255,255,255,0.05);">
                         <div class="tooltip-row">
                             <span class="tooltip-label">不出号目标</span>
                             <span class="tooltip-value" style="color:var(--warn);font-weight:700;">${data.followZodiac || '首期待定'}</span>
@@ -3791,7 +3791,7 @@ function copyRecommendations() {
                 `;
             } else if (currentMode === 'oddeven') {
                 modeSpecificHtml = `
-                    <div style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.05);">
+                    <div style="margin-top:7px; padding-top:7px; border-top:1px solid rgba(255,255,255,0.05);">
                         <div class="tooltip-row">
                             <span class="tooltip-label">单双</span>
                             <span class="tooltip-value" style="color:${data.winNum % 2 === 1 ? 'var(--up)' : 'var(--down)'}; font-weight:700;">${data.winNum % 2 === 1 ? '单' : '双'}</span>
@@ -3800,7 +3800,7 @@ function copyRecommendations() {
                 `;
             } else if (currentMode === 'bigsmall') {
                 modeSpecificHtml = `
-                    <div style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.05);">
+                    <div style="margin-top:7px; padding-top:7px; border-top:1px solid rgba(255,255,255,0.05);">
                         <div class="tooltip-row">
                             <span class="tooltip-label">大小</span>
                             <span class="tooltip-value" style="color:${data.winNum >= 25 ? 'var(--up)' : 'var(--down)'}; font-weight:700;">${data.winNum >= 25 ? '大' : '小'}</span>
@@ -3809,7 +3809,7 @@ function copyRecommendations() {
                 `;
             } else if (currentMode === 'color') {
                 modeSpecificHtml = `
-                    <div style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.05);">
+                    <div style="margin-top:7px; padding-top:7px; border-top:1px solid rgba(255,255,255,0.05);">
                         <div class="tooltip-row">
                             <span class="tooltip-label">波色</span>
                             <span class="tooltip-value" style="color:${data.currentColor === 'green' ? '#000' : data.currentColor === 'blue' ? '#448aff' : '#ff1744'}; font-weight:700;">${data.currentColor}</span>
@@ -3838,7 +3838,7 @@ function copyRecommendations() {
                         <div class="tooltip-balls">${ballsHtml}</div>
                     </div>
                     
-                    <div style="margin-top:12px; padding-top:12px; border-top:1px dashed rgba(255,255,255,0.1);">
+                    <div style="margin-top:7px; padding-top:7px; border-top:1px dashed rgba(255,255,255,0.1);">
             `;
 
             if (['zodiac_hotcold', 'number_hotcold'].includes(state.currentMode)) {
