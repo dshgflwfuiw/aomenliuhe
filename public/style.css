@@ -655,15 +655,15 @@
 
         .tooltip-header {
             border-bottom: 1px solid var(--border);
-            padding-bottom: 5px;
-            margin-bottom: 7px;
+            padding-bottom: 3px;
+            margin-bottom: 4px;
         }
 
         .tooltip-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 3px;
+            margin-bottom: 1px;
         }
 
         .tooltip-label {
@@ -681,7 +681,7 @@
         .tooltip-balls {
             display: flex;
             gap: 4px;
-            margin-top: 5px;
+            margin-top: 3px;
             flex-wrap: wrap;
         }
 
