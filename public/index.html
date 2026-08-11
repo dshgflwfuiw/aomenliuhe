@@ -10,7 +10,7 @@
     <meta name="theme-color" content="#0a0c10">
     <title>六合趋势全自动联动终端</title>
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=20260817">
+<link rel="stylesheet" href="style.css?v=20260818">
 </head>
 
 <body>
@@ -523,8 +523,46 @@
             <div id="backtestResult" style="font-size:11px;color:var(--text-secondary);min-height:40px;line-height:1.8;">数据加载后自动对比各窗口表现</div>
         </div>
 
+        <div class="sidebar-card" id="kellyCard">
+            <h3>🧮 凯利计算器</h3>
+            <div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;line-height:1.6;">算"该下注本金的百分之几"，结果为负=数学上不该下注</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-bottom:8px;">
+                <div style="display:flex;flex-direction:column;gap:4px;">
+                    <span style="color:var(--text-secondary);font-size:11px;">赔率（押1赢）</span>
+                    <input type="number" id="kellyOdds" value="40" step="0.01" min="0" style="font-size:13px;padding:8px 10px;">
+                </div>
+                <div style="display:flex;flex-direction:column;gap:4px;">
+                    <span style="color:var(--text-secondary);font-size:11px;">命中率 %</span>
+                    <input type="number" id="kellyProb" value="2.04" step="0.01" min="0" max="100" style="font-size:13px;padding:8px 10px;">
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-bottom:8px;">
+                <div style="display:flex;flex-direction:column;gap:4px;">
+                    <span style="color:var(--text-secondary);font-size:11px;">本金</span>
+                    <input type="number" id="kellyBankroll" value="1000" step="100" min="1" style="font-size:13px;padding:8px 10px;">
+                </div>
+                <div style="display:flex;flex-direction:column;gap:4px;">
+                    <span style="color:var(--text-secondary);font-size:11px;">常用玩法</span>
+                    <select id="kellyPreset" onchange="applyKellyPreset(this.value)" style="font-size:13px;padding:8px 10px;">
+                        <option value="">自定义</option>
+                        <option value="tema">特码 1赔40</option>
+                        <option value="daxiao">大小(大) 1赔0.9</option>
+                        <option value="danshuang">单数 1赔0.9</option>
+                        <option value="bose">波色绿 1赔2.85</option>
+                    </select>
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px;">
+                <button onclick="setKellyFraction(1)" style="font-size:11px;padding:7px 4px;">全凯利</button>
+                <button onclick="setKellyFraction(0.5)" style="font-size:11px;padding:7px 4px;">半凯利</button>
+                <button onclick="setKellyFraction(0.25)" style="font-size:11px;padding:7px 4px;">¼凯利</button>
+            </div>
+            <button class="primary" style="width:100%;" onclick="calcKelly()">计算</button>
+            <div id="kellyResult" style="margin-top:10px;font-size:11px;color:var(--text-secondary);min-height:64px;line-height:1.9;">输入赔率和命中率后点计算</div>
+        </div>
+
         <div style="height: 20px; flex-shrink: 0;"></div>
-        <div style="font-size: 9px; color: var(--text-secondary); text-align: center; padding: 4px 0 8px; flex-shrink: 0;">版本 v20260817</div>
+        <div style="font-size: 9px; color: var(--text-secondary); text-align: center; padding: 4px 0 8px; flex-shrink: 0;">版本 v20260818</div>
     </div>
 
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
@@ -820,7 +858,7 @@
         </div>
     </div>
 
-    <script src="app.js?v=20260817"></script>
+    <script src="app.js?v=20260818"></script>
 
     <nav class="mobile-nav" id="mobileNav">
         <div class="mobile-nav-item active" data-page="chart" onclick="switchToChart()">

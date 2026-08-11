@@ -3446,6 +3446,59 @@ function copyRecommendations() {
             `;
         }
 
+        // ==================== 凯利计算器 ====================
+        let kellyFraction = 1;
+
+        function applyKellyPreset(value) {
+            const presets = {
+                tema: { odds: 40, prob: 1 / 49 * 100 },
+                daxiao: { odds: 0.9, prob: 25 / 49 * 100 },
+                danshuang: { odds: 0.9, prob: 25 / 49 * 100 },
+                bose: { odds: 2.85, prob: 17 / 49 * 100 }
+            };
+            const p = presets[value];
+            if (!p) return;
+            document.getElementById('kellyOdds').value = p.odds;
+            document.getElementById('kellyProb').value = p.prob.toFixed(2);
+            calcKelly();
+        }
+
+        function setKellyFraction(f) {
+            kellyFraction = f;
+            calcKelly();
+        }
+
+        function calcKelly() {
+            const el = document.getElementById('kellyResult');
+            if (!el) return;
+            const odds = parseFloat(document.getElementById('kellyOdds').value);
+            const prob = parseFloat(document.getElementById('kellyProb').value);
+            const bankroll = parseFloat(document.getElementById('kellyBankroll').value);
+            if (!isFinite(odds) || !isFinite(prob) || !isFinite(bankroll) || odds <= 0 || prob <= 0 || bankroll <= 0) {
+                el.innerHTML = '<span style="color:var(--warn);">请输入有效的赔率、命中率和本金</span>';
+                return;
+            }
+            const p = Math.min(prob, 100) / 100;
+            const q = 1 - p;
+            const f = (odds * p - q) / odds;
+            const breakEven = q / p;
+            const fracLabel = kellyFraction === 1 ? '全凯利' : kellyFraction === 0.5 ? '半凯利' : '¼凯利';
+            if (f <= 0) {
+                el.innerHTML = `
+                    <div style="color:var(--down);font-weight:700;">✗ 负期望，不该下注</div>
+                    <div>凯利比例 ${(f * 100).toFixed(2)}%</div>
+                    <div>盈亏平衡净赔率需 ≥ ${breakEven.toFixed(2)}（当前 ${odds}）</div>
+                    <div style="color:var(--text-secondary);">长期下注必亏，凯利答案=0</div>`;
+            } else {
+                const bet = bankroll * f * kellyFraction;
+                el.innerHTML = `
+                    <div style="color:var(--up);font-weight:700;">✓ 正期望</div>
+                    <div>凯利比例 ${(f * 100).toFixed(2)}%</div>
+                    <div>${fracLabel}建议下注 ${bet.toFixed(2)}（本金的 ${(f * 100 * kellyFraction).toFixed(2)}%）</div>
+                    <div style="color:var(--text-secondary);">盈亏平衡净赔率 ${breakEven.toFixed(2)}</div>`;
+            }
+        }
+
         // ==================== 图例 + 近10期统计 ====================
         function updateChartLegend() {
             const el = document.getElementById('chartLegend');
