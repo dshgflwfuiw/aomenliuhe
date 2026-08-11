@@ -1488,37 +1488,6 @@
                     `</span>${i === 5 ? ' <span class="top-plus">+</span> ' : ''}`;
             });
 
-            if (state.currentMode === 'color' && d.colorScores) {
-                topHtml += ` <span style="margin-left:8px;font-size:11px;color:var(--text-secondary);">红:</span>`;
-                topHtml += `<span style="color:#ff1744;font-weight:700;margin-left:2px;">${d.colorScores.red > 0 ? '+' : ''}${d.colorScores.red.toFixed(1)}</span>`;
-                topHtml += ` <span style="margin-left:6px;font-size:11px;color:var(--text-secondary);">蓝:</span>`;
-                topHtml += `<span style="color:#448aff;font-weight:700;margin-left:2px;">${d.colorScores.blue > 0 ? '+' : ''}${d.colorScores.blue.toFixed(1)}</span>`;
-                topHtml += ` <span style="margin-left:6px;font-size:11px;color:var(--text-secondary);">绿:</span>`;
-                topHtml += `<span style="color:#00e676;font-weight:700;margin-left:2px;">${d.colorScores.green > 0 ? '+' : ''}${d.colorScores.green.toFixed(1)}</span>`;
-            } else {
-                topHtml += ` <span style="margin-left:8px;font-size:11px;color:var(--text-secondary);">指数:</span>`;
-                topHtml += `<span style="color:${d.displayScore >= 0 ? 'var(--up)' : 'var(--down)'};font-weight:700;margin-left:4px;">${d.displayScore > 0 ? '+' : ''}${d.displayScore}</span>`;
-            }
-
-            if (state.currentMode === 'cold_custom' && typeof d.coldMatches !== 'undefined') {
-                topHtml += ` <span style="margin-left:8px;font-size:10px;color:var(--warn);">(${d.coldMatches}/${state.coldSelection?.types.length || 0})</span>`;
-            }
-            if (state.currentMode === 'cold_custom' && state.coldSelection && state.coldSelection.setKline && d.followZodiac) {
-                const setShort = state.coldSelection.setMode === 'same' ? '同' : state.coldSelection.setMode === 'diff' ? '异' : '全';
-                topHtml += ` <span style="margin-left:8px;font-size:10px;color:var(--accent);">${setShort}:${d.followZodiac}${d.followHit ? '✓' : '✗'}</span>`;
-            }
-
-            if (state.currentMode === 'pingxiao_follow' && d.followZodiac) {
-                topHtml += ` <span style="margin-left:8px;font-size:10px;color:var(--warn);">${getFollowShortLabel()}${d.followZodiac}${d.followHit ? '✓' : '✗'}</span>`;
-            }
-            if (state.currentMode === 'pingtail_follow' && d.followZodiac) {
-                const tShort = state.tailMode === 'multi' ? '连' : '跟';
-                topHtml += ` <span style="margin-left:8px;font-size:10px;color:var(--warn);">${tShort}${d.followZodiac}${d.followHit ? '✓' : '✗'}</span>`;
-            }
-            if (state.currentMode === 'pingnum_absent' && d.followZodiac) {
-                topHtml += ` <span style="margin-left:8px;font-size:10px;color:var(--warn);">不${d.followZodiac}${d.followHit ? '✓' : '✗'}</span>`;
-            }
-
             document.getElementById('topBarCenter').innerHTML = topHtml;
             renderTable(d);
         }
