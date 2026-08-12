@@ -607,7 +607,7 @@
                             ...rollingSets,
                             inputNumbers: cold.selectedNumbers,
                             inputTerms: cold.inputTerms,
-                            selectedZodiacs: cold.selectedZodiacs,
+                            selectZodiacs: cold.selectedZodiacs,
                             selectedWaves: cold.selectedWaves
                         });
                         const smode = cold.setMode || 'all';
@@ -633,7 +633,7 @@
                             ...currentSets,
                             inputNumbers: cold.selectedNumbers,
                             inputTerms: cold.inputTerms,
-                            selectedZodiacs: cold.selectedZodiacs,
+                            selectZodiacs: cold.selectedZodiacs,
                             selectedWaves: cold.selectedWaves
                         });
                         coldHitSetsForPoint = { ...currentSets, setKline: pickNums(currentOptionSets).map(n => parseInt(n, 10)) };
