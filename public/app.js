@@ -602,7 +602,12 @@
                 } else if (state.currentMode === 'cold_custom' && state.coldSelection && state.coldSelection.types.length) {
                     const cold = state.coldSelection;
                     if (cold.setKline) {
-                        const rollingSets = calculateColdSets(cold.setTypes || [], getRollingColdSourceData(state.historyData, idx), cold.setCounts || {});
+                        const rollingSets = calculateColdSets(
+                            cold.setTypes || [],
+                            getRollingColdSourceData(state.historyData, idx),
+                            cold.setCounts || {},
+                            getRollingHotColdSourceData(state.historyData, idx)
+                        );
                         const rollingOptionSets = getColdOptionNumberSets({
                             ...rollingSets,
                             inputNumbers: cold.selectedNumbers,
@@ -628,7 +633,13 @@
                             codes: cList.map((n, i) => ({ num: n, wave: item.wave.split(',')[i] })),
                             pingXiao: zList.slice(0, 6).join(' ')
                         };
-                        const currentSets = calculateColdSets(cold.setTypes || [], getCurrentColdSourceData(state.historyData.concat([currentPointForSets])), cold.setCounts || {});
+                        const currentData = state.historyData.concat([currentPointForSets]);
+                        const currentSets = calculateColdSets(
+                            cold.setTypes || [],
+                            getCurrentColdSourceData(currentData),
+                            cold.setCounts || {},
+                            getCurrentHotColdSourceData(currentData)
+                        );
                         const currentOptionSets = getColdOptionNumberSets({
                             ...currentSets,
                             inputNumbers: cold.selectedNumbers,
@@ -650,7 +661,12 @@
                             coldMatchesForPoint = 0;
                         }
                     } else {
-                        const rollingColdSets = calculateColdSets(cold.types, getRollingColdSourceData(state.historyData, idx), cold.counts || {});
+                        const rollingColdSets = calculateColdSets(
+                            cold.types,
+                            getRollingColdSourceData(state.historyData, idx),
+                            cold.counts || {},
+                            getRollingHotColdSourceData(state.historyData, idx)
+                        );
                         coldHitSetsForPoint = rollingColdSets;
                         let matches = 0;
                         const numStr = winNum.toString().padStart(2, '0');
@@ -817,7 +833,12 @@
                 });
                 if (state.overlay && state.overlay.enabled && state.overlay.type === 'cold' && state.overlay.coldSets && state.overlay.coldSets.length) {
                     state.overlay.coldSets.forEach((set, si) => {
-                        const rolling = calculateColdSets(set.types, getRollingColdSourceData(state.historyData, idx), set.counts || {});
+                        const rolling = calculateColdSets(
+                            set.types,
+                            getRollingColdSourceData(state.historyData, idx),
+                            set.counts || {},
+                            getRollingHotColdSourceData(state.historyData, idx)
+                        );
                         const numStrC = winNum.toString().padStart(2, '0');
                         const m = countColdConditionMatches(set, rolling, {
                             numStr: numStrC, winZ, winNum, color, cList,
@@ -875,7 +896,8 @@
                         historyPoint.coldSets = calculateColdSets(
                             state.coldSelection.types,
                             getCurrentColdSourceData(state.historyData),
-                            state.coldSelection.counts || {}
+                            state.coldSelection.counts || {},
+                            getCurrentHotColdSourceData(state.historyData)
                         );
                         if (state.coldSelection.types.includes('inputNumbers') && state.coldSelection.inputTerms) {
                             historyPoint.coldSets.inputNumbers = formatInputTerms(state.coldSelection.inputTerms);
@@ -893,10 +915,12 @@
             if (state.currentMode === 'cold_custom' && state.coldSelection) {
                 const cold = state.coldSelection;
                 const selectedSourceData = getSelectedColdSourceData();
+                const selectedHotColdSourceData = getSelectedHotColdSourceData();
                 const latestSets = calculateColdSets(
                     cold.setKline ? (cold.setTypes || []) : cold.types,
                     selectedSourceData,
-                    cold.setKline ? (cold.setCounts || {}) : (cold.counts || {})
+                    cold.setKline ? (cold.setCounts || {}) : (cold.counts || {}),
+                    selectedHotColdSourceData
                 );
 
                 if (cold.setKline) {
@@ -2065,6 +2089,22 @@ function copyRecommendations() {
             return historyData.slice(-MAX_COLD_OMISSION_PERIODS);
         }
 
+        // 冷热统计跟随右上角选择的期数，最多使用 300 期以控制历史K线的计算量。
+        function getSelectedHotColdSourceData() {
+            const selectedCount = Math.min(getSelectedLoadCount(), 300);
+            return state.historyData.slice(-selectedCount);
+        }
+
+        function getRollingHotColdSourceData(historyData, currentIndex) {
+            const selectedCount = Math.min(getSelectedLoadCount(), 300);
+            return historyData.slice(Math.max(0, currentIndex - selectedCount), currentIndex);
+        }
+
+        function getCurrentHotColdSourceData(historyData) {
+            const selectedCount = Math.min(getSelectedLoadCount(), 300);
+            return historyData.slice(-selectedCount);
+        }
+
         function calculateOmissionCounts(keys, matchFn, sourceData = state.historyData) {
             const counts = {};
             keys.forEach(k => counts[k] = 0);
@@ -2280,26 +2320,26 @@ function copyRecommendations() {
             return matches;
         }
 
-        function calculateColdSets(types, sourceData = state.historyData, counts = {}) {
+        function calculateColdSets(types, omissionSourceData = state.historyData, counts = {}, hotColdSourceData = omissionSourceData) {
             const defaultCounts = { zodiacs: 3, numbers: 10, hotNumbers: 10, coldNumbers: 10, allHotNumbers: 10, allColdNumbers: 10, ...counts };
             const sets = {};
-            if (types.includes('numbers')) sets.numbers = getCold10Numbers(sourceData, defaultCounts.numbers);
-            if (types.includes('zodiacs')) sets.zodiacs = getCold3Zodiacs(sourceData, defaultCounts.zodiacs);
-            if (types.includes('hotNumbers')) sets.hotNumbers = getHot10Numbers(sourceData, defaultCounts.hotNumbers);
-            if (types.includes('coldNumbers')) sets.coldNumbers = getCold10NumbersByFrequency(sourceData, defaultCounts.coldNumbers);
-            if (types.includes('hotZodiacs')) sets.hotZodiacs = getHot3Zodiacs(sourceData, counts.hotZodiacs || 3);
-            if (types.includes('coldZodiacs')) sets.coldZodiacs = getCold3ZodiacsByFrequency(sourceData, counts.coldZodiacs || 3);
-            if (types.includes('allHotNumbers')) sets.allHotNumbers = getAllHot10Numbers(sourceData, defaultCounts.allHotNumbers);
-            if (types.includes('allColdNumbers')) sets.allColdNumbers = getAllCold10Numbers(sourceData, defaultCounts.allColdNumbers);
-            if (types.includes('allHotZodiacs')) sets.allHotZodiacs = getAllHot3Zodiacs(sourceData, counts.allHotZodiacs || 3);
-            if (types.includes('allColdZodiacs')) sets.allColdZodiacs = getAllCold3Zodiacs(sourceData, counts.allColdZodiacs || 3);
-            if (types.includes('wave')) sets.wave = getColdWave(sourceData);
-            if (types.includes('halfwave')) sets.halfwave = getColdHalfWave(sourceData, counts.halfwave || 1);
-            if (types.includes('jiaYe')) sets.jiaYe = getColdJiaYe(sourceData);
-            if (types.includes('head')) sets.head = getColdHeadGroup(sourceData, counts.head || 1);
-            if (types.includes('tail')) sets.tail = getColdTail2(sourceData, counts.tail || 2);
-            if (types.includes('wuxing')) sets.wuxing = getColdSegment(sourceData, counts.wuxing || 1);
-            if (types.includes('halfHead')) sets.halfHead = getColdHalfHead(sourceData, counts.halfHead || 1);
+            if (types.includes('numbers')) sets.numbers = getCold10Numbers(omissionSourceData, defaultCounts.numbers);
+            if (types.includes('zodiacs')) sets.zodiacs = getCold3Zodiacs(omissionSourceData, defaultCounts.zodiacs);
+            if (types.includes('hotNumbers')) sets.hotNumbers = getHot10Numbers(hotColdSourceData, defaultCounts.hotNumbers);
+            if (types.includes('coldNumbers')) sets.coldNumbers = getCold10NumbersByFrequency(hotColdSourceData, defaultCounts.coldNumbers);
+            if (types.includes('hotZodiacs')) sets.hotZodiacs = getHot3Zodiacs(hotColdSourceData, counts.hotZodiacs || 3);
+            if (types.includes('coldZodiacs')) sets.coldZodiacs = getCold3ZodiacsByFrequency(hotColdSourceData, counts.coldZodiacs || 3);
+            if (types.includes('allHotNumbers')) sets.allHotNumbers = getAllHot10Numbers(hotColdSourceData, defaultCounts.allHotNumbers);
+            if (types.includes('allColdNumbers')) sets.allColdNumbers = getAllCold10Numbers(hotColdSourceData, defaultCounts.allColdNumbers);
+            if (types.includes('allHotZodiacs')) sets.allHotZodiacs = getAllHot3Zodiacs(hotColdSourceData, counts.allHotZodiacs || 3);
+            if (types.includes('allColdZodiacs')) sets.allColdZodiacs = getAllCold3Zodiacs(hotColdSourceData, counts.allColdZodiacs || 3);
+            if (types.includes('wave')) sets.wave = getColdWave(omissionSourceData);
+            if (types.includes('halfwave')) sets.halfwave = getColdHalfWave(omissionSourceData, counts.halfwave || 1);
+            if (types.includes('jiaYe')) sets.jiaYe = getColdJiaYe(omissionSourceData);
+            if (types.includes('head')) sets.head = getColdHeadGroup(omissionSourceData, counts.head || 1);
+            if (types.includes('tail')) sets.tail = getColdTail2(omissionSourceData, counts.tail || 2);
+            if (types.includes('wuxing')) sets.wuxing = getColdSegment(omissionSourceData, counts.wuxing || 1);
+            if (types.includes('halfHead')) sets.halfHead = getColdHalfHead(omissionSourceData, counts.halfHead || 1);
             return sets;
         }
 
@@ -2458,6 +2498,7 @@ function copyRecommendations() {
             if (!types.length) return alert('请先选择至少一个特码自由K线选项');
 
             const coldSourceData = getSelectedColdSourceData();
+            const hotColdSourceData = getSelectedHotColdSourceData();
             const counts = {
                 zodiacs: parseInt(document.getElementById('coldOption_zodiacs_count')?.value || '3'),
                 numbers: parseInt(document.getElementById('coldOption_numbers_count')?.value || '10'),
@@ -2476,7 +2517,7 @@ function copyRecommendations() {
                 halfHead: parseInt(document.getElementById('coldOption_halfHead_count')?.value || '1')
             };
             
-            const sets = calculateColdSets(types, coldSourceData, counts);
+            const sets = calculateColdSets(types, coldSourceData, counts, hotColdSourceData);
             if (selectedZodiacs.length) sets.selectZodiacs = selectedZodiacs;
             if (selectedWaves.length) sets.selectedWaves = selectedWaves;
             if (selectedNumbers.length) sets.inputNumbers = selectedNumbers;
