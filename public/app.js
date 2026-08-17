@@ -2050,21 +2050,26 @@ function copyRecommendations() {
             return { maxRiseCount, maxFallCount, currentRise, currentFall };
         }
 
+        // 遗漏最多统计只使用最近 175 期：30～150 期按选择窗口变化，175 期以上固定。
+        const MAX_COLD_OMISSION_PERIODS = 175;
+
         function getSelectedColdSourceData() {
-            const selectedCount = getSelectedLoadCount();
-            if (!Number.isFinite(selectedCount)) return state.historyData;
+            const selectedCount = Math.min(getSelectedLoadCount(), MAX_COLD_OMISSION_PERIODS);
+            if (!Number.isFinite(selectedCount)) return state.historyData.slice(-MAX_COLD_OMISSION_PERIODS);
             return state.historyData.slice(-selectedCount);
         }
 
         function getRollingColdSourceData(historyData, currentIndex) {
-            const selectedCount = Math.min(getSelectedLoadCount(), 300);
-            if (!Number.isFinite(selectedCount)) return historyData.slice(Math.max(0, currentIndex - 300), currentIndex);
+            const selectedCount = Math.min(getSelectedLoadCount(), MAX_COLD_OMISSION_PERIODS);
+            if (!Number.isFinite(selectedCount)) {
+                return historyData.slice(Math.max(0, currentIndex - MAX_COLD_OMISSION_PERIODS), currentIndex);
+            }
             return historyData.slice(Math.max(0, currentIndex - selectedCount), currentIndex);
         }
 
         function getCurrentColdSourceData(historyData) {
-            const selectedCount = Math.min(getSelectedLoadCount(), 300);
-            if (!Number.isFinite(selectedCount)) return historyData.slice(-300);
+            const selectedCount = Math.min(getSelectedLoadCount(), MAX_COLD_OMISSION_PERIODS);
+            if (!Number.isFinite(selectedCount)) return historyData.slice(-MAX_COLD_OMISSION_PERIODS);
             return historyData.slice(-selectedCount);
         }
 
