@@ -889,6 +889,48 @@
                 new Set(cList.map(n => parseInt(n, 10) % 10)).forEach(t => { tailLastSeen[t] = idx; });
             });
 
+            // 期数切换后，同步更新自由K线当前显示的号码集，避免仍保留生成时的旧窗口结果。
+            if (state.currentMode === 'cold_custom' && state.coldSelection) {
+                const cold = state.coldSelection;
+                const selectedSourceData = getSelectedColdSourceData();
+                const latestSets = calculateColdSets(
+                    cold.setKline ? (cold.setTypes || []) : cold.types,
+                    selectedSourceData,
+                    cold.setKline ? (cold.setCounts || {}) : (cold.counts || {})
+                );
+
+                if (cold.setKline) {
+                    const latestOptionSets = getColdOptionNumberSets({
+                        ...latestSets,
+                        inputNumbers: cold.selectedNumbers,
+                        inputTerms: cold.inputTerms,
+                        selectZodiacs: cold.selectedZodiacs,
+                        selectedWaves: cold.selectedWaves
+                    });
+                    const latestCountMap = {};
+                    latestOptionSets.forEach(set => set.forEach(n => {
+                        latestCountMap[n] = (latestCountMap[n] || 0) + 1;
+                    }));
+                    const setMode = cold.setMode || 'all';
+                    let latestSetNumbers;
+                    if (setMode === 'same') {
+                        latestSetNumbers = Object.entries(latestCountMap)
+                            .filter(([, count]) => count >= 2).map(([num]) => num);
+                    } else if (setMode === 'diff') {
+                        latestSetNumbers = Object.entries(latestCountMap)
+                            .filter(([, count]) => count === 1).map(([num]) => num);
+                    } else {
+                        latestSetNumbers = Object.keys(latestCountMap);
+                    }
+                    latestSetNumbers.sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+                    cold.setNumbers = latestSetNumbers;
+                    cold.sets = { ...latestSets, setNumbers: latestSetNumbers };
+                } else {
+                    cold.sets = latestSets;
+                }
+                updateColdSummary();
+            }
+
             updatePagination();
 
             // Pre-compute displayScore for all history data (hot/cold modes only set it for the visible page)
