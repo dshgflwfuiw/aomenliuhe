@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="theme-color" content="#0a0c10">
+    <title>六合趋势全自动联动终端</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css?v=20260819">
+</head>
+
+<body>
+
+    <div id="loading-overlay">
+        <div class="loading-spinner"></div>
+        <div style="margin-top: 16px; color: var(--accent); font-size: 14px;">数据加载中...</div>
+        <div id="loadingProgress" style="margin-top: 8px; color: var(--text-secondary); font-size: 12px;"></div>
+    </div>
+    <div class="top-bar" id="topBar">
+        <div class="top-bar-left">
+            <span style="color:var(--text-secondary);font-size:11px;">期号</span>
+            <b id="topExpect" style="font-size:14px;color:var(--accent);margin-left:4px;">--</b>
+        </div>
+        <div class="top-bar-center" id="topBarCenter"></div>
+        <div class="top-bar-right">
+            <button id="themeToggle" onclick="toggleTheme()" title="切换浅色/深色主题"
+                style="width:30px;height:30px;padding:0;font-size:14px;border-radius:8px;flex-shrink:0;">🌙</button>
+        </div>
+    </div>
+
+    <div class="mode-quick-bar" id="modeQuickBar"></div>
+
+    <div class="sidebar" id="sidebar">
+        <h2 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 800; letter-spacing: -0.5px; flex-shrink: 0;">
+            <span
+                style="background: linear-gradient(135deg, var(--accent), #7c4dff); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent;">
+                六合趋势 Pro
+            </span>
+        </h2>
+
+        <div class="sidebar-card">
+            <h3>📡 数据源</h3>
+            <select id="yearSel" style="margin-bottom: 10px;">
+                <option value="2026">2026年 (丙午·马)</option>
+                <option value="2025">2025年 (乙巳·蛇)</option>
+                <option value="2024">2024年 (甲辰·龙)</option>
+                <option value="2023">2023年 (癸卯·兔)</option>
+                <option value="2022">2022年 (壬寅·虎)</option>
+                <option value="2021">2021年 (辛丑·牛)</option>
+                <option value="2020">2020年 (庚子·鼠)</option>
+            </select>
+            <button class="primary" style="width: 100%; margin-bottom: 10px;" onclick="clearCacheAndRetry()">
+                ⟳ 自动同步数据
+            </button>
+            <div class="advanced-toggle" onclick="toggleAdvanced('dataSourceAdvanced')">
+                <span>⚙ 高级设置</span>
+                <span id="dataSourceAdvancedArrow" class="follow-panel-arrow">▸</span>
+            </div>
+            <div id="dataSourceAdvanced" style="display: none;">
+                <div style="text-align: center; font-size: 11px; color: var(--text-secondary); margin: 10px 0;">或手动导入</div>
+                <textarea id="jsonInput" placeholder="粘贴JSON数据..."
+                    style="height: 60px; margin-bottom: 10px; font-size: 11px; resize: vertical; min-height: 40px;"></textarea>
+                <div style="display: flex; gap: 8px;">
+                    <button onclick="processData(document.getElementById('jsonInput').value)"
+                        style="flex: 1; font-size: 12px;">✓ 导入</button>
+                    <button onclick="exportCSV()" style="flex: 1; font-size: 12px;">⬇ 导出CSV</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar-card mode-card" id="modeCard">
+            <h3>📈 分析模式</h3>
+            <select id="trendModeSel" onchange="switchTrendMode(this.value)">
+                <option value="zodiac" selected>特肖遗漏分析</option>
+                <option value="oddeven">单双走势</option>
+                <option value="bigsmall">大小分布</option>
+                <option value="color">波色分析</option>
+                <option value="zodiac_hotcold">特肖冷热K线</option>
+                <option value="number_hotcold">特码冷热K线</option>
+                <option value="cold_custom">特码自由K线</option>
+                <option value="pingxiao_follow">平特肖K线</option>
+                <option value="pingtail_follow">平特尾K线</option>
+                <option value="pingnum_absent">平特断号K线</option>
+            </select>
+            <div id="followWrap" class="follow-panel collapsed" style="display: none; margin-top: 10px;">
+                <div class="follow-panel-header" onclick="toggleFollowPanel('followWrap')">
+                    <span class="follow-panel-title">平特肖K线</span>
+                    <span id="followWrapSummary" class="follow-panel-summary"></span>
+                    <span id="followWrapArrow" class="follow-panel-arrow">▸</span>
+                </div>
+                <div class="follow-panel-body">
+                <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">跟肖方式</div>
+                <select id="followModeSel" onchange="changeFollowMode(this.value)" style="font-size: 11px; margin-bottom: 8px;">
+                    <option value="zodiac" selected>选生肖（12生肖任选其一）</option>
+                    <option value="position">跟位次（上一期该位生肖）</option>
+                    <option value="multi">连肖（选2~5肖，全中才+1）</option>
+                    <option value="missnum">平特遗漏最多15号（选1~5号，全中才+1）</option>
+                </select>
+                <div id="followPosWrap" style="display: none;">
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">跟肖位次：取该位生肖，看下期7个号是否开出</div>
+                    <select id="followPosSel" onchange="changeFollowPos(this.value)" style="font-size: 11px;">
+                        <option value="1">第1号</option>
+                        <option value="2">第2号</option>
+                        <option value="3" selected>第3号</option>
+                        <option value="4">第4号</option>
+                        <option value="5">第5号</option>
+                        <option value="6">第6号</option>
+                        <option value="7">第7号(特码)</option>
+                    </select>
+                </div>
+                <div id="followZodiacWrap">
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">跟肖生肖：固定跟踪该生肖，每期7个号命中+1、未中-1</div>
+                    <select id="followZodiacSel" onchange="changeFollowZodiac(this.value)" style="font-size: 11px;"></select>
+                </div>
+                <div id="followMultiWrap" style="display: none;">
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">连肖：勾选2~5个生肖，每期7个号全部开出+1、否则-1</div>
+                    <div id="followMultiZodiacs" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; font-size: 12px; margin-bottom: 8px;"></div>
+                    <div id="followMultiHint" style="font-size: 11px; color: var(--accent);"></div>
+                </div>
+                <div id="followMissNumWrap" style="display: none;">
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">平特遗漏最多15号：每期按遗漏从多到少给号码排名（排名每期变动），勾选要跟的名次（最多5个），看这些名次号码所属生肖是否在7个开奖号中全部开出：全中+1、否则-1</div>
+                    <div id="followMissNumRanks" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; font-size: 12px; margin-bottom: 8px;"></div>
+                    <div id="followMissNumHint" style="font-size: 11px; color: var(--accent);"></div>
+                </div>
+                </div>
+            </div>
+                <div id="followTailWrap" class="follow-panel collapsed" style="display: none; margin-top: 10px;">
+                <div class="follow-panel-header" onclick="toggleFollowPanel('followTailWrap')">
+                    <span class="follow-panel-title">平特尾K线</span>
+                    <span id="followTailWrapSummary" class="follow-panel-summary"></span>
+                    <span id="followTailWrapArrow" class="follow-panel-arrow">▸</span>
+                </div>
+                <div class="follow-panel-body">
+                <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">跟尾方式</div>
+                <select id="tailModeSel" onchange="changeTailMode(this.value)" style="font-size: 11px; margin-bottom: 8px;">
+                    <option value="single" selected>选尾（0-9尾任选其一）</option>
+                    <option value="position">跟位次（上一期该位尾数）</option>
+                    <option value="multi">连尾（选2~5尾，全中才+1）</option>
+                    <option value="missrank">平特遗漏最多尾（选名次，最多5个）</option>
+                </select>
+                <div id="tailPosWrap" style="display: none;">
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">跟尾位次：取该位尾数，看下期7个号是否开出</div>
+                    <select id="tailPosSel" onchange="changeTailPos(this.value)" style="font-size: 11px;">
+                        <option value="1">第1号</option>
+                        <option value="2">第2号</option>
+                        <option value="3" selected>第3号</option>
+                        <option value="4">第4号</option>
+                        <option value="5">第5号</option>
+                        <option value="6">第6号</option>
+                        <option value="7">第7号(特码)</option>
+                    </select>
+                </div>
+                <div id="tailSingleWrap">
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">跟尾：固定跟踪该尾，每期7个号命中+1、未中-1</div>
+                    <select id="tailSingleSel" onchange="changeTailSingle(this.value)" style="font-size: 11px;"></select>
+                </div>
+                <div id="tailMultiWrap" style="display: none;">
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">连尾：勾选2~5个尾，每期7个号全部开出+1、否则-1</div>
+                    <div id="tailMultiList" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; font-size: 12px; margin-bottom: 8px;"></div>
+                    <div id="tailMultiHint" style="font-size: 11px; color: var(--accent);"></div>
+                </div>
+                <div id="tailMissWrap" style="display: none;">
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">平特遗漏最多尾：每期按遗漏从多到少给尾数排名（排名每期变动），勾选要跟的名次（最多5个），看这些名次尾数是否在7个开奖号中全部开出：全中+1、否则-1</div>
+                    <div id="tailMissRanks" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; font-size: 12px; margin-bottom: 8px;"></div>
+                    <div id="tailMissHint" style="font-size: 11px; color: var(--accent);"></div>
+                </div>
+                </div>
+            </div>
+                <div id="followNumAbsentWrap" class="follow-panel collapsed" style="display: none; margin-top: 10px;">
+                <div class="follow-panel-header" onclick="toggleFollowPanel('followNumAbsentWrap')">
+                    <span class="follow-panel-title">平特断号K线</span>
+                    <span id="followNumAbsentWrapSummary" class="follow-panel-summary"></span>
+                    <span id="followNumAbsentWrapArrow" class="follow-panel-arrow">▸</span>
+                </div>
+                <div class="follow-panel-body">
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">平特断号：勾选5~12个号码，每期7个号一个都没开出+1、有任意一个开出-1</div>
+                    <div id="followNumAbsentList" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; font-size: 12px; margin-bottom: 8px;"></div>
+                    <div id="followNumAbsentHint" style="font-size: 11px; color: var(--accent);"></div>
+                </div>
+                </div>
+        </div>
+
+        <div class="sidebar-card" id="coldCard" style="display: none;">
+            <h3>❄️ 特码自由K线</h3>
+            <button class="primary" style="width: 100%; margin-top: 10px;" onclick="generateColdKline()">生成特码自由K线</button>
+            <button id="setModeBtn" style="width: 100%; margin-top: 8px;" onclick="cycleSetMode()">📊 号码集: 所有号码（点按切换）</button>
+            <button style="width: 100%; margin-top: 8px;" onclick="addColdToOverlay()">➕ 加入叠加（多条件对比）</button>
+            <button style="width: 100%; margin-top: 8px;" onclick="resetColdSelection()">重置选择</button>
+            <div id="coldSelectionSummary" style="margin-top: 10px; font-size: 11px; color: var(--text-secondary); min-height: 48px;">请选择特码自由K线选项后点击生成</div>
+
+            <div style="font-weight: bold; font-size: 12px; color: var(--text-primary); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;"><span>遗漏</span><div style="display: flex; gap: 4px;"><button onclick="toggleColdSection('omission', true)" style="font-size:9px;padding:1px 6px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--accent);cursor:pointer;">全选</button><button onclick="toggleColdSection('omission', false)" style="font-size:9px;padding:1px 6px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--text-secondary);cursor:pointer;">清空</button></div></div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px; margin-bottom: 12px;">
+                <div style="display:flex; gap:6px; align-items:center;">
+                    <input type="checkbox" id="coldOption_numbers">
+                    <label for="coldOption_numbers" style="flex:1; cursor:pointer;">遗漏最多</label>
+                    <select id="coldOption_numbers_count" style="font-size:11px; padding:4px; min-width:50px;">
+                        <option value="5">5</option>
+                        <option value="10" selected>10</option>
+                        <option value="15">15</option>
+                        <option value="20">20</option>
+                        <option value="25">25</option>
+                        <option value="30">30</option>
+                    </select>
+                    <span>号</span>
+                </div>
+                <div style="display:flex; gap:6px; align-items:center;">
+                    <input type="checkbox" id="coldOption_zodiacs">
+                    <label for="coldOption_zodiacs" style="flex:1; cursor:pointer;">遗漏最多</label>
+                    <select id="coldOption_zodiacs_count" style="font-size:11px; padding:4px; min-width:44px;">
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3" selected>3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                        <option value="6">6</option>
+                        <option value="7">7</option>
+                        <option value="8">8</option>
+                        <option value="9">9</option>
+                        <option value="10">10</option>
+                    </select>
+                    <span>肖</span>
+                </div>
+                <label title="统计最近遗漏最多的波色"> <input type="checkbox" id="coldOption_wave"> 最多波色</label>
+                <div style="display:flex; gap:6px; align-items:center;">
+                    <input type="checkbox" id="coldOption_halfwave">
+                    <label for="coldOption_halfwave" style="flex:1; cursor:pointer;">最多半波</label>
+                    <select id="coldOption_halfwave_count" style="font-size:11px; padding:4px; min-width:44px;">
+                        <option value="1" selected>1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                    </select>
+                    <span>个</span>
+                </div>
+                <label title="统计最近遗漏最多的家野类别"> <input type="checkbox" id="coldOption_jiaYe"> 最多家野</label>
+                <div style="display:flex; gap:6px; align-items:center;">
+                    <input type="checkbox" id="coldOption_head">
+                    <label for="coldOption_head" style="flex:1; cursor:pointer;">最多头数</label>
+                    <select id="coldOption_head_count" style="font-size:11px; padding:4px; min-width:44px;">
+                        <option value="1" selected>1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                    </select>
+                    <span>个</span>
+                </div>
+                <div style="display:flex; gap:6px; align-items:center;">
+                    <input type="checkbox" id="coldOption_tail">
+                    <label for="coldOption_tail" style="flex:1; cursor:pointer;">最多尾数</label>
+                    <select id="coldOption_tail_count" style="font-size:11px; padding:4px; min-width:44px;">
+                        <option value="1" selected>1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                    </select>
+                    <span>个</span>
+                </div>
+                <div style="display:flex; gap:6px; align-items:center;">
+                    <input type="checkbox" id="coldOption_wuxing">
+                    <label for="coldOption_wuxing" style="flex:1; cursor:pointer;">最多段位</label>
+                    <select id="coldOption_wuxing_count" style="font-size:11px; padding:4px; min-width:44px;">
+                        <option value="1" selected>1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                    </select>
+                    <span>个</span>
+                </div>
+                <div style="display:flex; gap:6px; align-items:center;">
+                    <input type="checkbox" id="coldOption_halfHead">
+                    <label for="coldOption_halfHead" style="flex:1; cursor:pointer;">最多半头</label>
+                    <select id="coldOption_halfHead_count" style="font-size:11px; padding:4px; min-width:44px;">
+                        <option value="1" selected>1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                    </select>
+                    <span>个</span>
+                </div>
+            </div>
+
+            <div style="font-weight: bold; font-size: 12px; color: var(--text-primary); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;"><span>冷热</span><div style="display: flex; gap: 4px;"><button onclick="toggleColdSection('hotcold', true)" style="font-size:9px;padding:1px 6px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--accent);cursor:pointer;">全选</button><button onclick="toggleColdSection('hotcold', false)" style="font-size:9px;padding:1px 6px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--text-secondary);cursor:pointer;">清空</button></div></div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px; margin-bottom: 12px;">
+                <div style="display:flex; gap:6px; align-items:center;">
+                    <input type="checkbox" id="coldOption_hotNumbers">
+                    <label for="coldOption_hotNumbers" style="flex:1; cursor:pointer;">平特最热</label>
+                    <select id="coldOption_hotNumbers_count" style="font-size:11px; padding:4px; min-width:50px;">
+                        <option value="5">5</option>
+                        <option value="10" selected>10</option>
+                        <option value="15">15</option>
+                        <option value="20">20</option>
+                        <option value="25">25</option>
+                        <option value="30">30</option>
+                    </select>
+                    <span>号</span>
+                </div>
+                <div style="display:flex; gap:6px; align-items:center;">
+                    <input type="checkbox" id="coldOption_coldNumbers">
+                    <label for="coldOption_coldNumbers" style="flex:1; cursor:pointer;">平特最冷</label>
+                    <select id="coldOption_coldNumbers_count" style="font-size:11px; padding:4px; min-width:50px;">
+                        <option value="5">5</option>
+                        <option value="10" selected>10</option>
+                        <option value="15">15</option>
+                        <option value="20">20</option>
+                        <option value="25">25</option>
+                        <option value="30">30</option>
+                    </select>
+                    <span>号</span>
+                </div>
+                <div style="display:flex; gap:6px; align-items:center;">
+                    <input type="checkbox" id="coldOption_allHotNumbers">
+                    <label for="coldOption_allHotNumbers" style="flex:1; cursor:pointer;">特码最热</label>
+                    <select id="coldOption_allHotNumbers_count" style="font-size:11px; padding:4px; min-width:50px;">
+                        <option value="5">5</option>
+                        <option value="10" selected>10</option>
+                        <option value="15">15</option>
+                        <option value="20">20</option>
+                        <option value="25">25</option>
+                        <option value="30">30</option>
+                    </select>
+                    <span>号</span>
+                </div>
+                <div style="display:flex; gap:6px; align-items:center;">
+                    <input type="checkbox" id="coldOption_allColdNumbers">
+                    <label for="coldOption_allColdNumbers" style="flex:1; cursor:pointer;">特码最冷</label>
+                    <select id="coldOption_allColdNumbers_count" style="font-size:11px; padding:4px; min-width:50px;">
+                        <option value="5">5</option>
+                        <option value="10" selected>10</option>
+                        <option value="15">15</option>
+                        <option value="20">20</option>
+                        <option value="25">25</option>
+                        <option value="30">30</option>
+                    </select>
+                    <span>号</span>
+                </div>
+                <div style="display:flex; gap:6px; align-items:center;">
+                    <input type="checkbox" id="coldOption_hotZodiacs">
+                    <label for="coldOption_hotZodiacs" style="flex:1; cursor:pointer;">平特最热</label>
+                    <select id="coldOption_hotZodiacs_count" style="font-size:11px; padding:4px; min-width:44px;">
+                        <option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option>
+                    </select>
+                    <span>肖</span>
+                </div>
+                <div style="display:flex; gap:6px; align-items:center;">
+                    <input type="checkbox" id="coldOption_coldZodiacs">
+                    <label for="coldOption_coldZodiacs" style="flex:1; cursor:pointer;">平特最冷</label>
+                    <select id="coldOption_coldZodiacs_count" style="font-size:11px; padding:4px; min-width:44px;">
+                        <option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option>
+                    </select>
+                    <span>肖</span>
+                </div>
+                <div style="display:flex; gap:6px; align-items:center;">
+                    <input type="checkbox" id="coldOption_allHotZodiacs">
+                    <label for="coldOption_allHotZodiacs" style="flex:1; cursor:pointer;">特码最热</label>
+                    <select id="coldOption_allHotZodiacs_count" style="font-size:11px; padding:4px; min-width:44px;">
+                        <option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option>
+                    </select>
+                    <span>肖</span>
+                </div>
+                <div style="display:flex; gap:6px; align-items:center;">
+                    <input type="checkbox" id="coldOption_allColdZodiacs">
+                    <label for="coldOption_allColdZodiacs" style="flex:1; cursor:pointer;">特码最冷</label>
+                    <select id="coldOption_allColdZodiacs_count" style="font-size:11px; padding:4px; min-width:44px;">
+                        <option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option>
+                    </select>
+                    <span>肖</span>
+                </div>
+            </div>
+
+            <div style="font-weight: bold; font-size: 12px; color: var(--text-primary); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;"><span>肖</span><div style="display: flex; gap: 4px;"><button onclick="toggleColdSection('zodiac', true)" style="font-size:9px;padding:1px 6px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--accent);cursor:pointer;">全选</button><button onclick="toggleColdSection('zodiac', false)" style="font-size:9px;padding:1px 6px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--text-secondary);cursor:pointer;">清空</button></div></div>
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; font-size: 12px; margin-bottom: 12px;">
+                <label><input type="checkbox" id="zodiacOption_马"> 马</label>
+                <label><input type="checkbox" id="zodiacOption_蛇"> 蛇</label>
+                <label><input type="checkbox" id="zodiacOption_龙"> 龙</label>
+                <label><input type="checkbox" id="zodiacOption_兔"> 兔</label>
+                <label><input type="checkbox" id="zodiacOption_虎"> 虎</label>
+                <label><input type="checkbox" id="zodiacOption_牛"> 牛</label>
+                <label><input type="checkbox" id="zodiacOption_鼠"> 鼠</label>
+                <label><input type="checkbox" id="zodiacOption_猪"> 猪</label>
+                <label><input type="checkbox" id="zodiacOption_狗"> 狗</label>
+                <label><input type="checkbox" id="zodiacOption_鸡"> 鸡</label>
+                <label><input type="checkbox" id="zodiacOption_猴"> 猴</label>
+                <label><input type="checkbox" id="zodiacOption_羊"> 羊</label>
+            </div>
+
+            <div style="font-weight: bold; font-size: 12px; color: var(--text-primary); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;"><span>波色</span><div style="display: flex; gap: 4px;"><button onclick="toggleColdSection('wave', true)" style="font-size:9px;padding:1px 6px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--accent);cursor:pointer;">全选</button><button onclick="toggleColdSection('wave', false)" style="font-size:9px;padding:1px 6px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--text-secondary);cursor:pointer;">清空</button></div></div>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; font-size: 12px; margin-bottom: 12px;">
+                <label><input type="checkbox" id="waveOption_red"> <span style="color:#ff1744;">红波</span></label>
+                <label><input type="checkbox" id="waveOption_blue"> <span style="color:#448aff;">蓝波</span></label>
+                <label><input type="checkbox" id="waveOption_green"> <span style="color:#00e676;">绿波</span></label>
+            </div>
+
+            <div style="font-weight: bold; font-size: 12px; color: var(--text-primary); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;"><span>号码</span><button onclick="clearColdInput()" style="font-size:9px;padding:1px 6px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--text-secondary);cursor:pointer;">清空</button></div>
+            <div style="margin-bottom: 12px;">
+                <input type="text" id="coldOption_inputNumbers" placeholder="号码/肖/尾/头/波色/段，如 01,05,马,3尾,2头,红波,一段" style="width:100%;font-size:11px;padding:8px;background:#0d1117;border:1px solid var(--border);border-radius:8px;color:#e6edf3;outline:none;">
+                <div style="font-size:10px;color:var(--text-secondary);margin-top:4px;">支持号码01-49、生肖(马/蛇...)、N尾、N头、红波/蓝波/绿波、一段~七段，任意符号分隔，留空不启用</div>
+            </div>
+
+        </div>
+
+        <div class="sidebar-card">
+            <h3>📋 遗漏统计</h3>
+            <button class="primary" style="width: 100%; margin-bottom: 8px;" onclick="showOmissionPage()">
+                🔍 查看平特肖遗漏
+            </button>
+            <div style="font-size: 10px; color: var(--text-secondary); text-align: center;">
+                支持50/100/200/300期统计
+            </div>
+        </div>
+
+        <div class="sidebar-card">
+            <h3>📊 实时统计</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                <div style="text-align: center;">
+                    <div style="font-size: 20px; font-weight: 700; color: var(--accent);" id="statTotal">0</div>
+                    <div style="font-size: 10px; color: var(--text-secondary);">总期数</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="font-size: 20px; font-weight: 700; color: var(--up);" id="statScore">0</div>
+                    <div style="font-size: 10px; color: var(--text-secondary);">当前指数</div>
+                </div>
+            </div>
+            <div style="font-size: 11px; color: var(--text-secondary); display: flex; justify-content: space-between;">
+                <span>热号: <b style="color: var(--up);" id="statHot">0</b></span>
+                <span>冷号: <b style="color: var(--down);" id="statCold">0</b></span>
+            </div>
+        </div>
+
+        <div class="sidebar-card" style="border-color: var(--accent);">
+            <h3 style="color: var(--warn);">🎯 智能推荐</h3>
+            <div style="margin-bottom: 10px;">
+                <select id="recommendStrategy" onchange="generateRecommendations()" style="font-size: 11px;">
+
+                    <option value="omission">遗漏优先</option>
+                    <option value="balance">均衡推荐</option>
+                    <option value="hot">热号回补</option>
+                    <option value="color">波色策略</option>
+                    <option value="size">大小策略</option>
+                </select>
+            </div>
+            <div id="recommendHitRate" style="font-size:10px;color:var(--text-secondary);margin-bottom:8px;line-height:1.6;"></div>
+            <div id="recommendationResult" style="min-height: 80px;">
+                <div style="text-align: center; color: var(--text-secondary); font-size: 11px; padding: 10px;">
+                    加载数据后自动生成推荐
+                </div>
+            </div>
+            <div style="display: flex; gap: 6px; margin-top: 10px;">
+                <button onclick="generateRecommendations()" style="flex: 1; font-size: 11px; padding: 8px;">🔄
+                    刷新</button>
+                <button onclick="copyRecommendations()" style="flex: 1; font-size: 11px; padding: 8px;">📋 复制</button>
+            </div>
+        </div>
+
+        <div class="sidebar-card">
+            <h3>🎯 区间统计</h3>
+            <div style="display: flex; gap: 6px; margin-bottom: 10px;">
+                <select id="rangeStart" style="flex: 1; font-size: 11px;"></select>
+                <span style="color: var(--text-secondary); align-self: center;">~</span>
+                <select id="rangeEnd" style="flex: 1; font-size: 11px;"></select>
+            </div>
+            <button onclick="calcIntervalStats()" class="primary" style="width: 100%; font-size: 12px;">统计分析</button>
+            <div id="intervalResult" style="margin-top: 12px; font-size: 11px; max-height: 150px; overflow-y: auto;">
+            </div>
+        </div>
+
+        <div class="sidebar-card" id="overlayCard">
+            <h3>📈 多曲线叠加</h3>
+            <label style="display:flex;align-items:center;gap:6px;font-size:11px;margin-bottom:8px;cursor:pointer;">
+                <input type="checkbox" id="overlayEnabled" onchange="toggleOverlayEnabled(this.checked)"> 在图上叠加显示（选2~3项）
+            </label>
+            <select id="overlayTypeSel" onchange="changeOverlayType(this.value)" style="font-size:11px;margin-bottom:8px;">
+                <option value="zodiac" selected>生肖</option>
+                <option value="tail">尾数</option>
+                <option value="number">号码</option>
+                <option value="cold">特码自由K线</option>
+            </select>
+            <div id="overlayZodiacWrap" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;font-size:12px;margin-bottom:8px;"></div>
+            <div id="overlayTailWrap" style="display:none;grid-template-columns:repeat(5,1fr);gap:6px;font-size:12px;margin-bottom:8px;"></div>
+            <div id="overlayNumberWrap" style="display:none;margin-bottom:8px;">
+                <input type="text" id="overlayNumbersInput" placeholder="号码，逗号分隔，最多3个" style="width:100%;font-size:11px;padding:6px;background:#0d1117;border:1px solid var(--border);border-radius:6px;color:#e6edf3;outline:none;" onchange="applyOverlayNumbers()">
+            </div>
+            <div id="overlayColdWrap" style="display:none;margin-bottom:8px;">
+                <div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">已加入的特码自由K线条件（去特码自由K线卡片点「加入叠加」，最多3条）</div>
+                <div id="overlayColdList" style="display:flex;flex-direction:column;gap:4px;"></div>
+            </div>
+            <div id="overlayHint" style="font-size:10px;color:var(--accent);"></div>
+            <div id="overlayLegendList" style="display:none;flex-direction:column;gap:4px;margin-top:8px;"></div>
+        </div>
+
+        <div class="sidebar-card" id="matrixCard">
+            <h3>🔥 号码冷热矩阵</h3>
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+                <span style="font-size:11px;color:var(--text-secondary);">统计最近</span>
+                <select id="matrixWindow" onchange="renderHotColdMatrix()" style="font-size:11px;flex:1;">
+                    <option value="20">20期</option>
+                    <option value="50" selected>50期</option>
+                    <option value="100">100期</option>
+                </select>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+                <span style="font-size:11px;color:var(--text-secondary);">范围</span>
+                <div style="display:flex;flex:1;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+                    <button id="matrixModePingte" onclick="setMatrixMode('pingte')" style="flex:1;font-size:11px;padding:6px;background:var(--accent);color:#000;font-weight:700;border:none;border-radius:0;">平特</button>
+                    <button id="matrixModeSpecial" onclick="setMatrixMode('special')" style="flex:1;font-size:11px;padding:6px;background:transparent;color:var(--text-secondary);border:none;border-radius:0;">特码</button>
+                </div>
+            </div>
+            <div id="matrixGrid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;"></div>
+            <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text-secondary);margin-top:4px;">
+                <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#24d05a;display:inline-block;"></span>冷</span>
+                <span style="display:inline-flex;align-items:center;gap:4px;">热<span style="width:10px;height:10px;border-radius:2px;background:#f43f4c;display:inline-block;"></span></span>
+            </div>
+        </div>
+
+        <div class="sidebar-card" id="backtestCard">
+            <h3>📊 策略回测</h3>
+            <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
+                <button onclick="runBacktest()" class="primary" style="font-size:11px;padding:6px 14px;">🔄 回测</button>
+            </div>
+            <div id="backtestResult" style="font-size:11px;color:var(--text-secondary);min-height:40px;line-height:1.8;">数据加载后自动对比各窗口表现</div>
+        </div>
+
+        <div class="sidebar-card" id="kellyCard">
+            <h3>🧮 凯利计算器</h3>
+            <div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;line-height:1.6;">算"该下注本金的百分之几"，结果为负=数学上不该下注</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-bottom:8px;">
+                <div style="display:flex;flex-direction:column;gap:4px;">
+                    <span style="color:var(--text-secondary);font-size:11px;">赔率（押1赢）</span>
+                    <input type="number" id="kellyOdds" value="40" step="0.01" min="0" style="font-size:13px;padding:8px 10px;">
+                </div>
+                <div style="display:flex;flex-direction:column;gap:4px;">
+                    <span style="color:var(--text-secondary);font-size:11px;">命中率 %</span>
+                    <input type="number" id="kellyProb" value="2.04" step="0.01" min="0" max="100" style="font-size:13px;padding:8px 10px;">
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-bottom:8px;">
+                <div style="display:flex;flex-direction:column;gap:4px;">
+                    <span style="color:var(--text-secondary);font-size:11px;">本金</span>
+                    <input type="number" id="kellyBankroll" value="1000" step="100" min="1" style="font-size:13px;padding:8px 10px;">
+                </div>
+                <div style="display:flex;flex-direction:column;gap:4px;">
+                    <span style="color:var(--text-secondary);font-size:11px;">常用玩法</span>
+                    <select id="kellyPreset" onchange="applyKellyPreset(this.value)" style="font-size:13px;padding:8px 10px;">
+                        <option value="">自定义</option>
+                        <option value="tema">特码 1赔40</option>
+                        <option value="daxiao">大小(大) 1赔0.9</option>
+                        <option value="danshuang">单数 1赔0.9</option>
+                        <option value="bose">波色绿 1赔2.85</option>
+                    </select>
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px;">
+                <button onclick="setKellyFraction(1)" style="font-size:11px;padding:7px 4px;">全凯利</button>
+                <button onclick="setKellyFraction(0.5)" style="font-size:11px;padding:7px 4px;">半凯利</button>
+                <button onclick="setKellyFraction(0.25)" style="font-size:11px;padding:7px 4px;">¼凯利</button>
+            </div>
+            <button class="primary" style="width:100%;" onclick="calcKelly()">计算</button>
+            <div id="kellyResult" style="margin-top:10px;font-size:11px;color:var(--text-secondary);min-height:64px;line-height:1.9;">输入赔率和命中率后点计算</div>
+        </div>
+
+        <div style="height: 20px; flex-shrink: 0;"></div>
+        <div style="font-size: 9px; color: var(--text-secondary); text-align: center; padding: 4px 0 8px; flex-shrink: 0;">版本 v20260819</div>
+    </div>
+
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+    <div class="main-display">
+        <div class="toggle-btn" id="toggleBtn" onclick="toggleSidebar()">◀</div>
+
+        <div class="chart-section" id="chartSection">
+            <div class="chart-header">
+                <div id="info-left" style="display: none;">
+                    <span style="color: var(--text-secondary);">期号</span> <b id="dispExpect">--</b>
+                </div>
+                <div id="info-mid" style="display: none;">
+                    <span id="dispBalls"></span>
+                </div>
+                <div id="info-mode"
+                    style="padding: 4px 12px; background: var(--card-bg); border-radius: 6px; border: 1px solid var(--border); font-size: 11px; font-weight: 600;">
+                    特肖模式
+                </div>
+                <select id="maSel" onchange="changeMaWindow(this.value)" title="均线周期"
+                    style="width: 64px; font-size: 11px; padding: 4px 6px;">
+                    <option value="0">MA关</option>
+                    <option value="3">MA3</option>
+                    <option value="5" selected>MA5</option>
+                    <option value="10">MA10</option>
+                </select>
+                <span class="chart-legend" id="chartLegend">绿涨·红跌·黄虚线=MA</span>
+                <div class="page-controls">
+                    <select id="pageSizeSel" onchange="changePageSize(this.value)"
+                        style="width: 80px; font-size: 11px; padding: 4px 8px;">
+                        <option value="30">30期</option>
+                        <option value="50">50期</option>
+                        <option value="75">75期</option>
+                        <option value="100" selected>100期</option>
+                        <option value="125">125期</option>
+                        <option value="150">150期</option>
+                        <option value="175">175期</option>
+                        <option value="200">200期</option>
+                        <option value="225">225期</option>
+                        <option value="250">250期</option>
+                        <option value="275">275期</option>
+                        <option value="300">300期</option>
+                        <option value="all">全部</option>
+                    </select>
+                    <button onclick="changePage('first')">⏮</button>
+                    <button onclick="changePage('prev')">◀</button>
+                    <span id="pageInfo">--/--</span>
+                    <button onclick="changePage('next')">▶</button>
+                    <button onclick="changePage('last')">⏭</button>
+                </div>
+                <button class="fullscreen-btn" id="fullscreenBtn" onclick="toggleFullscreenChart()" title="全屏查看">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path
+                            d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+                    </svg>
+                </button>
+            </div>
+            
+            <div id="dynamicHotColdInfo" style="display: none; position: absolute; top: 50px; left: 0; right: 0; background: rgba(22, 27, 34, 0.95); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); padding: 8px 20px; font-size: 11px; z-index: 9; flex-direction: column; gap: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+            </div>
+
+            <canvas id="kCanvas"></canvas>
+
+            <div class="chart-controls-mobile">
+                <button onclick="zoomChart(1.2)" title="放大">+</button>
+                <button onclick="zoomChart(0.8)" title="缩小">−</button>
+                <button onclick="resetChartView()" title="重置">⟲</button>
+            </div>
+
+            <div class="kline-tooltip" id="klineTooltip" style="display: none;">
+                <div class="tooltip-content"></div>
+            </div>
+        </div>
+        <div class="chart-toggle" onclick="toggleChartSize()">
+            <span class="arrow" id="chartToggleArrow">▼</span>
+            <span id="chartToggleLabel">收起走势图</span>
+        </div>
+
+        <div class="table-section">
+            <table>
+                <thead>
+                    <tr>
+                        <th width="8%" data-sort="rank" onclick="sortTable('rank')">排名</th>
+                        <th width="10%" data-sort="name" onclick="sortTable('name')">生肖<span class="sort-arrow"></span></th>
+                        <th width="10%" data-sort="om" onclick="sortTable('om')">遗漏期数<span class="sort-arrow"></span></th>
+                        <th width="10%" data-sort="max" onclick="sortTable('max')">历史极值<span class="sort-arrow"></span></th>
+                        <th width="20%">遗漏走势</th>
+                        <th width="10%" data-sort="count" onclick="sortTable('count')">出现次数<span class="sort-arrow"></span></th>
+                        <th width="9%" data-sort="avg" onclick="sortTable('avg')">平均周期<span class="sort-arrow"></span></th>
+                        <th width="8%">波色</th>
+                        <th width="8%">大小</th>
+                        <th width="7%">趋势</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+        </div>
+
+        <div class="omission-section" id="omissionSection" style="display: none;">
+            <div class="omission-header">
+                <div class="omission-title">
+                    <h3>📋 平特肖遗漏 & 号码遗漏统计</h3>
+                    <button class="close-btn" onclick="hideOmissionPage()">✕</button>
+                </div>
+                <div class="omission-controls">
+                    <div class="period-selector" id="periodSelectorWrapper" style="display: none;">
+                        <label>统计期数：</label>
+                        <select id="omissionPeriodSel" onchange="updateOmissionStats()">
+                            <option value="50">最近50期</option>
+                            <option value="100" selected>最近100期</option>
+                            <option value="200">最近200期</option>
+                            <option value="300">最近300期</option>
+                        </select>
+                    </div>
+                    <div class="omission-tabs">
+                        <button class="tab-btn active" onclick="switchOmissionTab('zodiac')"
+                            data-tab="zodiac">平特肖</button>
+                        <button class="tab-btn" onclick="switchOmissionTab('number')" data-tab="number">号码</button>
+                        <button class="tab-btn" onclick="switchOmissionTab('color')" data-tab="color">波色</button>
+                        <button class="tab-btn" onclick="switchOmissionTab('size')" data-tab="size">大小</button>
+                        <button class="tab-btn" onclick="switchOmissionTab('special')" data-tab="special">特肖统计</button>
+                        <button class="tab-btn" onclick="loadMockDataAndRefresh()" title="如果没有数据,点击加载演示数据"
+                            style="background: var(--warn); color: #000; border-color: var(--warn);">📊 演示</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="omission-content">
+                <div class="omission-table-wrapper" id="zodiacOmissionTable">
+                    <table class="omission-table">
+                        <thead>
+                            <tr>
+                                <th width="12%">生肖</th>
+                                <th width="12%">当前遗漏</th>
+                                <th width="12%">最大遗漏</th>
+                                <th width="12%">平均遗漏</th>
+                                <th width="12%">出现次数</th>
+                                <th width="20%">遗漏走势</th>
+                                <th width="10%">状态</th>
+                                <th width="10%">号码</th>
+                            </tr>
+                        </thead>
+                        <tbody id="zodiacOmissionBody"></tbody>
+                    </table>
+                </div>
+
+                <div class="omission-table-wrapper" id="numberOmissionTable" style="display: none;">
+                    <table class="omission-table">
+                        <thead>
+                            <tr>
+                                <th width="10%">号码</th>
+                                <th width="10%">生肖</th>
+                                <th width="12%">当前遗漏</th>
+                                <th width="12%">最大遗漏</th>
+                                <th width="12%">平均遗漏</th>
+                                <th width="12%">出现次数</th>
+                                <th width="18%">遗漏走势</th>
+                                <th width="10%">状态</th>
+                                <th width="6%">波色</th>
+                            </tr>
+                        </thead>
+                        <tbody id="numberOmissionBody"></tbody>
+                    </table>
+                </div>
+
+                <div id="colorOmissionChart" style="display: none;">
+                    <div style="padding: 16px;">
+                        <h4 style="color: var(--accent); margin-bottom: 16px; font-size: 14px;">🔴🔵🟢 波色遗漏分布</h4>
+
+                        <div id="colorChartContainer" style="display: flex; flex-direction: column; gap: 12px;">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                    <span style="color: #ff1744; font-weight: 600;">红波</span>
+                                    <span style="font-size: 12px; color: var(--text-secondary);">当前:<span
+                                            id="colorChartRedCurrent" style="color: #ff1744; font-weight: 700;">0</span>
+                                        最大:<span id="colorChartRedMax" style="color: var(--accent);">0</span></span>
+                                </div>
+                                <div style="background: #0d1117; height: 20px; border-radius: 10px; overflow: hidden;">
+                                    <div id="colorChartRedBar"
+                                        style="height: 100%; width: 0%; background: linear-gradient(90deg, #ff1744, #ff5252); border-radius: 10px;">
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                    <span style="color: #448aff; font-weight: 600;">蓝波</span>
+                                    <span style="font-size: 12px; color: var(--text-secondary);">当前:<span
+                                            id="colorChartBlueCurrent"
+                                            style="color: #448aff; font-weight: 700;">0</span> 最大:<span
+                                            id="colorChartBlueMax" style="color: var(--accent);">0</span></span>
+                                </div>
+                                <div style="background: #0d1117; height: 20px; border-radius: 10px; overflow: hidden;">
+                                    <div id="colorChartBlueBar"
+                                        style="height: 100%; width: 0%; background: linear-gradient(90deg, #448aff, #82b1ff); border-radius: 10px;">
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                    <span style="color: #00e676; font-weight: 600;">绿波</span>
+                                    <span style="font-size: 12px; color: var(--text-secondary);">当前:<span
+                                            id="colorChartGreenCurrent"
+                                            style="color: #00e676; font-weight: 700;">0</span> 最大:<span
+                                            id="colorChartGreenMax" style="color: var(--accent);">0</span></span>
+                                </div>
+                                <div style="background: #0d1117; height: 20px; border-radius: 10px; overflow: hidden;">
+                                    <div id="colorChartGreenBar"
+                                        style="height: 100%; width: 0%; background: linear-gradient(90deg, #00e676, #69f0ae); border-radius: 10px;">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
+                            <h5 style="color: var(--text-secondary); font-size: 12px; margin-bottom: 8px;">号码分布</h5>
+                            <div id="colorNumbersDisplay"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="sizeOmissionChart" style="display: none;">
+                    <div style="padding: 16px;">
+                        <h4 style="color: var(--accent); margin-bottom: 16px; font-size: 14px;">📊 大小遗漏分布</h4>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                            <div
+                                style="background: var(--card-bg); padding: 12px; border-radius: 8px; border: 1px solid var(--border); text-align: center;">
+                                <div style="font-size: 28px; font-weight: 700; color: #00e676;"
+                                    id="sizeChartBigCurrent">0</div>
+                                <div style="font-size: 11px; color: var(--text-secondary);">遗漏期数</div>
+                                <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">最大: <span
+                                        id="sizeChartBigMax">0</span></div>
+                                <div
+                                    style="background: #0d1117; height: 16px; border-radius: 8px; overflow: hidden; margin-top: 8px;">
+                                    <div id="sizeChartBigBar"
+                                        style="height: 100%; width: 0%; background: linear-gradient(90deg, #00e676, #00c853); border-radius: 8px;">
+                                    </div>
+                                </div>
+                                <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">大数(25-49)
+                                </div>
+                            </div>
+
+                            <div
+                                style="background: var(--card-bg); padding: 12px; border-radius: 8px; border: 1px solid var(--border); text-align: center;">
+                                <div style="font-size: 28px; font-weight: 700; color: #00d4ff;"
+                                    id="sizeChartSmallCurrent">0</div>
+                                <div style="font-size: 11px; color: var(--text-secondary);">遗漏期数</div>
+                                <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">最大: <span
+                                        id="sizeChartSmallMax">0</span></div>
+                                <div
+                                    style="background: #0d1117; height: 16px; border-radius: 8px; overflow: hidden; margin-top: 8px;">
+                                    <div id="sizeChartSmallBar"
+                                        style="height: 100%; width: 0%; background: linear-gradient(90deg, #00d4ff, #0091ea); border-radius: 8px;">
+                                    </div>
+                                </div>
+                                <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">小数(1-24)
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="specialOmissionTable" style="display: none;">
+                    <table class="omission-table">
+                        <thead>
+                            <tr>
+                                <th width="12%">生肖</th>
+                                <th width="12%">出现次数</th>
+                                <th width="12%">出现率</th>
+                                <th width="12%">理论</th>
+                                <th width="12%">偏差</th>
+                                <th width="20%">趋势</th>
+                                <th width="10%">状态</th>
+                                <th width="10%">波色</th>
+                            </tr>
+                        </thead>
+                        <tbody id="specialOmissionBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="omission-summary">
+
+                <div class="summary-item">
+                    <span class="label">热号数量：</span>
+                    <span class="value hot" id="omissionStatHot">0</span>
+                </div>
+                <div class="summary-item">
+                    <span class="label">冷号数量：</span>
+                    <span class="value cold" id="omissionStatCold">0</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js?v=20260819"></script>
+
+    <nav class="mobile-nav" id="mobileNav">
+        <div class="mobile-nav-item active" data-page="chart" onclick="switchToChart()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 20V10M12 20V4M6 20v-6" />
+            </svg>
+            <span>走势图</span>
+        </div>
+        <div class="mobile-nav-item" data-page="table" onclick="switchToTable()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <path d="M3 9h18M9 21V9" />
+            </svg>
+            <span>数据表</span>
+        </div>
+        <div class="mobile-nav-item" data-page="omission" onclick="switchToOmission()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path
+                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            <span>遗漏</span>
+        </div>
+        <div class="mobile-nav-item" data-page="settings" onclick="toggleSettings()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3" />
+                <path
+                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+            <span>设置</span>
+        </div>
+    </nav>
+
+</body>
+
+</html>
