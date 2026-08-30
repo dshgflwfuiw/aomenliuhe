@@ -2810,7 +2810,7 @@ function copyRecommendations() {
                 number_hotcold: '特码冷热',
                 cold_custom: '特码自由K线',
                 pingxiao_follow: '平特肖K线',
-                special_zodiac_follow: '特肖加减1 K线',
+                special_zodiac_follow: '前期定特K线',
                 pingtail_follow: '平特尾K线',
                 pingnum_absent: '平特断号K线'
             };
@@ -3202,7 +3202,7 @@ function copyRecommendations() {
             ['number_hotcold', '特码冷热'],
             ['cold_custom', '特码自由'],
             ['pingxiao_follow', '平特肖'],
-            ['special_zodiac_follow', '特肖加减1'],
+            ['special_zodiac_follow', '前期定特'],
             ['pingtail_follow', '平特尾'],
             ['pingnum_absent', '平特断号']
         ];
