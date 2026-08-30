@@ -546,6 +546,7 @@
             let colorScores = { red: 0, blue: 0, green: 0 };
             const maWindow =[];
             let prevFollowZodiac = null;
+            let prevPeriodZodiacs = null;
             const numLastSeen = {};
             for (let n = 1; n <= 49; n++) numLastSeen[n.toString().padStart(2, '0')] = -1;
             let prevFollowTail = null;
@@ -714,6 +715,13 @@
                         const followTarget = state.followMode === 'zodiac' ? state.followZodiac : prevFollowZodiac;
                         followTargetForPoint = followTarget;
                         step = followTarget ? (zList.includes(followTarget) ? 1 : -1) : 0;
+                    }
+                } else if (state.currentMode === 'special_zodiac_follow') {
+                    // 用上一期全部 7 个开奖号对应生肖，判断本期特肖是否延续开出。
+                    if (prevPeriodZodiacs) {
+                        const targets = [...new Set(prevPeriodZodiacs.filter(Boolean))];
+                        followTargetForPoint = targets.join('、');
+                        step = targets.includes(winZ) ? 1 : -1;
                     }
                 } else if (state.currentMode === 'pingtail_follow') {
                     const tailHit = tail => cList.some(n => parseInt(n, 10) % 10 === tail);
@@ -884,7 +892,7 @@
                     coldHitSets: coldHitSetsForPoint,
                     coldMatches: coldMatchesForPoint,
                     followZodiac: followTargetForPoint,
-                    followHit: step > 0
+                    followHit: state.currentMode === 'special_zodiac_follow' && !followTargetForPoint ? null : step > 0
                 };
 
                 state.historyData.push(historyPoint);
@@ -906,6 +914,7 @@
                 }
 
                 prevFollowZodiac = zList[state.followPosition] || null;
+                prevPeriodZodiacs = zList;
                 cList.forEach(num => { numLastSeen[num] = idx; });
                 prevFollowTail = parseInt(cList[state.tailPosition], 10) % 10;
                 new Set(cList.map(n => parseInt(n, 10) % 10)).forEach(t => { tailLastSeen[t] = idx; });
@@ -1270,12 +1279,14 @@
                 ctx.globalAlpha = i === data.length - 1 ? 1 : Math.max(0.15, Math.min(1, spacing / 5));
                 ctx.beginPath();
                 ctx.arc(d.px, d.py, dotSize, 0, Math.PI * 2);
-                ctx.fillStyle = ['zodiac_hotcold', 'number_hotcold'].includes(state.currentMode) 
-                    ? (d.isCurrentHot ? '#00e676' : '#ff1744') 
-                    : (d.displayScore >= 0 ? '#00e676' : '#ff1744');
+                ctx.fillStyle = ['zodiac_hotcold', 'number_hotcold'].includes(state.currentMode)
+                    ? (d.isCurrentHot ? '#00e676' : '#ff1744')
+                    : state.currentMode === 'special_zodiac_follow'
+                        ? (d.followHit === null ? '#78909c' : d.followHit ? '#00e676' : '#ff1744')
+                        : (d.displayScore >= 0 ? '#00e676' : '#ff1744');
                 ctx.fill();
             });
-            if (['pingxiao_follow', 'pingtail_follow', 'pingnum_absent'].includes(state.currentMode)) {
+            if (['pingxiao_follow', 'special_zodiac_follow', 'pingtail_follow', 'pingnum_absent'].includes(state.currentMode)) {
                 data.forEach(d => {
                     if (typeof d.followHit !== 'boolean' || d.px == null) return;
                     const markY = d.followHit ? d.py - dotSize - 5 : d.py + dotSize + 5;
@@ -1529,6 +1540,12 @@
                     ? (d.followHit ? '生肖全中 +1' : '生肖未全中 -1')
                     : (d.followHit ? '全中 +1' : '未全中 -1');
                 ballsHtml += `<div style="margin-top:6px;font-size:11px;color:var(--warn);">${getFollowLabel()} ${d.followZodiac}: ${hitText}</div>`;
+            }
+            if (state.currentMode === 'special_zodiac_follow') {
+                const hitText = d.followZodiac
+                    ? (d.followHit ? '特肖命中 +1' : '特肖未中 -1')
+                    : '首期无参考 0';
+                ballsHtml += `<div style="margin-top:6px;font-size:11px;color:var(--warn);">上期7号生肖 ${d.followZodiac || '-'}: ${hitText}</div>`;
             }
             if (state.currentMode === 'pingtail_follow' && d.followZodiac) {
                 const tLabel = state.tailMode === 'multi' ? '连尾' : (state.tailMode === 'missrank' ? '跟名次' : '跟尾');
@@ -2793,6 +2810,7 @@ function copyRecommendations() {
                 number_hotcold: '特码冷热',
                 cold_custom: '特码自由K线',
                 pingxiao_follow: '平特肖K线',
+                special_zodiac_follow: '特肖加减1 K线',
                 pingtail_follow: '平特尾K线',
                 pingnum_absent: '平特断号K线'
             };
@@ -3184,6 +3202,7 @@ function copyRecommendations() {
             ['number_hotcold', '特码冷热'],
             ['cold_custom', '特码自由'],
             ['pingxiao_follow', '平特肖'],
+            ['special_zodiac_follow', '特肖加减1'],
             ['pingtail_follow', '平特尾'],
             ['pingnum_absent', '平特断号']
         ];
@@ -3864,6 +3883,19 @@ function copyRecommendations() {
                         </div>
                     </div>
                 `;
+            } else if (currentMode === 'special_zodiac_follow') {
+                modeSpecificHtml = `
+                    <div style="margin-top:4px; padding-top:4px; border-top:1px solid rgba(255,255,255,0.05);">
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">上期7号生肖</span>
+                            <span class="tooltip-value" style="color:var(--warn);font-weight:700;">${data.followZodiac || '首期无参考'}</span>
+                        </div>
+                        <div class="tooltip-row">
+                            <span class="tooltip-label">本期特肖是否开出</span>
+                            <span class="tooltip-value" style="color:${data.followZodiac ? (data.followHit ? 'var(--up)' : 'var(--down)') : 'var(--text-secondary)'};font-weight:700;">${data.followZodiac ? (data.followHit ? '✓ 命中 +1' : '✗ 未中 -1') : '— 0'}</span>
+                        </div>
+                    </div>
+                `;
             } else if (currentMode === 'pingtail_follow') {
                 const isMulti = state.tailMode === 'multi';
                 const isMiss = state.tailMode === 'missrank';
@@ -3950,6 +3982,17 @@ function copyRecommendations() {
                         <span class="tooltip-label">K线节点属性</span>
                         <span class="tooltip-value" style="color: ${data.isCurrentHot ? 'var(--up)' : 'var(--down)'};">
                             ${data.isCurrentHot ? '🔥 热 (走势+1)' : '❄️ 冷 (走势-1)'}
+                        </span>
+                    </div>
+                `;
+            }
+
+            if (state.currentMode === 'special_zodiac_follow') {
+                content += `
+                    <div class="tooltip-row">
+                        <span class="tooltip-label">K线节点属性</span>
+                        <span class="tooltip-value" style="color: ${data.followZodiac ? (data.followHit ? 'var(--up)' : 'var(--down)') : 'var(--text-secondary)'};">
+                            ${data.followZodiac ? (data.followHit ? '✓ 特肖命中 (走势+1)' : '✗ 特肖未中 (走势-1)') : '首期无参考 (走势0)'}
                         </span>
                     </div>
                 `;
