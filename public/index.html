@@ -191,6 +191,54 @@
             <button id="setModeBtn" style="width: 100%; margin-top: 8px;" onclick="cycleSetMode()">📊 号码集: 所有号码（点按切换）</button>
             <button style="width: 100%; margin-top: 8px;" onclick="addColdToOverlay()">➕ 加入叠加（多条件对比）</button>
             <button style="width: 100%; margin-top: 8px;" onclick="resetColdSelection()">重置选择</button>
+            
+            <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 8px; padding: 8px; margin-top: 8px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
+                    <span style="font-size: 11px; font-weight: 600; color: var(--accent);">⚡ 常用策略预设</span>
+                    <button type="button" onclick="saveCurrentStrategyPrompt()" style="font-size: 10px; padding: 2px 6px; border-radius: 4px; background: rgba(0,212,255,0.1); color: var(--accent); border: 1px solid var(--accent); cursor:pointer;">+ 存当前方案</button>
+                </div>
+                <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px;">
+                    <button type="button" class="strategy-preset-btn" onclick="applyStrategyPreset('hot_combo')">🔥 热码+热肖</button>
+                    <button type="button" class="strategy-preset-btn" onclick="applyStrategyPreset('cold_sniper')">❄️ 遗漏冷门</button>
+                    <button type="button" class="strategy-preset-btn" onclick="applyStrategyPreset('warm_middle')">⚖️ 温和区间</button>
+                </div>
+                <div style="display: flex; gap: 4px; align-items: center;" id="userStrategyRow">
+                    <select id="userStrategySel" onchange="loadSelectedUserStrategy(this.value)" style="flex:1; font-size:11px; padding: 4px;">
+                        <option value="">📂 我的自定策略...</option>
+                    </select>
+                    <button type="button" onclick="deleteSelectedUserStrategy()" title="删除选中策略" style="font-size:10px; padding: 4px 6px; color: var(--down); cursor:pointer;">🗑</button>
+                </div>
+            </div>
+
+            <div class="kline-metrics-box" id="klineMetricsBox" style="display:none;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
+                    <span style="font-size: 11px; font-weight: 700; color: var(--accent);">📊 策略量化回测</span>
+                    <span id="metricPeriodCount" style="font-size: 10px; color: var(--text-secondary);">共 0 期</span>
+                </div>
+                <div class="kline-metrics-grid">
+                    <div class="metric-item">
+                        <div class="metric-label">命中胜率</div>
+                        <div class="metric-val" id="metricHitRate" style="color: var(--up);">--%</div>
+                        <div style="font-size: 9px; color: var(--text-secondary); margin-top:2px;" id="metricHitCounts">0/0 (理论 --%)</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-label">极值连击</div>
+                        <div class="metric-val" id="metricMaxStreak" style="color: var(--accent);">-- / --</div>
+                        <div style="font-size: 9px; color: var(--text-secondary); margin-top:2px;" id="metricCurrentStreak">当前: --</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-label">平均命中周期</div>
+                        <div class="metric-val" id="metricAvgCycle">-- 期</div>
+                        <div style="font-size: 9px; color: var(--text-secondary); margin-top:2px;">平均反弹间隔</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-label">模拟平注收益</div>
+                        <div class="metric-val" id="metricROI">--</div>
+                        <div style="font-size: 9px; color: var(--text-secondary); margin-top:2px;" id="metricProfitDetail">特码1元/48倍</div>
+                    </div>
+                </div>
+            </div>
+
             <div id="coldSelectionSummary" style="margin-top: 10px; font-size: 11px; color: var(--text-secondary); min-height: 48px;">请选择特码自由K线选项后点击生成</div>
 
             <div style="font-weight: bold; font-size: 12px; color: var(--text-primary); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;"><span>遗漏</span><div style="display: flex; gap: 4px;"><button onclick="toggleColdSection('omission', true)" style="font-size:9px;padding:1px 6px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--accent);cursor:pointer;">全选</button><button onclick="toggleColdSection('omission', false)" style="font-size:9px;padding:1px 6px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--text-secondary);cursor:pointer;">清空</button></div></div>
@@ -316,109 +364,19 @@
                     <label for="coldOption_omissionRange" style="cursor:pointer; font-weight: 600; color: var(--text-primary); margin-right: 2px;">遗漏区域</label>
                     <span style="font-size: 11px; color: var(--text-secondary);">从第</span>
                     <select id="coldOption_omissionRange_start" style="font-size:11px; padding:3px 5px; min-width:44px;">
-                        <option value="1" selected>1</option>
-                        <option value="2">2</option>
-                        <option value="3">3</option>
-                        <option value="4">4</option>
-                        <option value="5">5</option>
-                        <option value="6">6</option>
-                        <option value="7">7</option>
-                        <option value="8">8</option>
-                        <option value="9">9</option>
-                        <option value="10">10</option>
-                        <option value="11">11</option>
-                        <option value="12">12</option>
-                        <option value="13">13</option>
-                        <option value="14">14</option>
-                        <option value="15">15</option>
-                        <option value="16">16</option>
-                        <option value="17">17</option>
-                        <option value="18">18</option>
-                        <option value="19">19</option>
-                        <option value="20">20</option>
-                        <option value="21">21</option>
-                        <option value="22">22</option>
-                        <option value="23">23</option>
-                        <option value="24">24</option>
-                        <option value="25">25</option>
-                        <option value="26">26</option>
-                        <option value="27">27</option>
-                        <option value="28">28</option>
-                        <option value="29">29</option>
-                        <option value="30">30</option>
-                        <option value="31">31</option>
-                        <option value="32">32</option>
-                        <option value="33">33</option>
-                        <option value="34">34</option>
-                        <option value="35">35</option>
-                        <option value="36">36</option>
-                        <option value="37">37</option>
-                        <option value="38">38</option>
-                        <option value="39">39</option>
-                        <option value="40">40</option>
-                        <option value="41">41</option>
-                        <option value="42">42</option>
-                        <option value="43">43</option>
-                        <option value="44">44</option>
-                        <option value="45">45</option>
-                        <option value="46">46</option>
-                        <option value="47">47</option>
-                        <option value="48">48</option>
-                        <option value="49">49</option>
+                        <option value="1" selected>1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option><option value="24">24</option><option value="25">25</option><option value="26">26</option><option value="27">27</option><option value="28">28</option><option value="29">29</option><option value="30">30</option><option value="31">31</option><option value="32">32</option><option value="33">33</option><option value="34">34</option><option value="35">35</option><option value="36">36</option><option value="37">37</option><option value="38">38</option><option value="39">39</option><option value="40">40</option><option value="41">41</option><option value="42">42</option><option value="43">43</option><option value="44">44</option><option value="45">45</option><option value="46">46</option><option value="47">47</option><option value="48">48</option><option value="49">49</option>
                     </select>
                     <span style="font-size: 11px; color: var(--text-secondary);">至第</span>
                     <select id="coldOption_omissionRange_end" style="font-size:11px; padding:3px 5px; min-width:44px;">
-                        <option value="1">1</option>
-                        <option value="2">2</option>
-                        <option value="3">3</option>
-                        <option value="4">4</option>
-                        <option value="5">5</option>
-                        <option value="6">6</option>
-                        <option value="7">7</option>
-                        <option value="8">8</option>
-                        <option value="9">9</option>
-                        <option value="10" selected>10</option>
-                        <option value="11">11</option>
-                        <option value="12">12</option>
-                        <option value="13">13</option>
-                        <option value="14">14</option>
-                        <option value="15">15</option>
-                        <option value="16">16</option>
-                        <option value="17">17</option>
-                        <option value="18">18</option>
-                        <option value="19">19</option>
-                        <option value="20">20</option>
-                        <option value="21">21</option>
-                        <option value="22">22</option>
-                        <option value="23">23</option>
-                        <option value="24">24</option>
-                        <option value="25">25</option>
-                        <option value="26">26</option>
-                        <option value="27">27</option>
-                        <option value="28">28</option>
-                        <option value="29">29</option>
-                        <option value="30">30</option>
-                        <option value="31">31</option>
-                        <option value="32">32</option>
-                        <option value="33">33</option>
-                        <option value="34">34</option>
-                        <option value="35">35</option>
-                        <option value="36">36</option>
-                        <option value="37">37</option>
-                        <option value="38">38</option>
-                        <option value="39">39</option>
-                        <option value="40">40</option>
-                        <option value="41">41</option>
-                        <option value="42">42</option>
-                        <option value="43">43</option>
-                        <option value="44">44</option>
-                        <option value="45">45</option>
-                        <option value="46">46</option>
-                        <option value="47">47</option>
-                        <option value="48">48</option>
-                        <option value="49">49</option>
+                        <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10" selected>10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option><option value="24">24</option><option value="25">25</option><option value="26">26</option><option value="27">27</option><option value="28">28</option><option value="29">29</option><option value="30">30</option><option value="31">31</option><option value="32">32</option><option value="33">33</option><option value="34">34</option><option value="35">35</option><option value="36">36</option><option value="37">37</option><option value="38">38</option><option value="39">39</option><option value="40">40</option><option value="41">41</option><option value="42">42</option><option value="43">43</option><option value="44">44</option><option value="45">45</option><option value="46">46</option><option value="47">47</option><option value="48">48</option><option value="49">49</option>
                     </select>
                     <span style="font-size: 11px; color: var(--text-secondary);">位号码</span>
+                    <div class="quick-range-chips">
+                        <button type="button" class="quick-chip-btn" onclick="setQuickRange('omissionRange', 1, 10)">1~10(冷区)</button>
+                        <button type="button" class="quick-chip-btn" onclick="setQuickRange('omissionRange', 1, 15)">1~15</button>
+                        <button type="button" class="quick-chip-btn" onclick="setQuickRange('omissionRange', 10, 25)">10~25(温冷)</button>
+                        <button type="button" class="quick-chip-btn" onclick="setQuickRange('omissionRange', 25, 49)">25~49(热区)</button>
+                    </div>
                     <div style="font-size: 10px; color: var(--text-secondary); width: 100%; margin-top: 2px;">(号码按遗漏降序排列，第1位为当前遗漏最多，自由定制统计区间)</div>
                 </div>
                 <div style="grid-column: span 2; display:flex; flex-wrap:wrap; gap:6px; align-items:center; background: rgba(255,255,255,0.03); padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border); margin-top: 4px;">
@@ -426,35 +384,19 @@
                     <label for="coldOption_omissionZodiacRange" style="cursor:pointer; font-weight: 600; color: var(--text-primary); margin-right: 2px;">遗漏生肖</label>
                     <span style="font-size: 11px; color: var(--text-secondary);">从第</span>
                     <select id="coldOption_omissionZodiacRange_start" style="font-size:11px; padding:3px 5px; min-width:44px;">
-                        <option value="1" selected>1</option>
-                        <option value="2">2</option>
-                        <option value="3">3</option>
-                        <option value="4">4</option>
-                        <option value="5">5</option>
-                        <option value="6">6</option>
-                        <option value="7">7</option>
-                        <option value="8">8</option>
-                        <option value="9">9</option>
-                        <option value="10">10</option>
-                        <option value="11">11</option>
-                        <option value="12">12</option>
+                        <option value="1" selected>1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option>
                     </select>
                     <span style="font-size: 11px; color: var(--text-secondary);">至第</span>
                     <select id="coldOption_omissionZodiacRange_end" style="font-size:11px; padding:3px 5px; min-width:44px;">
-                        <option value="1">1</option>
-                        <option value="2">2</option>
-                        <option value="3" selected>3</option>
-                        <option value="4">4</option>
-                        <option value="5">5</option>
-                        <option value="6">6</option>
-                        <option value="7">7</option>
-                        <option value="8">8</option>
-                        <option value="9">9</option>
-                        <option value="10">10</option>
-                        <option value="11">11</option>
-                        <option value="12">12</option>
+                        <option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option>
                     </select>
                     <span style="font-size: 11px; color: var(--text-secondary);">位生肖</span>
+                    <div class="quick-range-chips">
+                        <button type="button" class="quick-chip-btn" onclick="setQuickRange('omissionZodiacRange', 1, 3)">1~3(冷肖)</button>
+                        <button type="button" class="quick-chip-btn" onclick="setQuickRange('omissionZodiacRange', 1, 6)">1~6(冷半区)</button>
+                        <button type="button" class="quick-chip-btn" onclick="setQuickRange('omissionZodiacRange', 4, 9)">4~9(温肖)</button>
+                        <button type="button" class="quick-chip-btn" onclick="setQuickRange('omissionZodiacRange', 7, 12)">7~12(热半区)</button>
+                    </div>
                     <div style="font-size: 10px; color: var(--text-secondary); width: 100%; margin-top: 2px;">(生肖按遗漏降序排列，第1位为当前遗漏最多，自由定制统计区间)</div>
                 </div>
             </div>
@@ -673,6 +615,12 @@
                         <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10" selected>10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option><option value="24">24</option><option value="25">25</option><option value="26">26</option><option value="27">27</option><option value="28">28</option><option value="29">29</option><option value="30">30</option><option value="31">31</option><option value="32">32</option><option value="33">33</option><option value="34">34</option><option value="35">35</option><option value="36">36</option><option value="37">37</option><option value="38">38</option><option value="39">39</option><option value="40">40</option><option value="41">41</option><option value="42">42</option><option value="43">43</option><option value="44">44</option><option value="45">45</option><option value="46">46</option><option value="47">47</option><option value="48">48</option><option value="49">49</option>
                     </select>
                     <span style="font-size: 11px; color: var(--text-secondary);">位号码</span>
+                    <div class="quick-range-chips">
+                        <button type="button" class="quick-chip-btn" onclick="setQuickRange('hotNumberRange', 1, 10)">1~10(最热)</button>
+                        <button type="button" class="quick-chip-btn" onclick="setQuickRange('hotNumberRange', 1, 15)">1~15(核心)</button>
+                        <button type="button" class="quick-chip-btn" onclick="setQuickRange('hotNumberRange', 1, 25)">1~25(热半区)</button>
+                        <button type="button" class="quick-chip-btn" onclick="setQuickRange('hotNumberRange', 15, 35)">15~35(温码)</button>
+                    </div>
                     <div style="font-size: 10px; color: var(--text-secondary); width: 100%; margin-top: 2px;">(按平特出码频次降序排列，第1位为最热号，自由定制统计区间)</div>
                 </div>
                 <div style="grid-column: span 2; display:flex; flex-wrap:wrap; gap:6px; align-items:center; background: rgba(255,255,255,0.03); padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border); margin-top: 4px;">
@@ -687,6 +635,12 @@
                         <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10" selected>10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option><option value="24">24</option><option value="25">25</option><option value="26">26</option><option value="27">27</option><option value="28">28</option><option value="29">29</option><option value="30">30</option><option value="31">31</option><option value="32">32</option><option value="33">33</option><option value="34">34</option><option value="35">35</option><option value="36">36</option><option value="37">37</option><option value="38">38</option><option value="39">39</option><option value="40">40</option><option value="41">41</option><option value="42">42</option><option value="43">43</option><option value="44">44</option><option value="45">45</option><option value="46">46</option><option value="47">47</option><option value="48">48</option><option value="49">49</option>
                     </select>
                     <span style="font-size: 11px; color: var(--text-secondary);">位号码</span>
+                    <div class="quick-range-chips">
+                        <button type="button" class="quick-chip-btn" onclick="setQuickRange('allHotNumberRange', 1, 10)">1~10(特码热)</button>
+                        <button type="button" class="quick-chip-btn" onclick="setQuickRange('allHotNumberRange', 1, 15)">1~15(核心)</button>
+                        <button type="button" class="quick-chip-btn" onclick="setQuickRange('allHotNumberRange', 1, 20)">1~20</button>
+                        <button type="button" class="quick-chip-btn" onclick="setQuickRange('allHotNumberRange', 25, 49)">25~49(冷区)</button>
+                    </div>
                     <div style="font-size: 10px; color: var(--text-secondary); width: 100%; margin-top: 2px;">(按特码出码频次降序排列，第1位为最热号，自由定制统计区间)</div>
                 </div>
                 <div style="grid-column: span 2; display:flex; flex-wrap:wrap; gap:6px; align-items:center; background: rgba(255,255,255,0.03); padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border); margin-top: 4px;">
@@ -701,6 +655,12 @@
                         <option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option>
                     </select>
                     <span style="font-size: 11px; color: var(--text-secondary);">位生肖</span>
+                    <div class="quick-range-chips">
+                        <button type="button" class="quick-chip-btn" onclick="setQuickRange('hotZodiacRange', 1, 3)">1~3(热肖)</button>
+                        <button type="button" class="quick-chip-btn" onclick="setQuickRange('hotZodiacRange', 1, 6)">1~6(热半区)</button>
+                        <button type="button" class="quick-chip-btn" onclick="setQuickRange('hotZodiacRange', 4, 8)">4~8(中位)</button>
+                        <button type="button" class="quick-chip-btn" onclick="setQuickRange('hotZodiacRange', 7, 12)">7~12(冷半区)</button>
+                    </div>
                     <div style="font-size: 10px; color: var(--text-secondary); width: 100%; margin-top: 2px;">(按平特生肖频次降序排列，第1位为最热肖，自由定制统计区间)</div>
                 </div>
                 <div style="grid-column: span 2; display:flex; flex-wrap:wrap; gap:6px; align-items:center; background: rgba(255,255,255,0.03); padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border); margin-top: 4px;">
@@ -715,6 +675,12 @@
                         <option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option>
                     </select>
                     <span style="font-size: 11px; color: var(--text-secondary);">位生肖</span>
+                    <div class="quick-range-chips">
+                        <button type="button" class="quick-chip-btn" onclick="setQuickRange('allHotZodiacRange', 1, 3)">1~3(特码热肖)</button>
+                        <button type="button" class="quick-chip-btn" onclick="setQuickRange('allHotZodiacRange', 1, 6)">1~6(热半区)</button>
+                        <button type="button" class="quick-chip-btn" onclick="setQuickRange('allHotZodiacRange', 4, 8)">4~8(中位)</button>
+                        <button type="button" class="quick-chip-btn" onclick="setQuickRange('allHotZodiacRange', 7, 12)">7~12(冷肖)</button>
+                    </div>
                     <div style="font-size: 10px; color: var(--text-secondary); width: 100%; margin-top: 2px;">(按特码生肖频次降序排列，第1位为最热肖，自由定制统计区间)</div>
                 </div>
             </div>
@@ -837,6 +803,13 @@
             </div>
             <div id="overlayHint" style="font-size:10px;color:var(--accent);"></div>
             <div id="overlayLegendList" style="display:none;flex-direction:column;gap:4px;margin-top:8px;"></div>
+            <div id="overlayComparisonWrap" style="display:none;margin-top:10px;border-top:1px solid var(--border);padding-top:8px;">
+                <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;">
+                    <span>📊 多方案量化对比分析</span>
+                    <span style="font-size:9px;color:var(--text-secondary);">全历史回测</span>
+                </div>
+                <div id="overlayComparisonList" style="display:flex;flex-direction:column;gap:6px;"></div>
+            </div>
         </div>
 
         <div class="sidebar-card" id="matrixCard">

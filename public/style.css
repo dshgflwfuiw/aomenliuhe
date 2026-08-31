@@ -126,10 +126,15 @@
 
         .sidebar-card.collapsed {
             overflow: hidden;
+            padding-bottom: 12px;
         }
 
         .sidebar-card.collapsed > :not(h3) {
-            display: none;
+            display: none !important;
+        }
+
+        .sidebar-card.collapsed h3 {
+            margin-bottom: 0 !important;
         }
 
         .sidebar-card.collapsed .card-toggle-arrow {
@@ -2239,3 +2244,137 @@
         body.light-theme .top-bar .ball {
             border: 1px solid var(--border);
         }
+
+        /* Quick Range Chips */
+        .quick-range-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            width: 100%;
+            margin-top: 4px;
+            align-items: center;
+        }
+        .quick-chip-btn {
+            font-size: 10px;
+            padding: 2px 7px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            user-select: none;
+            line-height: 1.4;
+        }
+        .quick-chip-btn:hover {
+            background: rgba(0, 212, 255, 0.12);
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+        .quick-chip-btn:active {
+            transform: scale(0.96);
+        }
+        body.light-theme .quick-chip-btn {
+            background: #f0f3f8;
+            border-color: #d0d7e2;
+            color: #4a5568;
+        }
+        body.light-theme .quick-chip-btn:hover {
+            background: #e1f0fa;
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        /* Free Kline Quant Metrics Card */
+        .kline-metrics-box {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px;
+            margin-top: 10px;
+        }
+        .kline-metrics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            font-size: 11px;
+        }
+        .metric-item {
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+            padding: 6px 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .metric-label {
+            font-size: 10px;
+            color: var(--text-secondary);
+            margin-bottom: 2px;
+        }
+        .metric-val {
+            font-size: 13px;
+            font-weight: 700;
+        }
+        body.light-theme .kline-metrics-box {
+            background: #f8fafc;
+            border-color: #e2e8f0;
+        }
+        body.light-theme .metric-item {
+            background: #ffffff;
+            border-color: #e2e8f0;
+        }
+
+        /* Strategy Preset Controls */
+        .strategy-preset-btn {
+            font-size: 10px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+        }
+        .strategy-preset-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: rgba(0, 212, 255, 0.08);
+        }
+        body.light-theme .strategy-preset-btn {
+            background: #f0f3f8;
+            border-color: #d0d7e2;
+            color: #2d3748;
+        }
+        body.light-theme .strategy-preset-btn:hover {
+            background: #e1f0fa;
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        /* Mobile Touch & Layout Refinements */
+        @media screen and (max-width: 767px) {
+            .quick-chip-btn {
+                padding: 4px 9px;
+                font-size: 11px;
+                min-height: 28px;
+            }
+            .strategy-preset-btn {
+                padding: 6px 10px;
+                font-size: 11px;
+                min-height: 32px;
+            }
+            .kline-metrics-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 5px;
+            }
+            .metric-item {
+                padding: 5px 6px;
+            }
+            .metric-val {
+                font-size: 12px;
+            }
+        }
+

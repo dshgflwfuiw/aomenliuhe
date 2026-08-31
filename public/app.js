@@ -82,6 +82,7 @@
             updateSetModeButton();
             initTheme();
             buildOverlayOptions();
+            initUserStrategies();
             fetchData();
         });
 
@@ -245,15 +246,16 @@
             cards.forEach(card => {
                 const header = card.querySelector('h3');
                 if (!header) return;
+                if (header.querySelector('.card-toggle-arrow')) return;
 
                 const arrow = document.createElement('span');
                 arrow.className = 'card-toggle-arrow';
                 arrow.textContent = '▼';
                 header.appendChild(arrow);
 
-                header.addEventListener('click', () => {
+                header.addEventListener('click', (e) => {
+                    if (e.target && ['INPUT', 'SELECT', 'BUTTON', 'LABEL'].includes(e.target.tagName)) return;
                     card.classList.toggle('collapsed');
-                    arrow.textContent = card.classList.contains('collapsed') ? '▶' : '▼';
                 });
             });
         }
@@ -287,16 +289,22 @@
             if (!year || isNaN(year)) {
                 throw new Error('Invalid year: ' + year);
             }
+            const currentActualYear = new Date().getFullYear();
+            const isHistoricalYear = parseInt(year, 10) < currentActualYear;
             const cacheKey = `lottery_data_${year}`;
             const cached = localStorage.getItem(cacheKey);
             const cacheTime = localStorage.getItem(`${cacheKey}_time`);
 
             if (cached && cacheTime) {
-                const age = Date.now() - parseInt(cacheTime);
-                if (age < 6 * 60 * 60 * 1000) {
+                const age = Date.now() - parseInt(cacheTime, 10);
+                const maxAge = isHistoricalYear ? Infinity : 6 * 60 * 60 * 1000;
+                if (age < maxAge) {
                     try {
                         const data = JSON.parse(cached);
-                        return data.data || data;
+                        const result = data.data || data;
+                        if (Array.isArray(result) && result.length > 0) {
+                            return result;
+                        }
                     } catch (e) {
                         console.warn('Cache parse error for year', year, e);
                     }
@@ -1011,6 +1019,8 @@
             panelUpdateTimer = setTimeout(() => {
                 panelUpdateTimer = null;
                 updateChartLegend();
+                updateKlineMetricsDisplay();
+                renderOverlayComparison();
                 renderHotColdMatrix();
                 runBacktest();
             }, 150);
@@ -2980,6 +2990,315 @@ function copyRecommendations() {
             document.getElementById('coldOption_inputNumbers').value = '';
         }
 
+        // ==================== 快捷区间 & 量化策略预设 ====================
+        function setQuickRange(rangeType, start, end) {
+            const cb = document.getElementById(`coldOption_${rangeType}`);
+            if (cb) cb.checked = true;
+            const sEl = document.getElementById(`coldOption_${rangeType}_start`);
+            if (sEl) sEl.value = String(start);
+            const eEl = document.getElementById(`coldOption_${rangeType}_end`);
+            if (eEl) eEl.value = String(end);
+            showNotification(`已设置区间: 第${start}至第${end}位`);
+        }
+
+        function applyStrategyPreset(presetKey) {
+            resetColdSelection();
+            if (presetKey === 'hot_combo' || presetKey === 'hotCore10') {
+                setQuickRange('hotNumberRange', 1, 10);
+                setQuickRange('hotZodiacRange', 1, 3);
+            } else if (presetKey === 'cold_sniper' || presetKey === 'extremeOmission') {
+                setQuickRange('omissionRange', 15, 49);
+                setQuickRange('omissionZodiacRange', 1, 3);
+            } else if (presetKey === 'warm_middle') {
+                setQuickRange('hotNumberRange', 11, 30);
+                setQuickRange('hotZodiacRange', 4, 8);
+            } else if (presetKey === 'hotZodiac3') {
+                setQuickRange('hotZodiacRange', 1, 3);
+            } else if (presetKey === 'balancedMix') {
+                setQuickRange('hotZodiacRange', 1, 3);
+                const w = document.getElementById('waveOption_red');
+                if (w) w.checked = true;
+            } else if (presetKey === 'coldRebound') {
+                setQuickRange('omissionZodiacRange', 1, 3);
+            }
+            generateColdKline();
+            showNotification('已应用量化策略并生成K线');
+        }
+
+        const USER_STRATEGIES_STORAGE_KEY = 'liuhe_user_strategies';
+
+        function getUserStrategies() {
+            try {
+                const raw = localStorage.getItem(USER_STRATEGIES_STORAGE_KEY);
+                return raw ? JSON.parse(raw) : {};
+            } catch (e) {
+                return {};
+            }
+        }
+
+        function saveUserStrategies(strategies) {
+            localStorage.setItem(USER_STRATEGIES_STORAGE_KEY, JSON.stringify(strategies));
+        }
+
+        function initUserStrategies() {
+            const sel = document.getElementById('userStrategySel') || document.getElementById('userStrategySelect');
+            if (!sel) return;
+            const strategies = getUserStrategies();
+            const names = Object.keys(strategies);
+            sel.innerHTML = '<option value="">📂 我的自定策略...</option>' +
+                names.map(name => `<option value="${name}">${name}</option>`).join('');
+        }
+
+        function saveCurrentStrategyPrompt() {
+            const name = prompt('请输入自定义方案名称 (如: 我的平特热肖+红波组合):');
+            if (!name || !name.trim()) return;
+            const trimmedName = name.trim();
+            
+            const config = {
+                checkedOptions: {},
+                selectCounts: {},
+                ranges: {},
+                zodiacs: [],
+                waves: [],
+                inputNumbers: document.getElementById('coldOption_inputNumbers')?.value || ''
+            };
+            
+            const types = ['numbers', 'zodiacs', 'hotNumbers', 'coldNumbers', 'hotZodiacs', 'coldZodiacs', 'allHotNumbers', 'allColdNumbers', 'allHotZodiacs', 'allColdZodiacs', 'hotNumberRange', 'allHotNumberRange', 'hotZodiacRange', 'allHotZodiacRange', 'wave', 'halfwave', 'jiaYe', 'head', 'tail', 'wuxing', 'halfHead', 'region', 'omissionRange', 'omissionZodiacRange'];
+            types.forEach(t => {
+                const cb = document.getElementById(`coldOption_${t}`);
+                if (cb && cb.checked) config.checkedOptions[t] = true;
+                const count = document.getElementById(`coldOption_${t}_count`);
+                if (count) config.selectCounts[t] = count.value;
+            });
+
+            const rangeKeys = ['omissionRange', 'omissionZodiacRange', 'hotNumberRange', 'allHotNumberRange', 'hotZodiacRange', 'allHotZodiacRange'];
+            rangeKeys.forEach(rk => {
+                config.ranges[rk] = {
+                    start: document.getElementById(`coldOption_${rk}_start`)?.value || '1',
+                    end: document.getElementById(`coldOption_${rk}_end`)?.value || '10'
+                };
+            });
+
+            const zodiacs = CONFIG.zodiacMap[state.currentYear] || [];
+            zodiacs.forEach(z => {
+                if (document.getElementById(`zodiacOption_${z}`)?.checked) config.zodiacs.push(z);
+            });
+
+            ['red', 'blue', 'green'].forEach(w => {
+                if (document.getElementById('waveOption_' + w)?.checked) config.waves.push(w);
+            });
+
+            const strategies = getUserStrategies();
+            strategies[trimmedName] = config;
+            saveUserStrategies(strategies);
+            initUserStrategies();
+            
+            const sel = document.getElementById('userStrategySel') || document.getElementById('userStrategySelect');
+            if (sel) sel.value = trimmedName;
+            showNotification(`方案 "${trimmedName}" 保存成功！`);
+        }
+
+        function loadSelectedUserStrategy(name) {
+            if (!name) return;
+            const strategies = getUserStrategies();
+            const config = strategies[name];
+            if (!config) return;
+            
+            resetColdSelection();
+            
+            if (config.checkedOptions) {
+                Object.keys(config.checkedOptions).forEach(t => {
+                    const cb = document.getElementById(`coldOption_${t}`);
+                    if (cb) cb.checked = true;
+                });
+            }
+            if (config.selectCounts) {
+                Object.keys(config.selectCounts).forEach(t => {
+                    const count = document.getElementById(`coldOption_${t}_count`);
+                    if (count) count.value = config.selectCounts[t];
+                });
+            }
+            if (config.ranges) {
+                Object.keys(config.ranges).forEach(rk => {
+                    const sEl = document.getElementById(`coldOption_${rk}_start`);
+                    const eEl = document.getElementById(`coldOption_${rk}_end`);
+                    if (sEl && config.ranges[rk].start) sEl.value = config.ranges[rk].start;
+                    if (eEl && config.ranges[rk].end) eEl.value = config.ranges[rk].end;
+                });
+            }
+            if (config.zodiacs && Array.isArray(config.zodiacs)) {
+                config.zodiacs.forEach(z => {
+                    const el = document.getElementById(`zodiacOption_${z}`);
+                    if (el) el.checked = true;
+                });
+            }
+            if (config.waves && Array.isArray(config.waves)) {
+                config.waves.forEach(w => {
+                    const el = document.getElementById('waveOption_' + w);
+                    if (el) el.checked = true;
+                });
+            }
+            if (config.inputNumbers) {
+                const inp = document.getElementById('coldOption_inputNumbers');
+                if (inp) inp.value = config.inputNumbers;
+            }
+            
+            generateColdKline();
+            showNotification(`已载入方案: ${name}`);
+        }
+
+        function deleteSelectedUserStrategy() {
+            const sel = document.getElementById('userStrategySel') || document.getElementById('userStrategySelect');
+            if (!sel || !sel.value) return alert('请先选择要删除的方案');
+            const name = sel.value;
+            if (!confirm(`确定要删除方案 "${name}" 吗？`)) return;
+            const strategies = getUserStrategies();
+            delete strategies[name];
+            saveUserStrategies(strategies);
+            initUserStrategies();
+            showNotification(`方案 "${name}" 已删除`);
+        }
+
+        // ==================== 自由K线量化指标回测计算 ====================
+        function calculateKlineQuantMetrics(data) {
+            if (!data || !data.length) {
+                return {
+                    total: 0,
+                    hits: 0,
+                    misses: 0,
+                    winRate: 0,
+                    maxWinStreak: 0,
+                    maxLossStreak: 0,
+                    currentStreak: { type: 'none', count: 0 },
+                    avgCycle: 0,
+                    roi: '0.0'
+                };
+            }
+
+            const total = data.length;
+            let hits = 0;
+            let maxWinStreak = 0;
+            let maxLossStreak = 0;
+            let curWin = 0;
+            let curLoss = 0;
+            const intervals = [];
+            let lastHitIdx = -1;
+
+            data.forEach((d, idx) => {
+                const isWin = (d.step || 0) > 0;
+                if (isWin) {
+                    hits++;
+                    curWin++;
+                    curLoss = 0;
+                    if (curWin > maxWinStreak) maxWinStreak = curWin;
+                    if (lastHitIdx >= 0) {
+                        intervals.push(idx - lastHitIdx);
+                    }
+                    lastHitIdx = idx;
+                } else {
+                    curLoss++;
+                    curWin = 0;
+                    if (curLoss > maxLossStreak) maxLossStreak = curLoss;
+                }
+            });
+
+            const misses = total - hits;
+            const winRate = total > 0 ? (hits / total) * 100 : 0;
+            const avgCycle = intervals.length ? (intervals.reduce((a, b) => a + b, 0) / intervals.length).toFixed(1) : (hits > 0 ? (total / hits).toFixed(1) : '-');
+            
+            const scoreSum = data.reduce((acc, d) => acc + (d.step || 0), 0);
+            const roi = total > 0 ? ((scoreSum / total) * 100).toFixed(1) : '0.0';
+
+            let currentStreakType = 'none';
+            let currentStreakCount = 0;
+            if (data.length > 0) {
+                const lastWin = (data[data.length - 1].step || 0) > 0;
+                currentStreakType = lastWin ? 'win' : 'loss';
+                for (let i = data.length - 1; i >= 0; i--) {
+                    const w = (data[i].step || 0) > 0;
+                    if (w === lastWin) {
+                        currentStreakCount++;
+                    } else {
+                        break;
+                    }
+                }
+            }
+
+            return {
+                total,
+                hits,
+                misses,
+                winRate,
+                maxWinStreak,
+                maxLossStreak,
+                currentStreak: { type: currentStreakType, count: currentStreakCount },
+                avgCycle,
+                scoreSum,
+                roi
+            };
+        }
+
+        function updateKlineMetricsDisplay() {
+            const box = document.getElementById('klineMetricsBox');
+            if (!box) return;
+            
+            const isColdCustom = state.currentMode === 'cold_custom';
+            if (!isColdCustom && !state.coldSelection) {
+                box.style.display = 'none';
+                return;
+            }
+            box.style.display = 'block';
+
+            const metrics = calculateKlineQuantMetrics(state.historyData);
+            
+            // Support both element ID variants
+            const periodEl = document.getElementById('metricPeriodCount');
+            const hitRateEl = document.getElementById('metricHitRate') || document.getElementById('kline-metric-winrate');
+            const hitCountsEl = document.getElementById('metricHitCounts') || document.getElementById('kline-metric-winrate-sub');
+            const maxStreakEl = document.getElementById('metricMaxStreak') || document.getElementById('kline-metric-streak');
+            const curStreakEl = document.getElementById('metricCurrentStreak') || document.getElementById('kline-metric-cur-streak');
+            const avgCycleEl = document.getElementById('metricAvgCycle') || document.getElementById('kline-metric-cycle');
+            const roiEl = document.getElementById('metricROI') || document.getElementById('kline-metric-roi');
+            const profitDetailEl = document.getElementById('metricProfitDetail');
+
+            const setNumCount = (state.coldSelection && state.coldSelection.setNumbers) ? state.coldSelection.setNumbers.length : 0;
+            const theoreticalWr = setNumCount > 0 ? ((setNumCount / 49) * 100).toFixed(1) : ((metrics.winRate > 0 ? (setNumCount || 10) / 49 * 100 : 20.4)).toFixed(1);
+
+            if (periodEl) {
+                periodEl.textContent = `共 ${metrics.total} 期回测`;
+            }
+            if (hitRateEl) {
+                hitRateEl.textContent = `${metrics.winRate.toFixed(1)}%`;
+                hitRateEl.style.color = metrics.winRate >= parseFloat(theoreticalWr) ? 'var(--up)' : 'var(--down)';
+            }
+            if (hitCountsEl) {
+                hitCountsEl.textContent = `${metrics.hits}/${metrics.total} (理论 ${theoreticalWr}%)`;
+            }
+            if (maxStreakEl) {
+                maxStreakEl.innerHTML = `<span style="color:var(--up);">+${metrics.maxWinStreak}</span> / <span style="color:var(--down);">-${metrics.maxLossStreak}</span>`;
+            }
+            if (curStreakEl) {
+                if (metrics.currentStreak.type === 'win') {
+                    curStreakEl.innerHTML = `当前: <b style="color:var(--up);">${metrics.currentStreak.count}连中 🔥</b>`;
+                } else if (metrics.currentStreak.type === 'loss') {
+                    curStreakEl.innerHTML = `当前: <b style="color:var(--down);">${metrics.currentStreak.count}连落 ❄️</b>`;
+                } else {
+                    curStreakEl.textContent = '当前: --';
+                }
+            }
+            if (avgCycleEl) {
+                avgCycleEl.textContent = `${metrics.avgCycle} 期`;
+            }
+            if (roiEl) {
+                const roiVal = parseFloat(metrics.roi);
+                roiEl.textContent = `${roiVal > 0 ? '+' : ''}${metrics.roi}%`;
+                roiEl.style.color = roiVal >= 0 ? 'var(--up)' : 'var(--down)';
+            }
+            if (profitDetailEl) {
+                profitDetailEl.textContent = `净指数: ${metrics.scoreSum >= 0 ? '+' : ''}${metrics.scoreSum}`;
+            }
+        }
+
         function updatePagination() {
             const total = state.historyData.length;
             const size = state.pageState.pageSize === 'all' ? total : state.pageState.pageSize;
@@ -3624,6 +3943,7 @@ function copyRecommendations() {
             }
             syncOverlayTypeWrap();
             updateOverlayHint();
+            renderOverlayComparison();
         }
         function syncOverlayTypeWrap() {
             const type = state.overlay.type;
@@ -3732,6 +4052,104 @@ function copyRecommendations() {
                     state.overlay.type === 'zodiac' ? i : (state.overlay.type === 'tail' ? i + '尾' : parseInt(i, 10))
                 ).join('、');
             }
+        }
+
+        // ==================== 多方案量化对比表格渲染 ====================
+        function renderOverlayComparison() {
+            const wrap = document.getElementById('overlayComparisonWrap');
+            const list = document.getElementById('overlayComparisonList');
+            if (!wrap || !list) return;
+
+            const isCold = state.overlay.type === 'cold';
+            const items = isCold
+                ? (state.overlay.coldSets || []).map((_, i) => 'cold_' + i)
+                : (state.overlay.items || []).slice(0, 3);
+            const minItems = isCold ? 1 : 2;
+
+            if (!state.overlay.enabled || items.length < minItems) {
+                wrap.style.display = 'none';
+                list.innerHTML = '';
+                return;
+            }
+
+            wrap.style.display = 'block';
+            const palette = ['#ff9800', '#e040fb', '#00c4ff'];
+            const totalPeriods = state.historyData.length;
+
+            const cardsHtml = items.map((item, i) => {
+                const hidden = !!(state.overlay.hidden && state.overlay.hidden[item]);
+                let label = item;
+                if (state.overlay.type === 'zodiac') label = item + '肖';
+                else if (state.overlay.type === 'tail') label = parseInt(item, 10) + '尾';
+                else if (state.overlay.type === 'cold') {
+                    const setObj = state.overlay.coldSets[i];
+                    const typeStr = setObj ? (setObj.types || []).join('、') : '';
+                    label = `方案${i + 1} (${typeStr || '自定义'})`;
+                } else {
+                    label = parseInt(item, 10) + '号';
+                }
+
+                let hits = 0;
+                let maxWin = 0;
+                let maxLoss = 0;
+                let curWin = 0;
+                let curLoss = 0;
+                let prevScore = 0;
+                const recentResults = [];
+
+                state.historyData.forEach((d, idx) => {
+                    const score = (d.overlayScores && d.overlayScores[item] !== undefined) ? d.overlayScores[item] : 0;
+                    const diff = idx === 0 ? score : score - prevScore;
+                    const isHit = diff > 0;
+                    prevScore = score;
+
+                    if (isHit) {
+                        hits++;
+                        curWin++;
+                        curLoss = 0;
+                        if (curWin > maxWin) maxWin = curWin;
+                    } else {
+                        curLoss++;
+                        curWin = 0;
+                        if (curLoss > maxLoss) maxLoss = curLoss;
+                    }
+
+                    if (idx >= totalPeriods - 8) {
+                        recentResults.push(isHit ? 'W' : 'L');
+                    }
+                });
+
+                const winRate = totalPeriods > 0 ? ((hits / totalPeriods) * 100).toFixed(1) : '0.0';
+                const finalScore = state.historyData.length ? ((state.historyData[state.historyData.length - 1].overlayScores || {})[item] || 0) : 0;
+
+                const badgesHtml = recentResults.map(r =>
+                    r === 'W'
+                        ? '<span style="display:inline-block;width:14px;height:14px;line-height:14px;text-align:center;font-size:8px;font-weight:bold;background:rgba(255,23,68,0.2);color:var(--up);border-radius:2px;">中</span>'
+                        : '<span style="display:inline-block;width:14px;height:14px;line-height:14px;text-align:center;font-size:8px;font-weight:bold;background:rgba(0,230,118,0.1);color:var(--down);border-radius:2px;">落</span>'
+                ).join('');
+
+                return `
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid ${palette[i % 3]};border-radius:6px;padding:6px 8px;font-size:10px;${hidden ? 'opacity:0.4;' : ''}">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                            <div style="display:flex;align-items:center;gap:4px;">
+                                <span style="width:8px;height:8px;border-radius:2px;background:${palette[i % 3]};display:inline-block;"></span>
+                                <span style="font-weight:700;color:${palette[i % 3]};">${label}</span>
+                            </div>
+                            <span style="font-weight:700;color:${finalScore >= 0 ? 'var(--up)' : 'var(--down)'};">指数: ${finalScore >= 0 ? '+' : ''}${finalScore}</span>
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;color:var(--text-secondary);font-size:9px;margin-bottom:4px;">
+                            <div>胜率: <b style="color:var(--text-primary);">${winRate}%</b> (${hits}/${totalPeriods})</div>
+                            <div>连中/连落: <span style="color:var(--up);">+${maxWin}</span> / <span style="color:var(--down);">-${maxLoss}</span></div>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:2px;">
+                            <span style="font-size:9px;color:var(--text-secondary);margin-right:2px;">近8期:</span>
+                            ${badgesHtml}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            list.innerHTML = cardsHtml;
         }
 
         // ==================== 号码冷热矩阵 ====================
