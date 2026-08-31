@@ -1,0 +1,8 @@
+{
+  "name": "六合趋势全自动联动终端",
+  "description": "六合趋势分析与走势图表工具，支持特肖遗漏分析、单双大小走势、波色、冷热K线等多维度分析",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

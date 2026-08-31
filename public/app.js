@@ -2091,8 +2091,8 @@ function copyRecommendations() {
             return { maxRiseCount, maxFallCount, currentRise, currentFall };
         }
 
-        // “遗漏最多”使用固定的最近 175 期窗口，不受右上角K线显示期数影响。
-        const MAX_COLD_OMISSION_PERIODS = 175;
+        // “遗漏最多”使用固定的最近 300 期窗口，不受右上角K线显示期数影响。
+        const MAX_COLD_OMISSION_PERIODS = 300;
 
         function getSelectedColdSourceData() {
             return state.historyData.slice(-MAX_COLD_OMISSION_PERIODS);
@@ -2264,7 +2264,7 @@ function copyRecommendations() {
             return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, count).map(item => item[0]);
         }
 
-        function getColdJiaYe(sourceData) {
+        function getColdJiaYe(sourceData, count = 1) {
             const keys = ['jia', 'ye'];
             const counts = calculateOmissionCounts(keys, item => getJiaYe(item.win), sourceData);
             return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, count).map(item => item[0]);
@@ -2424,6 +2424,7 @@ function copyRecommendations() {
 
             // Show inline selection results next to each checked option (skip zodiac types - self-explanatory)
             const skipTypes = ['zodiacs', 'hotZodiacs', 'coldZodiacs', 'allHotZodiacs', 'allColdZodiacs', 'selectZodiacs'];
+            const displayValueMap = { red: '红波', blue: '蓝波', green: '绿波', jia: '家肖', ye: '野肖' };
             document.querySelectorAll('.cold-inline-result').forEach(el => el.remove());
             Object.keys(sets).forEach(type => {
                 if (skipTypes.includes(type)) return;
@@ -2434,7 +2435,8 @@ function copyRecommendations() {
                     const parent = cb.parentElement;
                     const result = document.createElement('span');
                     result.className = 'cold-inline-result';
-                    result.textContent = '→ ' + values.slice(0, 5).join(' ') + (values.length > 5 ? '...' : '');
+                    const displayValues = values.map(v => displayValueMap[v] || v);
+                    result.textContent = '→ ' + displayValues.slice(0, 5).join(' ') + (displayValues.length > 5 ? '...' : '');
                     result.style.cssText = 'font-size:9px;color:var(--warn);font-weight:600;margin-left:4px;flex-shrink:0;';
                     if (parent.tagName === 'LABEL') {
                         const wrap = document.createElement('div');
@@ -3737,17 +3739,29 @@ function copyRecommendations() {
                 setNumbers: '号码集'
             };
 
+            const displayValueMap = { red: '红波', blue: '蓝波', green: '绿波', jia: '家肖', ye: '野肖' };
             const rows = types
                 .filter(type => Array.isArray(sets[type]) && sets[type].length)
                 .map(type => {
                     const values = sets[type];
-                    const label = (type === 'setKline' || type === 'setNumbers')
+                    let label = (type === 'setKline' || type === 'setNumbers')
                         ? `号码集（${values.length}个）`
                         : (labels[type] || type);
+                    if (type === 'numbers') label = `遗漏最多${values.length}号`;
+                    if (type === 'zodiacs') label = `遗漏最多${values.length}肖`;
+                    if (type === 'hotNumbers') label = `平特最热${values.length}号`;
+                    if (type === 'coldNumbers') label = `平特最冷${values.length}号`;
+                    if (type === 'allHotNumbers') label = `特码最热${values.length}号`;
+                    if (type === 'allColdNumbers') label = `特码最冷${values.length}号`;
+                    if (type === 'hotZodiacs') label = `平特最热${values.length}肖`;
+                    if (type === 'coldZodiacs') label = `平特最冷${values.length}肖`;
+                    if (type === 'allHotZodiacs') label = `特码最热${values.length}肖`;
+                    if (type === 'allColdZodiacs') label = `特码最冷${values.length}肖`;
+                    const formattedValues = values.map(v => displayValueMap[v] || v);
                     return `
                         <div style="display:flex; justify-content:space-between; gap:6px; margin-top:1px; font-size:10px;">
                             <span style="color:var(--text-secondary); flex-shrink:0;">${label}</span>
-                            <span style="color:var(--warn); text-align:right; word-break:break-word;">${values.join(' ')}</span>
+                            <span style="color:var(--warn); text-align:right; word-break:break-word;">${formattedValues.join(' ')}</span>
                         </div>
                     `;
                 })
