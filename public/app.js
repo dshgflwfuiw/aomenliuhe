@@ -49,6 +49,16 @@
             overlay: { type: 'zodiac', items: [], enabled: false, coldSets: [] },
             matrixMode: 'pingte',
             setMode: 'all',
+            filterCalcMode: 'all',
+            excludeKills: {
+                zodiacs: [],
+                tails: [],
+                waves: [],
+                coldTop5: false,
+                manualNumbers: [],
+                excludedSingles: []
+            },
+            showSignals: true,
             loadedYears: new Set(),
             canvas: null,
             ctx: null,
@@ -74,12 +84,15 @@
             });
             initEvents();
             initCardCollapse();
+            initFilterCalculatorListeners();
             updateFollowZodiacOptions();
             updateTailOptions();
             updateFollowNumAbsentOptions();
             buildModeQuickBar();
             updateFollowPanelSummaries();
             updateSetModeButton();
+            updateKillChipsUI();
+            updateLiveSelectionPreview();
             initTheme();
             buildOverlayOptions();
             initUserStrategies();
@@ -1150,6 +1163,8 @@
 
             if (data.length === 0) return;
 
+            computeDataSignals(data);
+
             ctx.clearRect(0, 0, width, height);
 
             ctx.save();
@@ -1309,6 +1324,30 @@
                     ctx.beginPath();
                     ctx.arc(d.px, markY, 2.4, 0, Math.PI * 2);
                     ctx.fill();
+                });
+            }
+            if (state.showSignals !== false) {
+                data.forEach(d => {
+                    if (!d.chartSignal || d.px == null || d.py == null) return;
+                    const sig = d.chartSignal;
+                    const isAbove = sig.type === 'reversal' || sig.type === 'golden_cross';
+                    const badgeY = isAbove ? d.py - dotSize - 11 : d.py + dotSize + 11;
+
+                    ctx.save();
+                    ctx.globalAlpha = 0.95;
+                    // Draw mini glow aura
+                    ctx.beginPath();
+                    ctx.arc(d.px, d.py, dotSize + 3, 0, Math.PI * 2);
+                    ctx.strokeStyle = sig.type === 'reversal' ? 'rgba(0, 230, 118, 0.85)' : (sig.type === 'peak' ? 'rgba(255, 152, 0, 0.85)' : (sig.type === 'golden_cross' ? 'rgba(0, 212, 255, 0.85)' : 'rgba(255, 23, 68, 0.85)'));
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+
+                    // Draw icon
+                    ctx.font = '11px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(sig.icon, d.px, badgeY);
+                    ctx.restore();
                 });
             }
             if (overlayOk) {
@@ -1631,14 +1670,19 @@
             }
 
             const tbody = document.getElementById('tableBody');
+            const winTarget = state.currentMode === 'pingtail_follow'
+                ? (currentData.tailWin != null ? currentData.tailWin + '尾' : null)
+                : currentData.win;
+
             tbody.innerHTML = sorted.map((item, i) => {
                 const isHot = item.om <= 3;
                 const isCold = item.ratio >= 0.8;
+                const isWinMatch = winTarget && (item.name === winTarget || item.name === String(winTarget));
                 const trend = isHot ? '↗ 热' : isCold ? '↘ 冷' : '→ 稳';
                 const trendColor = isHot ? 'var(--up)' : isCold ? 'var(--down)' : 'var(--text-secondary)';
 
                 return `
-            <tr class="${isHot ? 'hot' : isCold ? 'cold' : ''}">
+            <tr class="${isHot ? 'hot' : isCold ? 'cold' : ''} ${isWinMatch ? 'table-row-crosshair-active' : ''}" data-name="${item.name}">
                 <td><b style="color:var(--accent);">${i + 1}</b></td>
                 <td><b style="font-size:14px;">${item.name}</b></td>
                 <td style="color:${item.om === 0 ? 'var(--up)' : item.om > 15 ? 'var(--down)' : 'inherit'};font-weight:600;font-size:14px;">
@@ -2541,7 +2585,7 @@ function copyRecommendations() {
         function updateColdSummary() {
             const summary = document.getElementById('coldSelectionSummary');
             if (!state.coldSelection) {
-                summary.textContent = '请选择特码自由K线选项后点击生成';
+                summary.textContent = '请选择特码综合K线选项后点击生成';
                 return;
             }
 
@@ -2763,22 +2807,35 @@ function copyRecommendations() {
             return parts.map(String);
         }
 
-        function generateColdKline() {
+        function calculateColdSelectionDetail() {
             const types = ['numbers', 'zodiacs', 'hotNumbers', 'coldNumbers', 'hotZodiacs', 'coldZodiacs', 'allHotNumbers', 'allColdNumbers', 'allHotZodiacs', 'allColdZodiacs', 'hotNumberRange', 'allHotNumberRange', 'hotZodiacRange', 'allHotZodiacRange', 'wave', 'halfwave', 'jiaYe', 'head', 'tail', 'wuxing', 'halfHead', 'region', 'omissionRange', 'omissionZodiacRange']
                 .filter(type => document.getElementById(`coldOption_${type}`)?.checked);
             
-            const inputText = document.getElementById('coldOption_inputNumbers').value.trim();
+            const inputText = document.getElementById('coldOption_inputNumbers')?.value.trim() || '';
             const inputTerms = parseInputTerms(inputText);
-            const selectedNumbers = inputTerms.numbers;
-            const hasInput = selectedNumbers.length || inputTerms.zodiacs.length || inputTerms.tails.length || inputTerms.heads.length || inputTerms.waves.length || inputTerms.segments.length || (inputTerms.regions && inputTerms.regions.length) || (inputTerms.omissionRanges && inputTerms.omissionRanges.length) || (inputTerms.omissionZodiacRanges && inputTerms.omissionZodiacRanges.length) || (inputTerms.hotNumberRanges && inputTerms.hotNumberRanges.length) || (inputTerms.allHotNumberRanges && inputTerms.allHotNumberRanges.length) || (inputTerms.hotZodiacRanges && inputTerms.hotZodiacRanges.length) || (inputTerms.allHotZodiacRanges && inputTerms.allHotZodiacRanges.length);
+            const selectedNumbers = inputTerms.numbers || [];
+            const hasInput = selectedNumbers.length || (inputTerms.zodiacs && inputTerms.zodiacs.length) || (inputTerms.tails && inputTerms.tails.length) || (inputTerms.heads && inputTerms.heads.length) || (inputTerms.waves && inputTerms.waves.length) || (inputTerms.segments && inputTerms.segments.length) || (inputTerms.regions && inputTerms.regions.length) || (inputTerms.omissionRanges && inputTerms.omissionRanges.length) || (inputTerms.omissionZodiacRanges && inputTerms.omissionZodiacRanges.length) || (inputTerms.hotNumberRanges && inputTerms.hotNumberRanges.length) || (inputTerms.allHotNumberRanges && inputTerms.allHotNumberRanges.length) || (inputTerms.hotZodiacRanges && inputTerms.hotZodiacRanges.length) || (inputTerms.allHotZodiacRanges && inputTerms.allHotZodiacRanges.length);
             if (hasInput) types.push('inputNumbers');
-            const selectedZodiacs = CONFIG.zodiacMap[state.currentYear]
-                .filter(z => document.getElementById(`zodiacOption_${z}`).checked);
+            const selectedZodiacs = (CONFIG.zodiacMap[state.currentYear] || [])
+                .filter(z => document.getElementById(`zodiacOption_${z}`)?.checked);
             if (selectedZodiacs.length) types.push('selectZodiacs');
             const selectedWaves = ['red', 'blue', 'green'].filter(w => document.getElementById('waveOption_' + w)?.checked);
             if (selectedWaves.length) types.push('selectedWaves');
-            
-            if (!types.length) return alert('请先选择至少一个特码自由K线选项');
+
+            if (!types.length) {
+                return {
+                    types: [],
+                    optionSets: [],
+                    candidateNumbers: [],
+                    finalNumbers: [],
+                    excludedNumbers: [],
+                    counts: {},
+                    selectedZodiacs: [],
+                    selectedWaves: [],
+                    selectedNumbers: [],
+                    inputTerms: {}
+                };
+            }
 
             const coldSourceData = getSelectedColdSourceData();
             const hotColdSourceData = getSelectedHotColdSourceData();
@@ -2813,39 +2870,99 @@ function copyRecommendations() {
                 allHotZodiacRangeEnd: parseInt(document.getElementById('coldOption_allHotZodiacRange_end')?.value || '3', 10),
                 inputTerms
             };
-            
+
             const sets = calculateColdSets(types, coldSourceData, counts, hotColdSourceData);
             if (selectedZodiacs.length) sets.selectZodiacs = selectedZodiacs;
             if (selectedWaves.length) sets.selectedWaves = selectedWaves;
             if (selectedNumbers.length) sets.inputNumbers = selectedNumbers;
             if (hasInput) sets.inputTerms = inputTerms;
 
-            // 号码集模式：相同（≥2个选项共有）/ 不同（仅1个选项独有）/ 所有（并集）
             const optionSets = getColdOptionNumberSets(sets);
             const cntMap = {};
             optionSets.forEach(set => set.forEach(n => { cntMap[n] = (cntMap[n] || 0) + 1; }));
-            const mode = state.setMode || 'all';
-            let setNumbers;
-            if (mode === 'same') {
-                setNumbers = Object.entries(cntMap).filter(([, c]) => c >= 2).map(([n]) => n);
+
+            const mode = state.filterCalcMode || state.setMode || 'all';
+            let candidateNumbers = [];
+            if (mode === 'and') {
+                if (optionSets.length > 0) {
+                    const totalSets = optionSets.length;
+                    candidateNumbers = Object.entries(cntMap).filter(([, c]) => c === totalSets).map(([n]) => n);
+                }
+            } else if (mode === 'same') {
+                candidateNumbers = Object.entries(cntMap).filter(([, c]) => c >= 2).map(([n]) => n);
             } else if (mode === 'diff') {
-                setNumbers = Object.entries(cntMap).filter(([, c]) => c === 1).map(([n]) => n);
+                candidateNumbers = Object.entries(cntMap).filter(([, c]) => c === 1).map(([n]) => n);
             } else {
-                setNumbers = Object.keys(cntMap);
+                candidateNumbers = Object.keys(cntMap);
             }
-            setNumbers.sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
-            if (!setNumbers.length) {
-                return alert('当前模式下没有可用号码，请调整选项或切换号码集');
+            candidateNumbers.sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+
+            // Top 5 cold numbers for omission kill
+            let top5ColdNumbers = [];
+            if (state.excludeKills.coldTop5) {
+                const latest = coldSourceData;
+                if (latest && latest.numberSnapshot) {
+                    top5ColdNumbers = Object.entries(latest.numberSnapshot)
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 5)
+                        .map(([n]) => n.toString().padStart(2, '0'));
+                }
+            }
+
+            const excludedNumbers = [];
+            const finalNumbers = [];
+
+            candidateNumbers.forEach(num => {
+                const z = getZodiac(parseInt(num, 10));
+                const tail = parseInt(num, 10) % 10;
+                const wave = getColor(num);
+
+                const isKilled = 
+                    (state.excludeKills.zodiacs && state.excludeKills.zodiacs.includes(z)) ||
+                    (state.excludeKills.tails && state.excludeKills.tails.includes(tail)) ||
+                    (state.excludeKills.waves && state.excludeKills.waves.includes(wave)) ||
+                    (state.excludeKills.coldTop5 && top5ColdNumbers.includes(num)) ||
+                    (state.excludeKills.excludedSingles && state.excludeKills.excludedSingles.includes(num));
+
+                if (isKilled) {
+                    excludedNumbers.push(num);
+                } else {
+                    finalNumbers.push(num);
+                }
+            });
+
+            return {
+                types,
+                optionSets,
+                candidateNumbers,
+                finalNumbers,
+                excludedNumbers,
+                counts,
+                selectedZodiacs,
+                selectedWaves,
+                selectedNumbers,
+                inputTerms
+            };
+        }
+
+        function generateColdKline() {
+            const detail = calculateColdSelectionDetail();
+            const { types, finalNumbers, counts, selectedZodiacs, selectedWaves, selectedNumbers, inputTerms } = detail;
+            
+            if (!types.length) return alert('请先选择至少一个特码综合K线选项');
+            if (!finalNumbers.length) {
+                return alert('当前多维运算或排除过滤后没有可用号码，请调整条件或清空排除项');
             }
             
+            const mode = state.filterCalcMode || state.setMode || 'all';
             state.coldSelection = {
                 types: ['setKline'],
                 setKline: true,
                 setMode: mode,
-                setNumbers,
+                setNumbers: finalNumbers,
                 setTypes: types,
                 setCounts: counts,
-                sets: { setNumbers },
+                sets: { setNumbers: finalNumbers },
                 counts,
                 selectedZodiacs,
                 selectedWaves,
@@ -2853,14 +2970,276 @@ function copyRecommendations() {
                 inputTerms
             };
             state.currentMode = 'cold_custom';
-            document.getElementById('trendModeSel').value = 'cold_custom';
-            document.getElementById('info-mode').textContent = '特码自由K线';
+            const trendModeSel = document.getElementById('trendModeSel');
+            if (trendModeSel) trendModeSel.value = 'cold_custom';
+            const infoMode = document.getElementById('info-mode');
+            if (infoMode) infoMode.textContent = '特码综合K线';
             const followWrap = document.getElementById('followWrap');
             if (followWrap) followWrap.style.display = 'none';
             const coldCard = document.getElementById('coldCard');
             if (coldCard) coldCard.style.display = 'block';
             updateColdSummary();
             recalcData();
+        }
+
+        function updateLiveSelectionPreview() {
+            const detail = calculateColdSelectionDetail();
+            const { finalNumbers, candidateNumbers, excludedNumbers } = detail;
+
+            const countEl = document.getElementById('liveSelectedCount');
+            const detailEl = document.getElementById('liveExcludedDetail');
+            const gridEl = document.getElementById('liveBallsGrid');
+            if (!gridEl) return;
+
+            const hitRatePct = ((finalNumbers.length / 49) * 100).toFixed(1);
+            if (countEl) {
+                countEl.textContent = `🎯 精选 ${finalNumbers.length} 码 (${hitRatePct}%)`;
+            }
+            if (detailEl) {
+                detailEl.textContent = `已排除杀号: ${excludedNumbers.length} 码 | 原始候选: ${candidateNumbers.length} 码 | 理论覆盖率: ${hitRatePct}%`;
+            }
+
+            if (!candidateNumbers.length && !finalNumbers.length && !excludedNumbers.length) {
+                gridEl.innerHTML = '<span style="font-size: 11px; color: var(--text-secondary); padding: 8px 0;">勾选下方条件即时生成号码球明细...</span>';
+                return;
+            }
+
+            const allBalls = Array.from(new Set([...finalNumbers, ...excludedNumbers])).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+
+            gridEl.innerHTML = allBalls.map(num => {
+                const wave = getColor(num);
+                const zodiac = getZodiac(parseInt(num, 10));
+                const isExcluded = excludedNumbers.includes(num);
+
+                return `
+                    <div class="preview-ball-item ${wave} ${isExcluded ? 'excluded-single' : ''}" 
+                         onclick="toggleSingleBallExclude('${num}')"
+                         title="${num} (${zodiac}/${wave === 'red' ? '红' : wave === 'blue' ? '蓝' : '绿'}) - 点击${isExcluded ? '恢复' : '排除'}">
+                        <span>${num}</span>
+                        <span class="ball-zodiac-tag">${zodiac}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function setFilterCalcMode(mode) {
+            state.filterCalcMode = mode;
+            state.setMode = mode;
+            const tabs = document.querySelectorAll('.filter-mode-tab');
+            tabs.forEach(tab => {
+                tab.classList.toggle('active', tab.getAttribute('data-mode') === mode);
+            });
+            const descMap = {
+                all: '包含任一选中条件（并集）',
+                and: '严格同时满足所有选中条件（交集）',
+                same: '至少满足 2 项及以上条件（重合）',
+                diff: '仅满足单一条件独有（差集）'
+            };
+            const descEl = document.getElementById('filterModeDesc');
+            if (descEl) descEl.textContent = descMap[mode] || '';
+            updateSetModeButton();
+            updateLiveSelectionPreview();
+            if (state.currentMode === 'cold_custom') {
+                generateColdKline();
+            }
+        }
+
+        function toggleKillZodiac(zodiac) {
+            if (!state.excludeKills.zodiacs) state.excludeKills.zodiacs = [];
+            const idx = state.excludeKills.zodiacs.indexOf(zodiac);
+            if (idx >= 0) state.excludeKills.zodiacs.splice(idx, 1);
+            else state.excludeKills.zodiacs.push(zodiac);
+            updateKillChipsUI();
+            updateLiveSelectionPreview();
+            if (state.currentMode === 'cold_custom') generateColdKline();
+        }
+
+        function toggleKillTail(tail) {
+            if (!state.excludeKills.tails) state.excludeKills.tails = [];
+            const idx = state.excludeKills.tails.indexOf(tail);
+            if (idx >= 0) state.excludeKills.tails.splice(idx, 1);
+            else state.excludeKills.tails.push(tail);
+            updateKillChipsUI();
+            updateLiveSelectionPreview();
+            if (state.currentMode === 'cold_custom') generateColdKline();
+        }
+
+        function toggleKillWave(wave) {
+            if (!state.excludeKills.waves) state.excludeKills.waves = [];
+            const idx = state.excludeKills.waves.indexOf(wave);
+            if (idx >= 0) state.excludeKills.waves.splice(idx, 1);
+            else state.excludeKills.waves.push(wave);
+            updateKillChipsUI();
+            updateLiveSelectionPreview();
+            if (state.currentMode === 'cold_custom') generateColdKline();
+        }
+
+        function toggleKillColdTop5() {
+            state.excludeKills.coldTop5 = !state.excludeKills.coldTop5;
+            updateKillChipsUI();
+            updateLiveSelectionPreview();
+            if (state.currentMode === 'cold_custom') generateColdKline();
+        }
+
+        function clearAllKills() {
+            state.excludeKills = {
+                zodiacs: [],
+                tails: [],
+                waves: [],
+                coldTop5: false,
+                manualNumbers: [],
+                excludedSingles: []
+            };
+            updateKillChipsUI();
+            updateLiveSelectionPreview();
+            if (state.currentMode === 'cold_custom') generateColdKline();
+        }
+
+        function toggleSingleBallExclude(num) {
+            if (!state.excludeKills.excludedSingles) state.excludeKills.excludedSingles = [];
+            const idx = state.excludeKills.excludedSingles.indexOf(num);
+            if (idx >= 0) state.excludeKills.excludedSingles.splice(idx, 1);
+            else state.excludeKills.excludedSingles.push(num);
+            updateLiveSelectionPreview();
+            if (state.currentMode === 'cold_custom') generateColdKline();
+        }
+
+        function copySelectedNumbers() {
+            const detail = calculateColdSelectionDetail();
+            const { finalNumbers } = detail;
+            if (!finalNumbers || !finalNumbers.length) {
+                return alert('当前没有选中的精选号码');
+            }
+            const text = finalNumbers.join(' ');
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => {
+                    alert(`✅ 已复制 ${finalNumbers.length} 个精选号码到剪贴板:\n${text}`);
+                }).catch(() => {
+                    prompt('请手动复制精选号码：', text);
+                });
+            } else {
+                prompt('请手动复制精选号码：', text);
+            }
+        }
+
+        function updateKillChipsUI() {
+            const zChips = document.querySelectorAll('#killZodiacGroup .kill-chip');
+            zChips.forEach(chip => {
+                const z = chip.textContent.trim();
+                chip.classList.toggle('active', !!(state.excludeKills.zodiacs && state.excludeKills.zodiacs.includes(z)));
+            });
+
+            const tChips = document.querySelectorAll('#killTailGroup .kill-chip');
+            tChips.forEach(chip => {
+                const t = parseInt(chip.textContent);
+                chip.classList.toggle('active', !!(state.excludeKills.tails && state.excludeKills.tails.includes(t)));
+            });
+
+            ['red', 'blue', 'green'].forEach(w => {
+                const el = document.getElementById('killWave_' + w);
+                if (el) el.classList.toggle('active', !!(state.excludeKills.waves && state.excludeKills.waves.includes(w)));
+            });
+
+            const coldEl = document.getElementById('killColdTop5');
+            if (coldEl) coldEl.classList.toggle('active', !!state.excludeKills.coldTop5);
+        }
+
+        function toggleShowSignals(show) {
+            state.showSignals = show;
+            draw();
+        }
+
+        function initFilterCalculatorListeners() {
+            const coldCard = document.getElementById('coldCard');
+            if (!coldCard) return;
+            coldCard.addEventListener('change', (e) => {
+                if (e.target.closest('#userStrategySel')) return;
+                updateLiveSelectionPreview();
+            });
+            const inputNumEl = document.getElementById('coldOption_inputNumbers');
+            if (inputNumEl) {
+                inputNumEl.addEventListener('input', () => {
+                    updateLiveSelectionPreview();
+                });
+            }
+        }
+
+        function computeDataSignals(data) {
+            if (!data || data.length < 2) return;
+            let winStreak = 0;
+            let lossStreak = 0;
+
+            let maxObservedLoss = 0;
+            let tempLoss = 0;
+            data.forEach(d => {
+                const step = d.step !== undefined ? d.step : (d.displayScore !== undefined ? 0 : 0);
+                const isWin = step > 0 || d.followHit === true || d.isCurrentHot === true;
+                if (isWin) { tempLoss = 0; }
+                else { tempLoss++; if (tempLoss > maxObservedLoss) maxObservedLoss = tempLoss; }
+            });
+            const freezeThreshold = Math.max(5, Math.floor(maxObservedLoss * 0.75));
+
+            data.forEach((d, i) => {
+                d.chartSignal = null;
+                let isWin = false;
+                if (d.step !== undefined) isWin = d.step > 0;
+                else if (typeof d.followHit === 'boolean') isWin = d.followHit;
+                else if (typeof d.isCurrentHot === 'boolean') isWin = d.isCurrentHot;
+                else if (i > 0) isWin = d.displayScore > data[i - 1].displayScore;
+
+                if (isWin) {
+                    if (lossStreak >= 4) {
+                        d.chartSignal = {
+                            type: 'reversal',
+                            icon: '🚀',
+                            name: '触底强反弹',
+                            desc: `连续 ${lossStreak} 期落空后本期转折反弹命中！`
+                        };
+                    }
+                    winStreak++;
+                    lossStreak = 0;
+                } else {
+                    if (winStreak >= 3) {
+                        d.chartSignal = {
+                            type: 'peak',
+                            icon: '⚠️',
+                            name: '见顶回落',
+                            desc: `连续 ${winStreak} 期命中后高位遇阻回落`
+                        };
+                    }
+                    lossStreak++;
+                    winStreak = 0;
+                    if (lossStreak >= freezeThreshold && !d.chartSignal) {
+                        d.chartSignal = {
+                            type: 'extreme_cold',
+                            icon: '❄️',
+                            name: '极值冷点',
+                            desc: `已连续 ${lossStreak} 期落空未出(深度冰点)`
+                        };
+                    }
+                }
+
+                if (state.maWindow > 0 && i >= 1) {
+                    const prev = data[i - 1];
+                    if (prev && prev.displayMa != null && d.displayMa != null) {
+                        if (prev.displayScore <= prev.displayMa && d.displayScore > d.displayMa && !d.chartSignal) {
+                            d.chartSignal = {
+                                type: 'golden_cross',
+                                icon: '⚡',
+                                name: '金叉突破',
+                                desc: `走势线上穿 MA${state.maWindow} 均线强势突破`
+                            };
+                        } else if (prev.displayScore >= prev.displayMa && d.displayScore < d.displayMa && !d.chartSignal) {
+                            d.chartSignal = {
+                                type: 'death_cross',
+                                icon: '🔻',
+                                name: '死叉跌破',
+                                desc: `走势线下穿 MA${state.maWindow} 均线破位`
+                            };
+                        }
+                    }
+                }
+            });
         }
 
         function getColdOptionNumberSets(sets) {
@@ -3426,13 +3805,13 @@ function copyRecommendations() {
                 color: '波色模式',
                 zodiac_hotcold: '特肖冷热',
                 number_hotcold: '特码冷热',
-                cold_custom: '特码自由K线',
+                cold_custom: '特码综合K线',
                 pingxiao_follow: '平特肖K线',
                 special_zodiac_follow: '前期定特K线',
                 pingtail_follow: '平特尾K线',
                 pingnum_absent: '平特断号K线'
             };
-            document.getElementById('info-mode').textContent = labels[mode] || '特码自由K线';
+            document.getElementById('info-mode').textContent = labels[mode] || '特码综合K线';
             document.getElementById('trendModeSel').value = mode;
             document.querySelectorAll('#modeQuickBar button').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.mode === mode);
@@ -3913,7 +4292,7 @@ function copyRecommendations() {
                         <span style="flex:1;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${(set.types || []).join('、')}</span>
                         <button onclick="removeColdOverlay(${i})" style="padding:2px 6px;font-size:10px;flex-shrink:0;">✕</button>
                     </div>
-                `).join('') || '<div style="font-size:10px;color:var(--text-secondary);">暂无，去特码自由K线卡片添加</div>';
+                `).join('') || '<div style="font-size:10px;color:var(--text-secondary);">暂无，去特码综合K线卡片添加</div>';
             }
             const legendList = document.getElementById('overlayLegendList');
             if (legendList) {
@@ -4006,11 +4385,11 @@ function copyRecommendations() {
         }
         function addColdToOverlay() {
             if (!state.coldSelection || !state.coldSelection.types.length) {
-                return alert('请先在特码自由K线模式生成条件，再加入叠加');
+                return alert('请先在特码综合K线模式生成条件，再加入叠加');
             }
             if (!state.overlay.coldSets) state.overlay.coldSets = [];
             if (state.overlay.coldSets.length >= 3) {
-                return alert('最多叠加3条特码自由K线');
+                return alert('最多叠加3条特码综合K线');
             }
             const set = {
                 types: [...state.coldSelection.types],
@@ -4041,7 +4420,7 @@ function copyRecommendations() {
                 const n = (state.overlay.coldSets || []).length;
                 hint.textContent = n > 0
                     ? '已加入 ' + n + ' 条条件线，勾选「在图上叠加显示」即可显示'
-                    : '到特码自由K线卡片生成条件后点「加入叠加」';
+                    : '到特码综合K线卡片生成条件后点「加入叠加」';
                 return;
             }
             const n = (state.overlay.items || []).length;
@@ -4444,7 +4823,7 @@ function copyRecommendations() {
 
             return rows ? `
                 <div style="margin-top:4px; padding-top:4px; border-top:1px solid rgba(255,255,255,0.05);">
-                    <div style="font-size:11px; color:var(--accent); font-weight:700; margin-bottom:4px;">本期开奖后特码自由K线数据</div>
+                    <div style="font-size:11px; color:var(--accent); font-weight:700; margin-bottom:4px;">本期开奖后特码综合K线数据</div>
                     ${rows}
                 </div>
             ` : '';
@@ -4747,6 +5126,15 @@ function copyRecommendations() {
 
             content += `</div>`;
             
+            if (data.chartSignal) {
+                content += `
+                    <div style="margin-top:6px; padding:4px 8px; border-radius:4px;" class="signal-tooltip-tag ${data.chartSignal.type}">
+                        <span>${data.chartSignal.icon}</span>
+                        <span><b>【${data.chartSignal.name}】</b> ${data.chartSignal.desc}</span>
+                    </div>
+                `;
+            }
+
             content += modeSpecificHtml;
             
             content += `</div>`;

@@ -2378,3 +2378,171 @@
             }
         }
 
+        /* ==================== 多维号码过滤器 & 杀码器 ==================== */
+        .filter-calc-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px;
+            margin-top: 8px;
+        }
+        .filter-mode-tabs {
+            display: flex;
+            gap: 4px;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 2px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+        .filter-mode-tab {
+            flex: 1;
+            font-size: 10px;
+            padding: 4px 2px;
+            text-align: center;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+        }
+        .filter-mode-tab.active {
+            background: var(--accent);
+            color: #0d1117;
+            font-weight: 700;
+        }
+        .kill-filter-section {
+            border-top: 1px dashed var(--border);
+            padding-top: 6px;
+            margin-top: 6px;
+        }
+        .kill-chip-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-bottom: 4px;
+        }
+        .kill-chip {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            user-select: none;
+        }
+        .kill-chip:hover {
+            border-color: var(--down);
+            color: var(--down);
+        }
+        .kill-chip.active {
+            background: rgba(255, 23, 68, 0.18);
+            border-color: var(--down);
+            color: var(--down);
+            font-weight: 700;
+            text-decoration: line-through;
+        }
+        .live-selection-box {
+            background: rgba(0, 212, 255, 0.03);
+            border: 1px solid rgba(0, 212, 255, 0.2);
+            border-radius: 8px;
+            padding: 8px;
+            margin-top: 8px;
+        }
+        .live-balls-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            max-height: 130px;
+            overflow-y: auto;
+            padding: 4px 2px;
+            margin: 6px 0;
+        }
+        .preview-ball-item {
+            position: relative;
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 700;
+            color: #fff;
+            cursor: pointer;
+            transition: transform 0.1s ease, opacity 0.15s ease;
+            box-shadow: inset 0 -2px 4px rgba(0, 0, 0, 0.35), 0 2px 4px rgba(0, 0, 0, 0.2);
+            user-select: none;
+        }
+        .preview-ball-item:hover {
+            transform: scale(1.15);
+            z-index: 2;
+        }
+        .preview-ball-item.excluded-single {
+            opacity: 0.3;
+            filter: grayscale(80%);
+            text-decoration: line-through;
+        }
+        .preview-ball-item .ball-zodiac-tag {
+            position: absolute;
+            bottom: -5px;
+            right: -3px;
+            font-size: 8px;
+            padding: 0 2px;
+            border-radius: 3px;
+            background: rgba(0, 0, 0, 0.8);
+            color: #fff;
+            line-height: 1.1;
+        }
+        .preview-ball-item.red { background: linear-gradient(135deg, #ff5252, #d50000); }
+        .preview-ball-item.blue { background: linear-gradient(135deg, #448aff, #2962ff); }
+        .preview-ball-item.green { background: linear-gradient(135deg, #00e676, #00c853); }
+
+        /* Table Crosshair Active Row */
+        tr.table-row-crosshair-active {
+            background: rgba(0, 212, 255, 0.12) !important;
+            outline: 1px solid var(--accent);
+            box-shadow: 0 0 8px rgba(0, 212, 255, 0.25);
+            transition: all 0.15s ease;
+        }
+
+        /* Signal Tooltip Item */
+        .signal-tooltip-tag {
+            margin-top: 4px;
+            padding: 3px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .signal-tooltip-tag.reversal {
+            background: rgba(0, 230, 118, 0.15);
+            color: #00e676;
+            border: 1px solid rgba(0, 230, 118, 0.3);
+        }
+        .signal-tooltip-tag.peak {
+            background: rgba(255, 152, 0, 0.15);
+            color: #ff9800;
+            border: 1px solid rgba(255, 152, 0, 0.3);
+        }
+        .signal-tooltip-tag.golden_cross {
+            background: rgba(0, 212, 255, 0.15);
+            color: #00d4ff;
+            border: 1px solid rgba(0, 212, 255, 0.3);
+        }
+        .signal-tooltip-tag.death_cross {
+            background: rgba(255, 23, 68, 0.15);
+            color: #ff1744;
+            border: 1px solid rgba(255, 23, 68, 0.3);
+        }
+        .signal-tooltip-tag.extreme_cold {
+            background: rgba(68, 138, 255, 0.15);
+            color: #448aff;
+            border: 1px solid rgba(68, 138, 255, 0.3);
+        }
+

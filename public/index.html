@@ -81,7 +81,7 @@
                 <option value="color">波色分析</option>
                 <option value="zodiac_hotcold">特肖冷热K线</option>
                 <option value="number_hotcold">特码冷热K线</option>
-                <option value="cold_custom">特码自由K线</option>
+                <option value="cold_custom">特码综合K线</option>
                 <option value="pingxiao_follow">平特肖K线</option>
                 <option value="special_zodiac_follow">前期定特K线</option>
                 <option value="pingtail_follow">平特尾K线</option>
@@ -186,11 +186,89 @@
         </div>
 
         <div class="sidebar-card" id="coldCard" style="display: none;">
-            <h3>❄️ 特码自由K线</h3>
-            <button class="primary" style="width: 100%; margin-top: 10px;" onclick="generateColdKline()">生成特码自由K线</button>
-            <button id="setModeBtn" style="width: 100%; margin-top: 8px;" onclick="cycleSetMode()">📊 号码集: 所有号码（点按切换）</button>
-            <button style="width: 100%; margin-top: 8px;" onclick="addColdToOverlay()">➕ 加入叠加（多条件对比）</button>
-            <button style="width: 100%; margin-top: 8px;" onclick="resetColdSelection()">重置选择</button>
+            <h3>❄️ 特码综合K线与智能多维选号</h3>
+            <button class="primary" style="width: 100%; margin-top: 10px;" onclick="generateColdKline()">🚀 生成特码综合K线</button>
+            <div style="display: flex; gap: 6px; margin-top: 8px;">
+                <button style="flex: 1;" onclick="addColdToOverlay()">➕ 加入叠加</button>
+                <button style="flex: 1;" onclick="resetColdSelection()">重置所有选择</button>
+            </div>
+
+            <!-- 多维组合逻辑与杀号排除计算器 -->
+            <div class="filter-calc-card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
+                    <span style="font-size: 11px; font-weight: 700; color: var(--accent);">🧩 多维集合运算模式</span>
+                    <span style="font-size: 10px; color: var(--text-secondary);" id="filterModeDesc">包含任一选中条件</span>
+                </div>
+                <div class="filter-mode-tabs" id="filterModeTabs">
+                    <button type="button" class="filter-mode-tab active" data-mode="all" onclick="setFilterCalcMode('all')">🔄 并集 (OR)</button>
+                    <button type="button" class="filter-mode-tab" data-mode="and" onclick="setFilterCalcMode('and')">🔗 严格交集 (AND)</button>
+                    <button type="button" class="filter-mode-tab" data-mode="same" onclick="setFilterCalcMode('same')">👥 共有重合 (≥2)</button>
+                    <button type="button" class="filter-mode-tab" data-mode="diff" onclick="setFilterCalcMode('diff')">🎯 独有特征 (DIFF)</button>
+                </div>
+
+                <!-- 排除/杀号过滤区 -->
+                <div class="kill-filter-section">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 4px;">
+                        <span style="font-size: 11px; font-weight: 600; color: var(--down);">🚫 智能排除 / 杀码器</span>
+                        <button type="button" onclick="clearAllKills()" style="font-size: 9px; padding: 1px 6px; border-radius: 3px; background: transparent; border: 1px solid var(--border); color: var(--text-secondary); cursor: pointer;">清空排除</button>
+                    </div>
+                    
+                    <!-- 杀生肖 -->
+                    <div style="font-size: 10px; color: var(--text-secondary); margin: 3px 0 2px;">杀生肖 (点击排除):</div>
+                    <div class="kill-chip-group" id="killZodiacGroup">
+                        <span class="kill-chip" onclick="toggleKillZodiac('马')">马</span>
+                        <span class="kill-chip" onclick="toggleKillZodiac('蛇')">蛇</span>
+                        <span class="kill-chip" onclick="toggleKillZodiac('龙')">龙</span>
+                        <span class="kill-chip" onclick="toggleKillZodiac('兔')">兔</span>
+                        <span class="kill-chip" onclick="toggleKillZodiac('虎')">虎</span>
+                        <span class="kill-chip" onclick="toggleKillZodiac('牛')">牛</span>
+                        <span class="kill-chip" onclick="toggleKillZodiac('鼠')">鼠</span>
+                        <span class="kill-chip" onclick="toggleKillZodiac('猪')">猪</span>
+                        <span class="kill-chip" onclick="toggleKillZodiac('狗')">狗</span>
+                        <span class="kill-chip" onclick="toggleKillZodiac('鸡')">鸡</span>
+                        <span class="kill-chip" onclick="toggleKillZodiac('猴')">猴</span>
+                        <span class="kill-chip" onclick="toggleKillZodiac('羊')">羊</span>
+                    </div>
+
+                    <!-- 杀尾数 -->
+                    <div style="font-size: 10px; color: var(--text-secondary); margin: 4px 0 2px;">杀尾数:</div>
+                    <div class="kill-chip-group" id="killTailGroup">
+                        <span class="kill-chip" onclick="toggleKillTail(0)">0尾</span>
+                        <span class="kill-chip" onclick="toggleKillTail(1)">1尾</span>
+                        <span class="kill-chip" onclick="toggleKillTail(2)">2尾</span>
+                        <span class="kill-chip" onclick="toggleKillTail(3)">3尾</span>
+                        <span class="kill-chip" onclick="toggleKillTail(4)">4尾</span>
+                        <span class="kill-chip" onclick="toggleKillTail(5)">5尾</span>
+                        <span class="kill-chip" onclick="toggleKillTail(6)">6尾</span>
+                        <span class="kill-chip" onclick="toggleKillTail(7)">7尾</span>
+                        <span class="kill-chip" onclick="toggleKillTail(8)">8尾</span>
+                        <span class="kill-chip" onclick="toggleKillTail(9)">9尾</span>
+                    </div>
+
+                    <!-- 杀波色 & 极冷 -->
+                    <div style="display:flex; gap: 4px; align-items:center; flex-wrap: wrap; margin-top: 4px;">
+                        <span class="kill-chip" id="killWave_red" onclick="toggleKillWave('red')">杀红波</span>
+                        <span class="kill-chip" id="killWave_blue" onclick="toggleKillWave('blue')">杀蓝波</span>
+                        <span class="kill-chip" id="killWave_green" onclick="toggleKillWave('green')">杀绿波</span>
+                        <span class="kill-chip" id="killColdTop5" onclick="toggleKillColdTop5()">杀Top5极冷</span>
+                    </div>
+                </div>
+
+                <!-- 实时精选预览与号码球明细卡片 -->
+                <div class="live-selection-box" id="liveSelectionBox">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size: 11px; font-weight: 700; color: var(--accent);" id="liveSelectedCount">🎯 精选 0 码 (0%)</span>
+                        <div style="display:flex; gap:4px;">
+                            <button type="button" onclick="copySelectedNumbers()" style="font-size: 10px; padding: 2px 6px; border-radius: 4px; background: rgba(0,212,255,0.12); color: var(--accent); border: 1px solid var(--accent); cursor: pointer;" title="复制精选号码列表">📋 复制清单</button>
+                        </div>
+                    </div>
+                    <div style="font-size: 10px; color: var(--text-secondary); margin-top: 2px;" id="liveExcludedDetail">已排除杀号: 0 码 | 理论覆盖率: 0%</div>
+                    <div class="live-balls-grid" id="liveBallsGrid">
+                        <span style="font-size: 11px; color: var(--text-secondary); padding: 8px 0;">勾选下方条件即时生成号码球明细...</span>
+                    </div>
+                    <div style="font-size: 9px; color: var(--text-secondary); text-align: right;">💡 点击球体可单点排除/恢复微调</div>
+                </div>
+            </div>
             
             <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 8px; padding: 8px; margin-top: 8px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
@@ -239,7 +317,7 @@
                 </div>
             </div>
 
-            <div id="coldSelectionSummary" style="margin-top: 10px; font-size: 11px; color: var(--text-secondary); min-height: 48px;">请选择特码自由K线选项后点击生成</div>
+            <div id="coldSelectionSummary" style="margin-top: 10px; font-size: 11px; color: var(--text-secondary); min-height: 36px;">请勾选或输入选项组合号码</div>
 
             <div style="font-weight: bold; font-size: 12px; color: var(--text-primary); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;"><span>遗漏</span><div style="display: flex; gap: 4px;"><button onclick="toggleColdSection('omission', true)" style="font-size:9px;padding:1px 6px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--accent);cursor:pointer;">全选</button><button onclick="toggleColdSection('omission', false)" style="font-size:9px;padding:1px 6px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--text-secondary);cursor:pointer;">清空</button></div></div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px; margin-bottom: 12px;">
@@ -790,7 +868,7 @@
                 <option value="zodiac" selected>生肖</option>
                 <option value="tail">尾数</option>
                 <option value="number">号码</option>
-                <option value="cold">特码自由K线</option>
+                <option value="cold">特码综合K线</option>
             </select>
             <div id="overlayZodiacWrap" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;font-size:12px;margin-bottom:8px;"></div>
             <div id="overlayTailWrap" style="display:none;grid-template-columns:repeat(5,1fr);gap:6px;font-size:12px;margin-bottom:8px;"></div>
@@ -798,7 +876,7 @@
                 <input type="text" id="overlayNumbersInput" placeholder="号码，逗号分隔，最多3个" style="width:100%;font-size:11px;padding:6px;background:#0d1117;border:1px solid var(--border);border-radius:6px;color:#e6edf3;outline:none;" onchange="applyOverlayNumbers()">
             </div>
             <div id="overlayColdWrap" style="display:none;margin-bottom:8px;">
-                <div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">已加入的特码自由K线条件（去特码自由K线卡片点「加入叠加」，最多3条）</div>
+                <div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">已加入的特码综合K线条件（去特码综合K线卡片点「加入叠加」，最多3条）</div>
                 <div id="overlayColdList" style="display:flex;flex-direction:column;gap:4px;"></div>
             </div>
             <div id="overlayHint" style="font-size:10px;color:var(--accent);"></div>
@@ -872,6 +950,10 @@
                     <option value="5" selected>MA5</option>
                     <option value="10">MA10</option>
                 </select>
+                <label style="display:inline-flex; align-items:center; gap:3px; font-size:11px; color:var(--text-secondary); cursor:pointer; user-select:none; margin:0 4px;" title="在K线上标注触底反弹、见顶回落、均线突破等关键信号">
+                    <input type="checkbox" id="showSignalsCb" checked onchange="toggleShowSignals(this.checked)">
+                    <span style="color:var(--accent);">✨ 信号</span>
+                </label>
                 <span class="chart-legend" id="chartLegend">绿涨·红跌·黄虚线=MA</span>
                 <div class="page-controls">
                     <select id="pageSizeSel" onchange="changePageSize(this.value)"
