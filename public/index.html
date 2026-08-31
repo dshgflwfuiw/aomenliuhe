@@ -311,6 +311,152 @@
                     </select>
                     <span>个</span>
                 </div>
+                <div style="grid-column: span 2; display:flex; flex-wrap:wrap; gap:6px; align-items:center; background: rgba(255,255,255,0.03); padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border); margin-top: 4px;">
+                    <input type="checkbox" id="coldOption_omissionRange">
+                    <label for="coldOption_omissionRange" style="cursor:pointer; font-weight: 600; color: var(--text-primary); margin-right: 2px;">遗漏区域</label>
+                    <span style="font-size: 11px; color: var(--text-secondary);">从第</span>
+                    <select id="coldOption_omissionRange_start" style="font-size:11px; padding:3px 5px; min-width:44px;">
+                        <option value="1" selected>1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                        <option value="6">6</option>
+                        <option value="7">7</option>
+                        <option value="8">8</option>
+                        <option value="9">9</option>
+                        <option value="10">10</option>
+                        <option value="11">11</option>
+                        <option value="12">12</option>
+                        <option value="13">13</option>
+                        <option value="14">14</option>
+                        <option value="15">15</option>
+                        <option value="16">16</option>
+                        <option value="17">17</option>
+                        <option value="18">18</option>
+                        <option value="19">19</option>
+                        <option value="20">20</option>
+                        <option value="21">21</option>
+                        <option value="22">22</option>
+                        <option value="23">23</option>
+                        <option value="24">24</option>
+                        <option value="25">25</option>
+                        <option value="26">26</option>
+                        <option value="27">27</option>
+                        <option value="28">28</option>
+                        <option value="29">29</option>
+                        <option value="30">30</option>
+                        <option value="31">31</option>
+                        <option value="32">32</option>
+                        <option value="33">33</option>
+                        <option value="34">34</option>
+                        <option value="35">35</option>
+                        <option value="36">36</option>
+                        <option value="37">37</option>
+                        <option value="38">38</option>
+                        <option value="39">39</option>
+                        <option value="40">40</option>
+                        <option value="41">41</option>
+                        <option value="42">42</option>
+                        <option value="43">43</option>
+                        <option value="44">44</option>
+                        <option value="45">45</option>
+                        <option value="46">46</option>
+                        <option value="47">47</option>
+                        <option value="48">48</option>
+                        <option value="49">49</option>
+                    </select>
+                    <span style="font-size: 11px; color: var(--text-secondary);">至第</span>
+                    <select id="coldOption_omissionRange_end" style="font-size:11px; padding:3px 5px; min-width:44px;">
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                        <option value="6">6</option>
+                        <option value="7">7</option>
+                        <option value="8">8</option>
+                        <option value="9">9</option>
+                        <option value="10" selected>10</option>
+                        <option value="11">11</option>
+                        <option value="12">12</option>
+                        <option value="13">13</option>
+                        <option value="14">14</option>
+                        <option value="15">15</option>
+                        <option value="16">16</option>
+                        <option value="17">17</option>
+                        <option value="18">18</option>
+                        <option value="19">19</option>
+                        <option value="20">20</option>
+                        <option value="21">21</option>
+                        <option value="22">22</option>
+                        <option value="23">23</option>
+                        <option value="24">24</option>
+                        <option value="25">25</option>
+                        <option value="26">26</option>
+                        <option value="27">27</option>
+                        <option value="28">28</option>
+                        <option value="29">29</option>
+                        <option value="30">30</option>
+                        <option value="31">31</option>
+                        <option value="32">32</option>
+                        <option value="33">33</option>
+                        <option value="34">34</option>
+                        <option value="35">35</option>
+                        <option value="36">36</option>
+                        <option value="37">37</option>
+                        <option value="38">38</option>
+                        <option value="39">39</option>
+                        <option value="40">40</option>
+                        <option value="41">41</option>
+                        <option value="42">42</option>
+                        <option value="43">43</option>
+                        <option value="44">44</option>
+                        <option value="45">45</option>
+                        <option value="46">46</option>
+                        <option value="47">47</option>
+                        <option value="48">48</option>
+                        <option value="49">49</option>
+                    </select>
+                    <span style="font-size: 11px; color: var(--text-secondary);">位号码</span>
+                    <div style="font-size: 10px; color: var(--text-secondary); width: 100%; margin-top: 2px;">(号码按遗漏降序排列，第1位为当前遗漏最多，自由定制统计区间)</div>
+                </div>
+                <div style="grid-column: span 2; display:flex; flex-wrap:wrap; gap:6px; align-items:center; background: rgba(255,255,255,0.03); padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border); margin-top: 4px;">
+                    <input type="checkbox" id="coldOption_omissionZodiacRange">
+                    <label for="coldOption_omissionZodiacRange" style="cursor:pointer; font-weight: 600; color: var(--text-primary); margin-right: 2px;">遗漏生肖</label>
+                    <span style="font-size: 11px; color: var(--text-secondary);">从第</span>
+                    <select id="coldOption_omissionZodiacRange_start" style="font-size:11px; padding:3px 5px; min-width:44px;">
+                        <option value="1" selected>1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                        <option value="6">6</option>
+                        <option value="7">7</option>
+                        <option value="8">8</option>
+                        <option value="9">9</option>
+                        <option value="10">10</option>
+                        <option value="11">11</option>
+                        <option value="12">12</option>
+                    </select>
+                    <span style="font-size: 11px; color: var(--text-secondary);">至第</span>
+                    <select id="coldOption_omissionZodiacRange_end" style="font-size:11px; padding:3px 5px; min-width:44px;">
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3" selected>3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                        <option value="6">6</option>
+                        <option value="7">7</option>
+                        <option value="8">8</option>
+                        <option value="9">9</option>
+                        <option value="10">10</option>
+                        <option value="11">11</option>
+                        <option value="12">12</option>
+                    </select>
+                    <span style="font-size: 11px; color: var(--text-secondary);">位生肖</span>
+                    <div style="font-size: 10px; color: var(--text-secondary); width: 100%; margin-top: 2px;">(生肖按遗漏降序排列，第1位为当前遗漏最多，自由定制统计区间)</div>
+                </div>
             </div>
 
             <div style="font-weight: bold; font-size: 12px; color: var(--text-primary); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;"><span>冷热</span><div style="display: flex; gap: 4px;"><button onclick="toggleColdSection('hotcold', true)" style="font-size:9px;padding:1px 6px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--accent);cursor:pointer;">全选</button><button onclick="toggleColdSection('hotcold', false)" style="font-size:9px;padding:1px 6px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--text-secondary);cursor:pointer;">清空</button></div></div>
@@ -515,6 +661,62 @@
                     </select>
                     <span>肖</span>
                 </div>
+                <div style="grid-column: span 2; display:flex; flex-wrap:wrap; gap:6px; align-items:center; background: rgba(255,255,255,0.03); padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border); margin-top: 4px;">
+                    <input type="checkbox" id="coldOption_hotNumberRange">
+                    <label for="coldOption_hotNumberRange" style="cursor:pointer; font-weight: 600; color: var(--text-primary); margin-right: 2px;">平特热码</label>
+                    <span style="font-size: 11px; color: var(--text-secondary);">从第</span>
+                    <select id="coldOption_hotNumberRange_start" style="font-size:11px; padding:3px 5px; min-width:44px;">
+                        <option value="1" selected>1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option><option value="24">24</option><option value="25">25</option><option value="26">26</option><option value="27">27</option><option value="28">28</option><option value="29">29</option><option value="30">30</option><option value="31">31</option><option value="32">32</option><option value="33">33</option><option value="34">34</option><option value="35">35</option><option value="36">36</option><option value="37">37</option><option value="38">38</option><option value="39">39</option><option value="40">40</option><option value="41">41</option><option value="42">42</option><option value="43">43</option><option value="44">44</option><option value="45">45</option><option value="46">46</option><option value="47">47</option><option value="48">48</option><option value="49">49</option>
+                    </select>
+                    <span style="font-size: 11px; color: var(--text-secondary);">至第</span>
+                    <select id="coldOption_hotNumberRange_end" style="font-size:11px; padding:3px 5px; min-width:44px;">
+                        <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10" selected>10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option><option value="24">24</option><option value="25">25</option><option value="26">26</option><option value="27">27</option><option value="28">28</option><option value="29">29</option><option value="30">30</option><option value="31">31</option><option value="32">32</option><option value="33">33</option><option value="34">34</option><option value="35">35</option><option value="36">36</option><option value="37">37</option><option value="38">38</option><option value="39">39</option><option value="40">40</option><option value="41">41</option><option value="42">42</option><option value="43">43</option><option value="44">44</option><option value="45">45</option><option value="46">46</option><option value="47">47</option><option value="48">48</option><option value="49">49</option>
+                    </select>
+                    <span style="font-size: 11px; color: var(--text-secondary);">位号码</span>
+                    <div style="font-size: 10px; color: var(--text-secondary); width: 100%; margin-top: 2px;">(按平特出码频次降序排列，第1位为最热号，自由定制统计区间)</div>
+                </div>
+                <div style="grid-column: span 2; display:flex; flex-wrap:wrap; gap:6px; align-items:center; background: rgba(255,255,255,0.03); padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border); margin-top: 4px;">
+                    <input type="checkbox" id="coldOption_allHotNumberRange">
+                    <label for="coldOption_allHotNumberRange" style="cursor:pointer; font-weight: 600; color: var(--text-primary); margin-right: 2px;">特码热码</label>
+                    <span style="font-size: 11px; color: var(--text-secondary);">从第</span>
+                    <select id="coldOption_allHotNumberRange_start" style="font-size:11px; padding:3px 5px; min-width:44px;">
+                        <option value="1" selected>1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option><option value="24">24</option><option value="25">25</option><option value="26">26</option><option value="27">27</option><option value="28">28</option><option value="29">29</option><option value="30">30</option><option value="31">31</option><option value="32">32</option><option value="33">33</option><option value="34">34</option><option value="35">35</option><option value="36">36</option><option value="37">37</option><option value="38">38</option><option value="39">39</option><option value="40">40</option><option value="41">41</option><option value="42">42</option><option value="43">43</option><option value="44">44</option><option value="45">45</option><option value="46">46</option><option value="47">47</option><option value="48">48</option><option value="49">49</option>
+                    </select>
+                    <span style="font-size: 11px; color: var(--text-secondary);">至第</span>
+                    <select id="coldOption_allHotNumberRange_end" style="font-size:11px; padding:3px 5px; min-width:44px;">
+                        <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10" selected>10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option><option value="24">24</option><option value="25">25</option><option value="26">26</option><option value="27">27</option><option value="28">28</option><option value="29">29</option><option value="30">30</option><option value="31">31</option><option value="32">32</option><option value="33">33</option><option value="34">34</option><option value="35">35</option><option value="36">36</option><option value="37">37</option><option value="38">38</option><option value="39">39</option><option value="40">40</option><option value="41">41</option><option value="42">42</option><option value="43">43</option><option value="44">44</option><option value="45">45</option><option value="46">46</option><option value="47">47</option><option value="48">48</option><option value="49">49</option>
+                    </select>
+                    <span style="font-size: 11px; color: var(--text-secondary);">位号码</span>
+                    <div style="font-size: 10px; color: var(--text-secondary); width: 100%; margin-top: 2px;">(按特码出码频次降序排列，第1位为最热号，自由定制统计区间)</div>
+                </div>
+                <div style="grid-column: span 2; display:flex; flex-wrap:wrap; gap:6px; align-items:center; background: rgba(255,255,255,0.03); padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border); margin-top: 4px;">
+                    <input type="checkbox" id="coldOption_hotZodiacRange">
+                    <label for="coldOption_hotZodiacRange" style="cursor:pointer; font-weight: 600; color: var(--text-primary); margin-right: 2px;">平特热肖</label>
+                    <span style="font-size: 11px; color: var(--text-secondary);">从第</span>
+                    <select id="coldOption_hotZodiacRange_start" style="font-size:11px; padding:3px 5px; min-width:44px;">
+                        <option value="1" selected>1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option>
+                    </select>
+                    <span style="font-size: 11px; color: var(--text-secondary);">至第</span>
+                    <select id="coldOption_hotZodiacRange_end" style="font-size:11px; padding:3px 5px; min-width:44px;">
+                        <option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option>
+                    </select>
+                    <span style="font-size: 11px; color: var(--text-secondary);">位生肖</span>
+                    <div style="font-size: 10px; color: var(--text-secondary); width: 100%; margin-top: 2px;">(按平特生肖频次降序排列，第1位为最热肖，自由定制统计区间)</div>
+                </div>
+                <div style="grid-column: span 2; display:flex; flex-wrap:wrap; gap:6px; align-items:center; background: rgba(255,255,255,0.03); padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border); margin-top: 4px;">
+                    <input type="checkbox" id="coldOption_allHotZodiacRange">
+                    <label for="coldOption_allHotZodiacRange" style="cursor:pointer; font-weight: 600; color: var(--text-primary); margin-right: 2px;">特码热肖</label>
+                    <span style="font-size: 11px; color: var(--text-secondary);">从第</span>
+                    <select id="coldOption_allHotZodiacRange_start" style="font-size:11px; padding:3px 5px; min-width:44px;">
+                        <option value="1" selected>1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option>
+                    </select>
+                    <span style="font-size: 11px; color: var(--text-secondary);">至第</span>
+                    <select id="coldOption_allHotZodiacRange_end" style="font-size:11px; padding:3px 5px; min-width:44px;">
+                        <option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option>
+                    </select>
+                    <span style="font-size: 11px; color: var(--text-secondary);">位生肖</span>
+                    <div style="font-size: 10px; color: var(--text-secondary); width: 100%; margin-top: 2px;">(按特码生肖频次降序排列，第1位为最热肖，自由定制统计区间)</div>
+                </div>
             </div>
 
             <div style="font-weight: bold; font-size: 12px; color: var(--text-primary); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;"><span>肖</span><div style="display: flex; gap: 4px;"><button onclick="toggleColdSection('zodiac', true)" style="font-size:9px;padding:1px 6px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--accent);cursor:pointer;">全选</button><button onclick="toggleColdSection('zodiac', false)" style="font-size:9px;padding:1px 6px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--text-secondary);cursor:pointer;">清空</button></div></div>
@@ -542,8 +744,8 @@
 
             <div style="font-weight: bold; font-size: 12px; color: var(--text-primary); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;"><span>号码</span><button onclick="clearColdInput()" style="font-size:9px;padding:1px 6px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--text-secondary);cursor:pointer;">清空</button></div>
             <div style="margin-bottom: 12px;">
-                <input type="text" id="coldOption_inputNumbers" placeholder="号码/肖/尾/头/波色/段，如 01,05,马,3尾,2头,红波,一段" style="width:100%;font-size:11px;padding:8px;background:#0d1117;border:1px solid var(--border);border-radius:8px;color:#e6edf3;outline:none;">
-                <div style="font-size:10px;color:var(--text-secondary);margin-top:4px;">支持号码01-49、生肖(马/蛇...)、N尾、N头、红波/蓝波/绿波、一段~七段，任意符号分隔，留空不启用</div>
+                <input type="text" id="coldOption_inputNumbers" placeholder="号码/肖/尾/头/波色/段/区/遗漏区间，如 01,05,马,3尾,2头,红波,一段,一区,遗漏1-10,遗漏肖1-3" style="width:100%;font-size:11px;padding:8px;background:#0d1117;border:1px solid var(--border);border-radius:8px;color:#e6edf3;outline:none;">
+                <div style="font-size:10px;color:var(--text-secondary);margin-top:4px;">支持号码01-49、生肖(马/蛇...)、N尾、N头、红/蓝/绿波、一段~七段、一区~五区、遗漏1-10、遗漏肖1-3等，任意符号分隔，留空不启用</div>
             </div>
 
         </div>
@@ -667,44 +869,6 @@
                 <button onclick="runBacktest()" class="primary" style="font-size:11px;padding:6px 14px;">🔄 回测</button>
             </div>
             <div id="backtestResult" style="font-size:11px;color:var(--text-secondary);min-height:40px;line-height:1.8;">数据加载后自动对比各窗口表现</div>
-        </div>
-
-        <div class="sidebar-card" id="kellyCard">
-            <h3>🧮 凯利计算器</h3>
-            <div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;line-height:1.6;">算"该下注本金的百分之几"，结果为负=数学上不该下注</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-bottom:8px;">
-                <div style="display:flex;flex-direction:column;gap:4px;">
-                    <span style="color:var(--text-secondary);font-size:11px;">赔率（押1赢）</span>
-                    <input type="number" id="kellyOdds" value="40" step="0.01" min="0" style="font-size:13px;padding:8px 10px;">
-                </div>
-                <div style="display:flex;flex-direction:column;gap:4px;">
-                    <span style="color:var(--text-secondary);font-size:11px;">命中率 %</span>
-                    <input type="number" id="kellyProb" value="2.04" step="0.01" min="0" max="100" style="font-size:13px;padding:8px 10px;">
-                </div>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-bottom:8px;">
-                <div style="display:flex;flex-direction:column;gap:4px;">
-                    <span style="color:var(--text-secondary);font-size:11px;">本金</span>
-                    <input type="number" id="kellyBankroll" value="1000" step="100" min="1" style="font-size:13px;padding:8px 10px;">
-                </div>
-                <div style="display:flex;flex-direction:column;gap:4px;">
-                    <span style="color:var(--text-secondary);font-size:11px;">常用玩法</span>
-                    <select id="kellyPreset" onchange="applyKellyPreset(this.value)" style="font-size:13px;padding:8px 10px;">
-                        <option value="">自定义</option>
-                        <option value="tema">特码 1赔40</option>
-                        <option value="daxiao">大小(大) 1赔0.9</option>
-                        <option value="danshuang">单数 1赔0.9</option>
-                        <option value="bose">波色绿 1赔2.85</option>
-                    </select>
-                </div>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px;">
-                <button onclick="setKellyFraction(1)" style="font-size:11px;padding:7px 4px;">全凯利</button>
-                <button onclick="setKellyFraction(0.5)" style="font-size:11px;padding:7px 4px;">半凯利</button>
-                <button onclick="setKellyFraction(0.25)" style="font-size:11px;padding:7px 4px;">¼凯利</button>
-            </div>
-            <button class="primary" style="width:100%;" onclick="calcKelly()">计算</button>
-            <div id="kellyResult" style="margin-top:10px;font-size:11px;color:var(--text-secondary);min-height:64px;line-height:1.9;">输入赔率和命中率后点计算</div>
         </div>
 
         <div style="height: 20px; flex-shrink: 0;"></div>

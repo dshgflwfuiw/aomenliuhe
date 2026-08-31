@@ -678,11 +678,13 @@
                         const halfWaveKey = getHalfWaveKey(cList[6]);
                         const halfHeadKey = getHalfHeadKey(winNum);
                         const segment = getSegmentKey(winNum);
+                        const regionKey = getRegionKey(winNum);
+                        const regionShort = getRegionShortKey(winNum);
                         const jiaYe = getJiaYe(winZ);
 
                         matches = countColdConditionMatches(cold, rollingColdSets, {
                             numStr, winZ, winNum, color, cList,
-                            headKey, tailKey, halfWaveKey, halfHeadKey, segment, jiaYe
+                            headKey, tailKey, halfWaveKey, halfHeadKey, segment, regionKey, regionShort, jiaYe
                         });
 
                         step = matches > 0 ? 1 : -1;
@@ -855,6 +857,8 @@
                             halfWaveKey: getHalfWaveKey(cList[6]),
                             halfHeadKey: getHalfHeadKey(winNum),
                             segment: getSegmentKey(winNum),
+                            regionKey: getRegionKey(winNum),
+                            regionShort: getRegionShortKey(winNum),
                             jiaYe: getJiaYe(winZ)
                         });
                         overlayScores['cold_' + si] = (overlayScores['cold_' + si] || 0) + (m > 0 ? 1 : -1);
@@ -2056,6 +2060,26 @@ function copyRecommendations() {
             return `${start}-${end}段`;
         }
 
+        function getRegionKey(num) {
+            const n = typeof num === 'number' ? num : parseInt(num, 10);
+            if (n >= 1 && n <= 10) return '一区(01-10)';
+            if (n >= 11 && n <= 20) return '二区(11-20)';
+            if (n >= 21 && n <= 30) return '三区(21-30)';
+            if (n >= 31 && n <= 40) return '四区(31-40)';
+            if (n >= 41 && n <= 49) return '五区(41-49)';
+            return '一区(01-10)';
+        }
+
+        function getRegionShortKey(num) {
+            const n = typeof num === 'number' ? num : parseInt(num, 10);
+            if (n >= 1 && n <= 10) return '1区';
+            if (n >= 11 && n <= 20) return '2区';
+            if (n >= 21 && n <= 30) return '3区';
+            if (n >= 31 && n <= 40) return '4区';
+            if (n >= 41 && n <= 49) return '5区';
+            return '1区';
+        }
+
         function computeMaxRiseFall(data, endIndex) {
             let maxRiseCount = 0;
             let maxFallCount = 0;
@@ -2301,8 +2325,68 @@ function copyRecommendations() {
             return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, count).map(item => item[0]);
         }
 
+        function getColdRegion(sourceData, count = 1) {
+            const keys = ['一区(01-10)', '二区(11-20)', '三区(21-30)', '四区(31-40)', '五区(41-49)'];
+            const counts = calculateOmissionCounts(keys, item => getRegionKey(item.winNum), sourceData);
+            return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, count).map(item => item[0]);
+        }
+
+        function getColdOmissionRangeNumbers(sourceData, startRank = 1, endRank = 10) {
+            const keys = Array.from({ length: 49 }, (_, i) => (i + 1).toString().padStart(2, '0'));
+            const counts = calculateOmissionCounts(keys, item => item.winNum.toString().padStart(2, '0'), sourceData);
+            const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(item => item[0]);
+            const s = Math.max(1, Math.min(49, Math.min(startRank, endRank)));
+            const e = Math.max(1, Math.min(49, Math.max(startRank, endRank)));
+            return sorted.slice(s - 1, e);
+        }
+
+        function getColdOmissionRangeZodiacs(sourceData, startRank = 1, endRank = 3) {
+            const keys = CONFIG.zodiacMap[state.currentYear];
+            const counts = calculateOmissionCounts(keys, item => item.win, sourceData);
+            const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1] || keys.indexOf(a[0]) - keys.indexOf(b[0])).map(item => item[0]);
+            const s = Math.max(1, Math.min(12, Math.min(startRank, endRank)));
+            const e = Math.max(1, Math.min(12, Math.max(startRank, endRank)));
+            return sorted.slice(s - 1, e);
+        }
+
+        function getHotNumberRange(sourceData, startRank = 1, endRank = 10) {
+            const keys = Array.from({ length: 49 }, (_, i) => (i + 1).toString().padStart(2, '0'));
+            const counts = calculateFrequencyCounts(keys, item => getAllDrawNumbers(item), sourceData);
+            const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(item => item[0]);
+            const s = Math.max(1, Math.min(49, Math.min(startRank, endRank)));
+            const e = Math.max(1, Math.min(49, Math.max(startRank, endRank)));
+            return sorted.slice(s - 1, e);
+        }
+
+        function getAllHotNumberRange(sourceData, startRank = 1, endRank = 10) {
+            const keys = Array.from({ length: 49 }, (_, i) => (i + 1).toString().padStart(2, '0'));
+            const counts = calculateFrequencyCounts(keys, item => item.winNum.toString().padStart(2, '0'), sourceData);
+            const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(item => item[0]);
+            const s = Math.max(1, Math.min(49, Math.min(startRank, endRank)));
+            const e = Math.max(1, Math.min(49, Math.max(startRank, endRank)));
+            return sorted.slice(s - 1, e);
+        }
+
+        function getHotZodiacRange(sourceData, startRank = 1, endRank = 3) {
+            const keys = CONFIG.zodiacMap[state.currentYear];
+            const counts = calculateFrequencyCounts(keys, item => getAllDrawZodiacs(item), sourceData);
+            const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1] || keys.indexOf(a[0]) - keys.indexOf(b[0])).map(item => item[0]);
+            const s = Math.max(1, Math.min(12, Math.min(startRank, endRank)));
+            const e = Math.max(1, Math.min(12, Math.max(startRank, endRank)));
+            return sorted.slice(s - 1, e);
+        }
+
+        function getAllHotZodiacRange(sourceData, startRank = 1, endRank = 3) {
+            const keys = CONFIG.zodiacMap[state.currentYear];
+            const counts = calculateFrequencyCounts(keys, item => item.win, sourceData);
+            const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1] || keys.indexOf(a[0]) - keys.indexOf(b[0])).map(item => item[0]);
+            const s = Math.max(1, Math.min(12, Math.min(startRank, endRank)));
+            const e = Math.max(1, Math.min(12, Math.max(startRank, endRank)));
+            return sorted.slice(s - 1, e);
+        }
+
         function countColdConditionMatches(cold, rollingColdSets, ctx) {
-            const { numStr, winZ, winNum, color, headKey, tailKey, halfWaveKey, halfHeadKey, segment, jiaYe } = ctx;
+            const { numStr, winZ, winNum, color, headKey, tailKey, halfWaveKey, halfHeadKey, segment, regionKey, regionShort, jiaYe } = ctx;
             let matches = 0;
             if (cold.types.includes('numbers') && rollingColdSets.numbers.includes(numStr)) matches++;
             if (cold.types.includes('zodiacs') && rollingColdSets.zodiacs.includes(winZ)) matches++;
@@ -2314,8 +2398,15 @@ function copyRecommendations() {
             if (cold.types.includes('allColdNumbers') && rollingColdSets.allColdNumbers.includes(numStr)) matches++;
             if (cold.types.includes('allHotZodiacs') && rollingColdSets.allHotZodiacs.includes(winZ)) matches++;
             if (cold.types.includes('allColdZodiacs') && rollingColdSets.allColdZodiacs.includes(winZ)) matches++;
+            if (cold.types.includes('hotNumberRange') && rollingColdSets.hotNumberRange && rollingColdSets.hotNumberRange.includes(numStr)) matches++;
+            if (cold.types.includes('allHotNumberRange') && rollingColdSets.allHotNumberRange && rollingColdSets.allHotNumberRange.includes(numStr)) matches++;
+            if (cold.types.includes('hotZodiacRange') && rollingColdSets.hotZodiacRange && rollingColdSets.hotZodiacRange.includes(winZ)) matches++;
+            if (cold.types.includes('allHotZodiacRange') && rollingColdSets.allHotZodiacRange && rollingColdSets.allHotZodiacRange.includes(winZ)) matches++;
             if (cold.types.includes('selectZodiacs') && cold.selectedZodiacs && cold.selectedZodiacs.includes(winZ)) matches++;
             if (cold.types.includes('selectedWaves') && cold.selectedWaves && cold.selectedWaves.includes(color)) matches++;
+            if (cold.types.includes('selectedRegions') && cold.selectedRegions && (cold.selectedRegions.includes(regionKey) || cold.selectedRegions.includes(regionShort))) matches++;
+            if (cold.types.includes('omissionRange') && rollingColdSets.omissionRange && rollingColdSets.omissionRange.includes(numStr)) matches++;
+            if (cold.types.includes('omissionZodiacRange') && rollingColdSets.omissionZodiacRange && rollingColdSets.omissionZodiacRange.includes(winZ)) matches++;
             if (cold.types.includes('inputNumbers')) {
                 const t = cold.inputTerms || { numbers: cold.selectedNumbers || [] };
                 if (
@@ -2324,7 +2415,14 @@ function copyRecommendations() {
                     t.tails.includes(winNum % 10) ||
                     t.heads.includes(Math.floor(winNum / 10)) ||
                     t.waves.includes(color) ||
-                    t.segments.includes(Math.ceil(winNum / 7))
+                    t.segments.includes(Math.ceil(winNum / 7)) ||
+                    (t.regions && t.regions.includes(regionShort)) ||
+                    (rollingColdSets.inputOmissionRangeNumbers && rollingColdSets.inputOmissionRangeNumbers.includes(numStr)) ||
+                    (rollingColdSets.inputOmissionZodiacRangeZodiacs && rollingColdSets.inputOmissionZodiacRangeZodiacs.includes(winZ)) ||
+                    (rollingColdSets.inputHotNumberRangeNumbers && rollingColdSets.inputHotNumberRangeNumbers.includes(numStr)) ||
+                    (rollingColdSets.inputAllHotNumberRangeNumbers && rollingColdSets.inputAllHotNumberRangeNumbers.includes(numStr)) ||
+                    (rollingColdSets.inputHotZodiacRangeZodiacs && rollingColdSets.inputHotZodiacRangeZodiacs.includes(winZ)) ||
+                    (rollingColdSets.inputAllHotZodiacRangeZodiacs && rollingColdSets.inputAllHotZodiacRangeZodiacs.includes(winZ))
                 ) matches++;
             }
             if (cold.types.includes('wave') && rollingColdSets.wave.includes(color)) matches++;
@@ -2334,11 +2432,12 @@ function copyRecommendations() {
             if (cold.types.includes('tail') && rollingColdSets.tail.includes(tailKey)) matches++;
             if (cold.types.includes('wuxing') && rollingColdSets.wuxing.includes(segment)) matches++;
             if (cold.types.includes('halfHead') && rollingColdSets.halfHead.includes(halfHeadKey)) matches++;
+            if (cold.types.includes('region') && rollingColdSets.region && rollingColdSets.region.includes(regionKey)) matches++;
             return matches;
         }
 
         function calculateColdSets(types, omissionSourceData = state.historyData, counts = {}, hotColdSourceData = omissionSourceData) {
-            const defaultCounts = { zodiacs: 3, numbers: 10, hotNumbers: 10, coldNumbers: 10, allHotNumbers: 10, allColdNumbers: 10, ...counts };
+            const defaultCounts = { zodiacs: 3, numbers: 10, hotNumbers: 10, coldNumbers: 10, allHotNumbers: 10, allColdNumbers: 10, region: 1, ...counts };
             const sets = {};
             if (types.includes('numbers')) sets.numbers = getCold10Numbers(omissionSourceData, defaultCounts.numbers);
             if (types.includes('zodiacs')) sets.zodiacs = getCold3Zodiacs(omissionSourceData, defaultCounts.zodiacs);
@@ -2357,6 +2456,75 @@ function copyRecommendations() {
             if (types.includes('tail')) sets.tail = getColdTail2(omissionSourceData, counts.tail || 2);
             if (types.includes('wuxing')) sets.wuxing = getColdSegment(omissionSourceData, counts.wuxing || 1);
             if (types.includes('halfHead')) sets.halfHead = getColdHalfHead(omissionSourceData, counts.halfHead || 1);
+            if (types.includes('region')) sets.region = getColdRegion(omissionSourceData, counts.region || 1);
+            if (types.includes('omissionRange')) {
+                const s = counts.omissionRangeStart !== undefined ? counts.omissionRangeStart : 1;
+                const e = counts.omissionRangeEnd !== undefined ? counts.omissionRangeEnd : 10;
+                sets.omissionRange = getColdOmissionRangeNumbers(omissionSourceData, s, e);
+            }
+            if (types.includes('omissionZodiacRange')) {
+                const s = counts.omissionZodiacRangeStart !== undefined ? counts.omissionZodiacRangeStart : 1;
+                const e = counts.omissionZodiacRangeEnd !== undefined ? counts.omissionZodiacRangeEnd : 3;
+                sets.omissionZodiacRange = getColdOmissionRangeZodiacs(omissionSourceData, s, e);
+            }
+            if (types.includes('hotNumberRange')) {
+                const s = counts.hotNumberRangeStart !== undefined ? counts.hotNumberRangeStart : 1;
+                const e = counts.hotNumberRangeEnd !== undefined ? counts.hotNumberRangeEnd : 10;
+                sets.hotNumberRange = getHotNumberRange(hotColdSourceData, s, e);
+            }
+            if (types.includes('allHotNumberRange')) {
+                const s = counts.allHotNumberRangeStart !== undefined ? counts.allHotNumberRangeStart : 1;
+                const e = counts.allHotNumberRangeEnd !== undefined ? counts.allHotNumberRangeEnd : 10;
+                sets.allHotNumberRange = getAllHotNumberRange(hotColdSourceData, s, e);
+            }
+            if (types.includes('hotZodiacRange')) {
+                const s = counts.hotZodiacRangeStart !== undefined ? counts.hotZodiacRangeStart : 1;
+                const e = counts.hotZodiacRangeEnd !== undefined ? counts.hotZodiacRangeEnd : 3;
+                sets.hotZodiacRange = getHotZodiacRange(hotColdSourceData, s, e);
+            }
+            if (types.includes('allHotZodiacRange')) {
+                const s = counts.allHotZodiacRangeStart !== undefined ? counts.allHotZodiacRangeStart : 1;
+                const e = counts.allHotZodiacRangeEnd !== undefined ? counts.allHotZodiacRangeEnd : 3;
+                sets.allHotZodiacRange = getAllHotZodiacRange(hotColdSourceData, s, e);
+            }
+            if (types.includes('inputNumbers') && counts.inputTerms) {
+                if (counts.inputTerms.omissionRanges) {
+                    sets.inputOmissionRangeNumbers = [];
+                    counts.inputTerms.omissionRanges.forEach(r => {
+                        sets.inputOmissionRangeNumbers.push(...getColdOmissionRangeNumbers(omissionSourceData, r.start, r.end));
+                    });
+                }
+                if (counts.inputTerms.omissionZodiacRanges) {
+                    sets.inputOmissionZodiacRangeZodiacs = [];
+                    counts.inputTerms.omissionZodiacRanges.forEach(r => {
+                        sets.inputOmissionZodiacRangeZodiacs.push(...getColdOmissionRangeZodiacs(omissionSourceData, r.start, r.end));
+                    });
+                }
+                if (counts.inputTerms.hotNumberRanges) {
+                    sets.inputHotNumberRangeNumbers = [];
+                    counts.inputTerms.hotNumberRanges.forEach(r => {
+                        sets.inputHotNumberRangeNumbers.push(...getHotNumberRange(hotColdSourceData, r.start, r.end));
+                    });
+                }
+                if (counts.inputTerms.allHotNumberRanges) {
+                    sets.inputAllHotNumberRangeNumbers = [];
+                    counts.inputTerms.allHotNumberRanges.forEach(r => {
+                        sets.inputAllHotNumberRangeNumbers.push(...getAllHotNumberRange(hotColdSourceData, r.start, r.end));
+                    });
+                }
+                if (counts.inputTerms.hotZodiacRanges) {
+                    sets.inputHotZodiacRangeZodiacs = [];
+                    counts.inputTerms.hotZodiacRanges.forEach(r => {
+                        sets.inputHotZodiacRangeZodiacs.push(...getHotZodiacRange(hotColdSourceData, r.start, r.end));
+                    });
+                }
+                if (counts.inputTerms.allHotZodiacRanges) {
+                    sets.inputAllHotZodiacRangeZodiacs = [];
+                    counts.inputTerms.allHotZodiacRanges.forEach(r => {
+                        sets.inputAllHotZodiacRangeZodiacs.push(...getAllHotZodiacRange(hotColdSourceData, r.start, r.end));
+                    });
+                }
+            }
             return sets;
         }
 
@@ -2381,14 +2549,19 @@ function copyRecommendations() {
             if (sets.coldNumbers) sets.coldNumbers.forEach(addNumber);
             if (sets.allHotNumbers) sets.allHotNumbers.forEach(addNumber);
             if (sets.allColdNumbers) sets.allColdNumbers.forEach(addNumber);
+            if (sets.hotNumberRange) sets.hotNumberRange.forEach(addNumber);
+            if (sets.allHotNumberRange) sets.allHotNumberRange.forEach(addNumber);
 
             if (sets.zodiacs) sets.zodiacs.forEach(zodiac => addNumbersByFilter(num => getZodiac(parseInt(num, 10)) === zodiac));
             if (sets.hotZodiacs) sets.hotZodiacs.forEach(zodiac => addNumbersByFilter(num => getZodiac(parseInt(num, 10)) === zodiac));
             if (sets.coldZodiacs) sets.coldZodiacs.forEach(zodiac => addNumbersByFilter(num => getZodiac(parseInt(num, 10)) === zodiac));
             if (sets.allHotZodiacs) sets.allHotZodiacs.forEach(zodiac => addNumbersByFilter(num => getZodiac(parseInt(num, 10)) === zodiac));
             if (sets.allColdZodiacs) sets.allColdZodiacs.forEach(zodiac => addNumbersByFilter(num => getZodiac(parseInt(num, 10)) === zodiac));
+            if (sets.hotZodiacRange) sets.hotZodiacRange.forEach(zodiac => addNumbersByFilter(num => getZodiac(parseInt(num, 10)) === zodiac));
+            if (sets.allHotZodiacRange) sets.allHotZodiacRange.forEach(zodiac => addNumbersByFilter(num => getZodiac(parseInt(num, 10)) === zodiac));
             if (sets.selectZodiacs) sets.selectZodiacs.forEach(zodiac => addNumbersByFilter(num => getZodiac(parseInt(num, 10)) === zodiac));
             if (sets.selectedWaves) sets.selectedWaves.forEach(wave => addNumbersByFilter(num => getColor(num) === wave));
+            if (sets.selectedRegions) sets.selectedRegions.forEach(reg => addNumbersByFilter(num => getRegionKey(parseInt(num, 10)) === reg || getRegionShortKey(parseInt(num, 10)) === reg));
 
             if (sets.wave) sets.wave.forEach(wave => addNumbersByFilter(num => getColor(num) === wave));
             if (sets.halfwave) sets.halfwave.forEach(half => addNumbersByFilter(num => getHalfWaveKey(num) === half));
@@ -2396,7 +2569,10 @@ function copyRecommendations() {
             if (sets.head) sets.head.forEach(head => addNumbersByFilter(num => `${Math.floor(parseInt(num, 10) / 10)}头` === head));
             if (sets.tail) sets.tail.forEach(tail => addNumbersByFilter(num => `${parseInt(num, 10) % 10}尾` === tail));
             if (sets.wuxing) sets.wuxing.forEach(segment => addNumbersByFilter(num => getSegmentKey(parseInt(num, 10)) === segment));
-            if (sets.halfHead) sets.halfHead.forEach(key => addNumbersByFilter(num => getHalfHeadKey(parseInt(num, 10)) === key));
+                    if (sets.halfHead) sets.halfHead.forEach(key => addNumbersByFilter(num => getHalfHeadKey(parseInt(num, 10)) === key));
+            if (sets.region) sets.region.forEach(key => addNumbersByFilter(num => getRegionKey(parseInt(num, 10)) === key));
+            if (sets.omissionRange) sets.omissionRange.forEach(addNumber);
+            if (sets.omissionZodiacRange) sets.omissionZodiacRange.forEach(zodiac => addNumbersByFilter(num => getZodiac(parseInt(num, 10)) === zodiac));
             if (sets.inputTerms) {
                 const it = sets.inputTerms;
                 it.numbers.forEach(addNumber);
@@ -2405,6 +2581,13 @@ function copyRecommendations() {
                 it.heads.forEach(h => addNumbersByFilter(num => Math.floor(parseInt(num, 10) / 10) === h));
                 it.waves.forEach(w => addNumbersByFilter(num => getColor(num) === w));
                 it.segments.forEach(s => addNumbersByFilter(num => Math.ceil(parseInt(num, 10) / 7) === s));
+                if (it.regions) it.regions.forEach(r => addNumbersByFilter(num => getRegionShortKey(parseInt(num, 10)) === r));
+                if (sets.inputOmissionRangeNumbers) sets.inputOmissionRangeNumbers.forEach(addNumber);
+                if (sets.inputOmissionZodiacRangeZodiacs) sets.inputOmissionZodiacRangeZodiacs.forEach(zodiac => addNumbersByFilter(num => getZodiac(parseInt(num, 10)) === zodiac));
+                if (sets.inputHotNumberRangeNumbers) sets.inputHotNumberRangeNumbers.forEach(addNumber);
+                if (sets.inputAllHotNumberRangeNumbers) sets.inputAllHotNumberRangeNumbers.forEach(addNumber);
+                if (sets.inputHotZodiacRangeZodiacs) sets.inputHotZodiacRangeZodiacs.forEach(zodiac => addNumbersByFilter(num => getZodiac(parseInt(num, 10)) === zodiac));
+                if (sets.inputAllHotZodiacRangeZodiacs) sets.inputAllHotZodiacRangeZodiacs.forEach(zodiac => addNumbersByFilter(num => getZodiac(parseInt(num, 10)) === zodiac));
             }
             if (sets.setNumbers && sets.setNumbers.length) sets.setNumbers.forEach(addNumber);
 
@@ -2423,7 +2606,7 @@ function copyRecommendations() {
                   + (inputDesc.length ? `<div style="margin-top:4px;">输入条件: ${inputDesc.join(' ')}</div>` : '');
 
             // Show inline selection results next to each checked option (skip zodiac types - self-explanatory)
-            const skipTypes = ['zodiacs', 'hotZodiacs', 'coldZodiacs', 'allHotZodiacs', 'allColdZodiacs', 'selectZodiacs'];
+            const skipTypes = ['zodiacs', 'hotZodiacs', 'coldZodiacs', 'allHotZodiacs', 'allColdZodiacs', 'hotZodiacRange', 'allHotZodiacRange', 'selectZodiacs'];
             const displayValueMap = { red: '红波', blue: '蓝波', green: '绿波', jia: '家肖', ye: '野肖' };
             document.querySelectorAll('.cold-inline-result').forEach(el => el.remove());
             Object.keys(sets).forEach(type => {
@@ -2452,16 +2635,78 @@ function copyRecommendations() {
         }
 
         function parseInputTerms(text) {
-            const terms = { numbers: [], zodiacs: [], tails: [], heads: [], waves: [], segments: [] };
+            const terms = { numbers: [], zodiacs: [], tails: [], heads: [], waves: [], segments: [], regions: [], omissionRanges: [], omissionZodiacRanges: [], hotNumberRanges: [], allHotNumberRanges: [], hotZodiacRanges: [], allHotZodiacRanges: [] };
             if (!text) return terms;
             const zodiacNames = new Set(['鼠', '牛', '虎', '兔', '龙', '蛇', '马', '羊', '猴', '鸡', '狗', '猪']);
             const waveMap = { '红': 'red', '蓝': 'blue', '绿': 'green', '红波': 'red', '蓝波': 'blue', '绿波': 'green' };
             const cnNum = { '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7 };
             const toSeg = s => /^\d$/.test(s) ? parseInt(s, 10) : cnNum[s];
+            const regionMap = {
+                '一区': '1区', '二区': '2区', '三区': '3区', '四区': '4区', '五区': '5区',
+                '1区': '1区', '2区': '2区', '3区': '3区', '4区': '4区', '5区': '5区',
+                '区1': '1区', '区2': '2区', '区3': '3区', '区4': '4区', '区5': '5区',
+                '1分区': '1区', '2分区': '2区', '3分区': '3区', '4分区': '4区', '5分区': '5区',
+                '一分区': '1区', '二分区': '2区', '三分区': '3区', '四分区': '4区', '五分区': '5区'
+            };
             const tokens = text.split(/[*^&%$#@!~,，;；、\s\-\+|｜]+/).map(s => s.trim()).filter(Boolean);
             tokens.forEach(token => {
                 if (waveMap[token]) { terms.waves.push(waveMap[token]); return; }
-                let m = token.match(/^([一二三四五六七1-7])段$/);
+                if (regionMap[token]) {
+                    const r = regionMap[token];
+                    if (!terms.regions.includes(r)) terms.regions.push(r);
+                    return;
+                }
+                let mHotZ = token.match(/^(?:平特热肖|平热肖|平特肖|平肖)(\d{1,2})[-~到至](\d{1,2})(?:位|肖)?$/);
+                if (mHotZ) {
+                    const s = Math.max(1, Math.min(12, parseInt(mHotZ[1], 10)));
+                    const e = Math.max(1, Math.min(12, parseInt(mHotZ[2], 10)));
+                    terms.hotZodiacRanges.push({ start: Math.min(s, e), end: Math.max(s, e) });
+                    return;
+                }
+                let mAllHotZ = token.match(/^(?:特码热肖|特热肖|特码肖|特肖)(\d{1,2})[-~到至](\d{1,2})(?:位|肖)?$/);
+                if (mAllHotZ) {
+                    const s = Math.max(1, Math.min(12, parseInt(mAllHotZ[1], 10)));
+                    const e = Math.max(1, Math.min(12, parseInt(mAllHotZ[2], 10)));
+                    terms.allHotZodiacRanges.push({ start: Math.min(s, e), end: Math.max(s, e) });
+                    return;
+                }
+                let mHotN = token.match(/^(?:平特热码|平热码|平特热号|平热号|平特码|平热)?(\d{1,2})[-~到至](\d{1,2})(?:位|号)?$/);
+                if (mHotN && !token.startsWith('遗漏') && !token.startsWith('特')) {
+                    if (token.startsWith('平') || token.startsWith('热')) {
+                        const s = Math.max(1, Math.min(49, parseInt(mHotN[1], 10)));
+                        const e = Math.max(1, Math.min(49, parseInt(mHotN[2], 10)));
+                        terms.hotNumberRanges.push({ start: Math.min(s, e), end: Math.max(s, e) });
+                        return;
+                    }
+                }
+                let mAllHotN = token.match(/^(?:特码热码|特热码|特码热号|特热号|特码号)(\d{1,2})[-~到至](\d{1,2})(?:位|号)?$/);
+                if (mAllHotN) {
+                    const s = Math.max(1, Math.min(49, parseInt(mAllHotN[1], 10)));
+                    const e = Math.max(1, Math.min(49, parseInt(mAllHotN[2], 10)));
+                    terms.allHotNumberRanges.push({ start: Math.min(s, e), end: Math.max(s, e) });
+                    return;
+                }
+                let mZRange = token.match(/^(?:遗漏肖|遗漏生肖|遗漏生肖区|遗漏肖段)(\d{1,2})[-~到至](\d{1,2})(?:位|肖)?$/);
+                if (mZRange) {
+                    const s = Math.max(1, Math.min(12, parseInt(mZRange[1], 10)));
+                    const e = Math.max(1, Math.min(12, parseInt(mZRange[2], 10)));
+                    terms.omissionZodiacRanges.push({ start: Math.min(s, e), end: Math.max(s, e) });
+                    return;
+                }
+                let mRange = token.match(/^(?:遗漏|遗漏区|遗漏区域|遗漏段)?(\d{1,2})[-~到至](\d{1,2})(?:位|号)?$/);
+                if (mRange) {
+                    const s = Math.max(1, Math.min(49, parseInt(mRange[1], 10)));
+                    const e = Math.max(1, Math.min(49, parseInt(mRange[2], 10)));
+                    terms.omissionRanges.push({ start: Math.min(s, e), end: Math.max(s, e) });
+                    return;
+                }
+                let m = token.match(/^([一二三四五1-5])区$/);
+                if (m) {
+                    const r = `${toSeg(m[1])}区`;
+                    if (!terms.regions.includes(r)) terms.regions.push(r);
+                    return;
+                }
+                m = token.match(/^([一二三四五六七1-7])段$/);
                 if (m) { const s = toSeg(m[1]); if (!terms.segments.includes(s)) terms.segments.push(s); return; }
                 m = token.match(/^段([一二三四五六七1-7])$/);
                 if (m) { const s = toSeg(m[1]); if (!terms.segments.includes(s)) terms.segments.push(s); return; }
@@ -2483,12 +2728,14 @@ function copyRecommendations() {
                 }
             });
             terms.waves = [...new Set(terms.waves)];
+            terms.regions = [...new Set(terms.regions)];
             return terms;
         }
 
         function formatInputTerms(t) {
             if (!t) return [];
             const waveNames = { red: '红波', blue: '蓝波', green: '绿波' };
+            const regionNames = { '1区': '一区(01-10)', '2区': '二区(11-20)', '3区': '三区(21-30)', '4区': '四区(31-40)', '5区': '五区(41-49)' };
             const parts = [];
             if (t.numbers && t.numbers.length) parts.push(...t.numbers.map(n => parseInt(n, 10)));
             if (t.zodiacs && t.zodiacs.length) parts.push(...t.zodiacs);
@@ -2496,22 +2743,29 @@ function copyRecommendations() {
             if (t.heads && t.heads.length) parts.push(...t.heads.map(x => x + '头'));
             if (t.waves && t.waves.length) parts.push(...t.waves.map(w => waveNames[w]));
             if (t.segments && t.segments.length) parts.push(...t.segments.map(s => s + '段'));
+            if (t.regions && t.regions.length) parts.push(...t.regions.map(r => regionNames[r] || r));
+            if (t.omissionRanges && t.omissionRanges.length) parts.push(...t.omissionRanges.map(r => `遗漏${r.start}-${r.end}`));
+            if (t.omissionZodiacRanges && t.omissionZodiacRanges.length) parts.push(...t.omissionZodiacRanges.map(r => `遗漏肖${r.start}-${r.end}`));
+            if (t.hotNumberRanges && t.hotNumberRanges.length) parts.push(...t.hotNumberRanges.map(r => `平特热码${r.start}-${r.end}`));
+            if (t.allHotNumberRanges && t.allHotNumberRanges.length) parts.push(...t.allHotNumberRanges.map(r => `特码热码${r.start}-${r.end}`));
+            if (t.hotZodiacRanges && t.hotZodiacRanges.length) parts.push(...t.hotZodiacRanges.map(r => `平特热肖${r.start}-${r.end}`));
+            if (t.allHotZodiacRanges && t.allHotZodiacRanges.length) parts.push(...t.allHotZodiacRanges.map(r => `特码热肖${r.start}-${r.end}`));
             return parts.map(String);
         }
 
         function generateColdKline() {
-            const types = ['numbers', 'zodiacs', 'hotNumbers', 'coldNumbers', 'hotZodiacs', 'coldZodiacs', 'allHotNumbers', 'allColdNumbers', 'allHotZodiacs', 'allColdZodiacs', 'wave', 'halfwave', 'jiaYe', 'head', 'tail', 'wuxing', 'halfHead']
-                .filter(type => document.getElementById(`coldOption_${type}`).checked);
+            const types = ['numbers', 'zodiacs', 'hotNumbers', 'coldNumbers', 'hotZodiacs', 'coldZodiacs', 'allHotNumbers', 'allColdNumbers', 'allHotZodiacs', 'allColdZodiacs', 'hotNumberRange', 'allHotNumberRange', 'hotZodiacRange', 'allHotZodiacRange', 'wave', 'halfwave', 'jiaYe', 'head', 'tail', 'wuxing', 'halfHead', 'region', 'omissionRange', 'omissionZodiacRange']
+                .filter(type => document.getElementById(`coldOption_${type}`)?.checked);
             
             const inputText = document.getElementById('coldOption_inputNumbers').value.trim();
             const inputTerms = parseInputTerms(inputText);
             const selectedNumbers = inputTerms.numbers;
-            const hasInput = selectedNumbers.length || inputTerms.zodiacs.length || inputTerms.tails.length || inputTerms.heads.length || inputTerms.waves.length || inputTerms.segments.length;
+            const hasInput = selectedNumbers.length || inputTerms.zodiacs.length || inputTerms.tails.length || inputTerms.heads.length || inputTerms.waves.length || inputTerms.segments.length || (inputTerms.regions && inputTerms.regions.length) || (inputTerms.omissionRanges && inputTerms.omissionRanges.length) || (inputTerms.omissionZodiacRanges && inputTerms.omissionZodiacRanges.length) || (inputTerms.hotNumberRanges && inputTerms.hotNumberRanges.length) || (inputTerms.allHotNumberRanges && inputTerms.allHotNumberRanges.length) || (inputTerms.hotZodiacRanges && inputTerms.hotZodiacRanges.length) || (inputTerms.allHotZodiacRanges && inputTerms.allHotZodiacRanges.length);
             if (hasInput) types.push('inputNumbers');
             const selectedZodiacs = CONFIG.zodiacMap[state.currentYear]
                 .filter(z => document.getElementById(`zodiacOption_${z}`).checked);
             if (selectedZodiacs.length) types.push('selectZodiacs');
-            const selectedWaves = ['red', 'blue', 'green'].filter(w => document.getElementById('waveOption_' + w).checked);
+            const selectedWaves = ['red', 'blue', 'green'].filter(w => document.getElementById('waveOption_' + w)?.checked);
             if (selectedWaves.length) types.push('selectedWaves');
             
             if (!types.length) return alert('请先选择至少一个特码自由K线选项');
@@ -2533,7 +2787,21 @@ function copyRecommendations() {
                 head: parseInt(document.getElementById('coldOption_head_count')?.value || '1'),
                 tail: parseInt(document.getElementById('coldOption_tail_count')?.value || '2'),
                 wuxing: parseInt(document.getElementById('coldOption_wuxing_count')?.value || '1'),
-                halfHead: parseInt(document.getElementById('coldOption_halfHead_count')?.value || '1')
+                halfHead: parseInt(document.getElementById('coldOption_halfHead_count')?.value || '1'),
+                region: parseInt(document.getElementById('coldOption_region_count')?.value || '1'),
+                omissionRangeStart: parseInt(document.getElementById('coldOption_omissionRange_start')?.value || '1', 10),
+                omissionRangeEnd: parseInt(document.getElementById('coldOption_omissionRange_end')?.value || '10', 10),
+                omissionZodiacRangeStart: parseInt(document.getElementById('coldOption_omissionZodiacRange_start')?.value || '1', 10),
+                omissionZodiacRangeEnd: parseInt(document.getElementById('coldOption_omissionZodiacRange_end')?.value || '3', 10),
+                hotNumberRangeStart: parseInt(document.getElementById('coldOption_hotNumberRange_start')?.value || '1', 10),
+                hotNumberRangeEnd: parseInt(document.getElementById('coldOption_hotNumberRange_end')?.value || '10', 10),
+                allHotNumberRangeStart: parseInt(document.getElementById('coldOption_allHotNumberRange_start')?.value || '1', 10),
+                allHotNumberRangeEnd: parseInt(document.getElementById('coldOption_allHotNumberRange_end')?.value || '10', 10),
+                hotZodiacRangeStart: parseInt(document.getElementById('coldOption_hotZodiacRange_start')?.value || '1', 10),
+                hotZodiacRangeEnd: parseInt(document.getElementById('coldOption_hotZodiacRange_end')?.value || '3', 10),
+                allHotZodiacRangeStart: parseInt(document.getElementById('coldOption_allHotZodiacRange_start')?.value || '1', 10),
+                allHotZodiacRangeEnd: parseInt(document.getElementById('coldOption_allHotZodiacRange_end')?.value || '3', 10),
+                inputTerms
             };
             
             const sets = calculateColdSets(types, coldSourceData, counts, hotColdSourceData);
@@ -2594,13 +2862,20 @@ function copyRecommendations() {
             add(sets.coldNumbers, num => sets.coldNumbers.includes(num));
             add(sets.allHotNumbers, num => sets.allHotNumbers.includes(num));
             add(sets.allColdNumbers, num => sets.allColdNumbers.includes(num));
+            add(sets.hotNumberRange, num => sets.hotNumberRange.includes(num));
+            add(sets.allHotNumberRange, num => sets.allHotNumberRange.includes(num));
             add(sets.zodiacs, num => sets.zodiacs.includes(getZodiac(parseInt(num, 10))));
             add(sets.hotZodiacs, num => sets.hotZodiacs.includes(getZodiac(parseInt(num, 10))));
             add(sets.coldZodiacs, num => sets.coldZodiacs.includes(getZodiac(parseInt(num, 10))));
             add(sets.allHotZodiacs, num => sets.allHotZodiacs.includes(getZodiac(parseInt(num, 10))));
             add(sets.allColdZodiacs, num => sets.allColdZodiacs.includes(getZodiac(parseInt(num, 10))));
+            add(sets.hotZodiacRange, num => sets.hotZodiacRange.includes(getZodiac(parseInt(num, 10))));
+            add(sets.allHotZodiacRange, num => sets.allHotZodiacRange.includes(getZodiac(parseInt(num, 10))));
             add(sets.selectZodiacs, num => sets.selectZodiacs.includes(getZodiac(parseInt(num, 10))));
             add(sets.selectedWaves, num => sets.selectedWaves.includes(getColor(num)));
+            add(sets.selectedRegions, num => sets.selectedRegions.includes(getRegionKey(parseInt(num, 10))) || sets.selectedRegions.includes(getRegionShortKey(parseInt(num, 10))));
+            add(sets.omissionRange, num => sets.omissionRange.includes(num));
+            add(sets.omissionZodiacRange, num => sets.omissionZodiacRange.includes(getZodiac(parseInt(num, 10))));
             add(sets.wave, num => sets.wave.includes(getColor(num)));
             add(sets.halfwave, num => sets.halfwave.includes(getHalfWaveKey(num)));
             add(sets.jiaYe, num => sets.jiaYe.includes(getJiaYe(getZodiac(parseInt(num, 10)))));
@@ -2608,7 +2883,14 @@ function copyRecommendations() {
             add(sets.tail, num => sets.tail.includes(`${parseInt(num, 10) % 10}尾`));
             add(sets.wuxing, num => sets.wuxing.includes(getSegmentKey(parseInt(num, 10))));
             add(sets.halfHead, num => sets.halfHead.includes(getHalfHeadKey(parseInt(num, 10))));
+            add(sets.region, num => sets.region.includes(getRegionKey(parseInt(num, 10))));
             if (sets.inputNumbers && sets.inputNumbers.length) out.push(sets.inputNumbers.slice());
+            if (sets.inputOmissionRangeNumbers && sets.inputOmissionRangeNumbers.length) out.push(sets.inputOmissionRangeNumbers.slice());
+            if (sets.inputOmissionZodiacRangeZodiacs && sets.inputOmissionZodiacRangeZodiacs.length) out.push(allNumbers.filter(n => sets.inputOmissionZodiacRangeZodiacs.includes(getZodiac(parseInt(n, 10)))));
+            if (sets.inputHotNumberRangeNumbers && sets.inputHotNumberRangeNumbers.length) out.push(sets.inputHotNumberRangeNumbers.slice());
+            if (sets.inputAllHotNumberRangeNumbers && sets.inputAllHotNumberRangeNumbers.length) out.push(sets.inputAllHotNumberRangeNumbers.slice());
+            if (sets.inputHotZodiacRangeZodiacs && sets.inputHotZodiacRangeZodiacs.length) out.push(allNumbers.filter(n => sets.inputHotZodiacRangeZodiacs.includes(getZodiac(parseInt(n, 10)))));
+            if (sets.inputAllHotZodiacRangeZodiacs && sets.inputAllHotZodiacRangeZodiacs.length) out.push(allNumbers.filter(n => sets.inputAllHotZodiacRangeZodiacs.includes(getZodiac(parseInt(n, 10)))));
             if (sets.inputTerms) {
                 const it = sets.inputTerms;
                 if (it.numbers && it.numbers.length) out.push(it.numbers.slice());
@@ -2617,6 +2899,7 @@ function copyRecommendations() {
                 if (it.heads && it.heads.length) out.push(allNumbers.filter(n => it.heads.includes(Math.floor(parseInt(n, 10) / 10))));
                 if (it.waves && it.waves.length) out.push(allNumbers.filter(n => it.waves.includes(getColor(n))));
                 if (it.segments && it.segments.length) out.push(allNumbers.filter(n => it.segments.includes(Math.ceil(parseInt(n, 10) / 7))));
+                if (it.regions && it.regions.length) out.push(allNumbers.filter(n => it.regions.includes(getRegionShortKey(parseInt(n, 10)))));
             }
             return out;
         }
@@ -2635,13 +2918,27 @@ function copyRecommendations() {
         }
 
         function resetColdSelection() {
-            ['numbers', 'zodiacs', 'hotNumbers', 'coldNumbers', 'hotZodiacs', 'coldZodiacs', 'allHotNumbers', 'allColdNumbers', 'allHotZodiacs', 'allColdZodiacs', 'wave', 'halfwave', 'jiaYe', 'head', 'tail', 'wuxing', 'halfHead'].forEach(type => {
+            ['numbers', 'zodiacs', 'hotNumbers', 'coldNumbers', 'hotZodiacs', 'coldZodiacs', 'allHotNumbers', 'allColdNumbers', 'allHotZodiacs', 'allColdZodiacs', 'hotNumberRange', 'allHotNumberRange', 'hotZodiacRange', 'allHotZodiacRange', 'wave', 'halfwave', 'jiaYe', 'head', 'tail', 'wuxing', 'halfHead', 'region', 'omissionRange', 'omissionZodiacRange'].forEach(type => {
                 const el = document.getElementById(`coldOption_${type}`);
                 if (el) el.checked = false;
                 const countEl = document.getElementById(`coldOption_${type}_count`);
                 if (countEl) countEl.value = '10';
-                if (countEl && type === 'tail') countEl.value = '2';
-                if (countEl && type === 'zodiacs') countEl.value = '3';
+                if (countEl && (type === 'tail' || type === 'region')) countEl.value = type === 'region' ? '1' : '2';
+                if (countEl && (type === 'zodiacs' || type === 'hotZodiacs' || type === 'coldZodiacs' || type === 'allHotZodiacs' || type === 'allColdZodiacs')) countEl.value = '3';
+            });
+            const resetRanges = [
+                { start: 'coldOption_omissionRange_start', end: 'coldOption_omissionRange_end', sVal: '1', eVal: '10' },
+                { start: 'coldOption_omissionZodiacRange_start', end: 'coldOption_omissionZodiacRange_end', sVal: '1', eVal: '3' },
+                { start: 'coldOption_hotNumberRange_start', end: 'coldOption_hotNumberRange_end', sVal: '1', eVal: '10' },
+                { start: 'coldOption_allHotNumberRange_start', end: 'coldOption_allHotNumberRange_end', sVal: '1', eVal: '10' },
+                { start: 'coldOption_hotZodiacRange_start', end: 'coldOption_hotZodiacRange_end', sVal: '1', eVal: '3' },
+                { start: 'coldOption_allHotZodiacRange_start', end: 'coldOption_allHotZodiacRange_end', sVal: '1', eVal: '3' }
+            ];
+            resetRanges.forEach(r => {
+                const sEl = document.getElementById(r.start);
+                if (sEl) sEl.value = r.sVal;
+                const eEl = document.getElementById(r.end);
+                if (eEl) eEl.value = r.eVal;
             });
             CONFIG.zodiacMap[state.currentYear].forEach(z => {
                 const el = document.getElementById(`zodiacOption_${z}`);
@@ -2656,9 +2953,9 @@ function copyRecommendations() {
             document.getElementById('coldSelectionSummary').textContent = '请选择自由K线选项后点击生成';
         }
         function toggleColdSection(section, selectAll) {
-            const omissionIds = ['numbers', 'zodiacs', 'wave', 'halfwave', 'jiaYe', 'head', 'tail', 'wuxing', 'halfHead'];
+            const omissionIds = ['numbers', 'zodiacs', 'wave', 'halfwave', 'jiaYe', 'head', 'tail', 'wuxing', 'halfHead', 'omissionRange', 'omissionZodiacRange'];
             const waveIds = ['red', 'blue', 'green'];
-            const hotcoldIds = ['hotNumbers', 'coldNumbers', 'hotZodiacs', 'coldZodiacs', 'allHotNumbers', 'allColdNumbers', 'allHotZodiacs', 'allColdZodiacs'];
+            const hotcoldIds = ['hotNumbers', 'coldNumbers', 'hotZodiacs', 'coldZodiacs', 'allHotNumbers', 'allColdNumbers', 'allHotZodiacs', 'allColdZodiacs', 'hotNumberRange', 'allHotNumberRange', 'hotZodiacRange', 'allHotZodiacRange'];
             if (section === 'wave') {
                 waveIds.forEach(w => {
                     const el = document.getElementById('waveOption_' + w);
@@ -2673,7 +2970,7 @@ function copyRecommendations() {
             } else {
                 const ids = section === 'omission' ? omissionIds : hotcoldIds;
                 ids.forEach(type => {
-                    const el = document.getElementById('coldOption_' + type);
+                    const el = document.getElementById(`coldOption_${type}`);
                     if (el) el.checked = selectAll;
                 });
             }
@@ -3548,59 +3845,6 @@ function copyRecommendations() {
             `;
         }
 
-        // ==================== 凯利计算器 ====================
-        let kellyFraction = 1;
-
-        function applyKellyPreset(value) {
-            const presets = {
-                tema: { odds: 40, prob: 1 / 49 * 100 },
-                daxiao: { odds: 0.9, prob: 25 / 49 * 100 },
-                danshuang: { odds: 0.9, prob: 25 / 49 * 100 },
-                bose: { odds: 2.85, prob: 17 / 49 * 100 }
-            };
-            const p = presets[value];
-            if (!p) return;
-            document.getElementById('kellyOdds').value = p.odds;
-            document.getElementById('kellyProb').value = p.prob.toFixed(2);
-            calcKelly();
-        }
-
-        function setKellyFraction(f) {
-            kellyFraction = f;
-            calcKelly();
-        }
-
-        function calcKelly() {
-            const el = document.getElementById('kellyResult');
-            if (!el) return;
-            const odds = parseFloat(document.getElementById('kellyOdds').value);
-            const prob = parseFloat(document.getElementById('kellyProb').value);
-            const bankroll = parseFloat(document.getElementById('kellyBankroll').value);
-            if (!isFinite(odds) || !isFinite(prob) || !isFinite(bankroll) || odds <= 0 || prob <= 0 || bankroll <= 0) {
-                el.innerHTML = '<span style="color:var(--warn);">请输入有效的赔率、命中率和本金</span>';
-                return;
-            }
-            const p = Math.min(prob, 100) / 100;
-            const q = 1 - p;
-            const f = (odds * p - q) / odds;
-            const breakEven = q / p;
-            const fracLabel = kellyFraction === 1 ? '全凯利' : kellyFraction === 0.5 ? '半凯利' : '¼凯利';
-            if (f <= 0) {
-                el.innerHTML = `
-                    <div style="color:var(--down);font-weight:700;">✗ 负期望，不该下注</div>
-                    <div>凯利比例 ${(f * 100).toFixed(2)}%</div>
-                    <div>盈亏平衡净赔率需 ≥ ${breakEven.toFixed(2)}（当前 ${odds}）</div>
-                    <div style="color:var(--text-secondary);">长期下注必亏，凯利答案=0</div>`;
-            } else {
-                const bet = bankroll * f * kellyFraction;
-                el.innerHTML = `
-                    <div style="color:var(--up);font-weight:700;">✓ 正期望</div>
-                    <div>凯利比例 ${(f * 100).toFixed(2)}%</div>
-                    <div>${fracLabel}建议下注 ${bet.toFixed(2)}（本金的 ${(f * 100 * kellyFraction).toFixed(2)}%）</div>
-                    <div style="color:var(--text-secondary);">盈亏平衡净赔率 ${breakEven.toFixed(2)}</div>`;
-            }
-        }
-
         // ==================== 图例 + 近10期统计 ====================
         function updateChartLegend() {
             const el = document.getElementById('chartLegend');
@@ -3732,6 +3976,14 @@ function copyRecommendations() {
                 tail: '遗漏最多尾数',
                 wuxing: '遗漏最多段位',
                 halfHead: '遗漏最多半头',
+                region: '遗漏最多区域',
+                omissionRange: '遗漏区域',
+                omissionZodiacRange: '遗漏生肖',
+                hotNumberRange: '平特热码区间',
+                allHotNumberRange: '特码热码区间',
+                hotZodiacRange: '平特热肖区间',
+                allHotZodiacRange: '特码热肖区间',
+                selectedRegions: '选择区域',
                 selectedWaves: '选择波色',
                 inputNumbers: '输入条件',
                 commonNumbers: '共同号码',
@@ -3757,6 +4009,11 @@ function copyRecommendations() {
                     if (type === 'coldZodiacs') label = `平特最冷${values.length}肖`;
                     if (type === 'allHotZodiacs') label = `特码最热${values.length}肖`;
                     if (type === 'allColdZodiacs') label = `特码最冷${values.length}肖`;
+                    if (type === 'hotNumberRange') label = `平特热码（${values.length}个）`;
+                    if (type === 'allHotNumberRange') label = `特码热码（${values.length}个）`;
+                    if (type === 'hotZodiacRange') label = `平特热肖（${values.length}肖）`;
+                    if (type === 'allHotZodiacRange') label = `特码热肖（${values.length}肖）`;
+                    if (type === 'region') label = `遗漏最多${values.length}区域`;
                     const formattedValues = values.map(v => displayValueMap[v] || v);
                     return `
                         <div style="display:flex; justify-content:space-between; gap:6px; margin-top:1px; font-size:10px;">
