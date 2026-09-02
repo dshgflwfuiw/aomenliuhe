@@ -4185,6 +4185,42 @@
             allHotZodiacRange: { max: 12, unit: '肖' }
         };
 
+        let coldKlineDebounceTimer = null;
+        let coldPreviewDebounceTimer = null;
+
+        function requestColdKlineUpdate(immediate = false) {
+            if (state.currentMode !== 'cold_custom') return;
+            if (immediate) {
+                if (coldKlineDebounceTimer) {
+                    clearTimeout(coldKlineDebounceTimer);
+                    coldKlineDebounceTimer = null;
+                }
+                generateColdKline();
+                return;
+            }
+            if (coldKlineDebounceTimer) clearTimeout(coldKlineDebounceTimer);
+            coldKlineDebounceTimer = setTimeout(() => {
+                coldKlineDebounceTimer = null;
+                generateColdKline();
+            }, 180);
+        }
+
+        function requestLivePreviewUpdate(immediate = false) {
+            if (immediate) {
+                if (coldPreviewDebounceTimer) {
+                    clearTimeout(coldPreviewDebounceTimer);
+                    coldPreviewDebounceTimer = null;
+                }
+                updateLiveSelectionPreview();
+                return;
+            }
+            if (coldPreviewDebounceTimer) return;
+            coldPreviewDebounceTimer = setTimeout(() => {
+                coldPreviewDebounceTimer = null;
+                updateLiveSelectionPreview();
+            }, 120);
+        }
+
         function updateDualSliderUI(rangeType, maxVal, unit) {
             const cfg = DUAL_RANGE_CONFIGS[rangeType] || { max: maxVal || 49, unit: unit || '码' };
             const max = cfg.max;
@@ -4213,13 +4249,6 @@
                 const count = eVal - sVal + 1;
                 badge.textContent = `第 ${sVal} ~ ${eVal} 位 (共${count}${u})`;
             }
-            if (sVal > max * 0.7) {
-                sEl.style.zIndex = '2';
-                eEl.style.zIndex = '3';
-            } else {
-                sEl.style.zIndex = '3';
-                eEl.style.zIndex = '2';
-            }
         }
 
         function onDualSliderChange(rangeType, maxVal, unit, isStart) {
@@ -4230,19 +4259,22 @@
             if (sEl && eEl) {
                 let sVal = parseInt(sEl.value, 10);
                 let eVal = parseInt(eEl.value, 10);
-                if (sVal > eVal) {
-                    if (isStart) {
-                        eEl.value = String(sVal);
-                    } else {
-                        sEl.value = String(eVal);
-                    }
+                if (isStart && sVal > eVal) {
+                    eEl.value = String(sVal);
+                } else if (!isStart && eVal < sVal) {
+                    sEl.value = String(eVal);
                 }
             }
             updateDualSliderUI(rangeType, maxVal, unit);
-            updateLiveSelectionPreview();
-            if (state.currentMode === 'cold_custom') {
-                generateColdKline();
-            }
+            requestLivePreviewUpdate(false);
+            requestColdKlineUpdate(false);
+        }
+
+        function onDualSliderCommit(rangeType) {
+            const cfg = DUAL_RANGE_CONFIGS[rangeType] || { max: 49, unit: '码' };
+            updateDualSliderUI(rangeType, cfg.max, cfg.unit);
+            requestLivePreviewUpdate(true);
+            requestColdKlineUpdate(true);
         }
 
         function updateAllDualSliders() {
@@ -4254,6 +4286,121 @@
 
         function initAllDualSliders() {
             updateAllDualSliders();
+            Object.keys(DUAL_RANGE_CONFIGS).forEach(rangeType => {
+                const cfg = DUAL_RANGE_CONFIGS[rangeType];
+                const sEl = document.getElementById(`coldOption_${rangeType}_start`);
+                const eEl = document.getElementById(`coldOption_${rangeType}_end`);
+                const wrap = sEl ? sEl.closest('.dual-slider-wrap') : null;
+                if (!sEl || !eEl || !wrap) return;
+
+                let activeHandle = null;
+
+                const getValFromX = (clientX) => {
+                    const rect = wrap.getBoundingClientRect();
+                    if (rect.width <= 0) return 1;
+                    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+                    return Math.round(1 + ratio * (cfg.max - 1));
+                };
+
+                const updateSliderPosition = (targetVal) => {
+                    const cb = document.getElementById(`coldOption_${rangeType}`);
+                    if (cb && !cb.checked) cb.checked = true;
+
+                    let sVal = parseInt(sEl.value, 10);
+                    let eVal = parseInt(eEl.value, 10);
+
+                    if (activeHandle === 'start') {
+                        sVal = Math.max(1, Math.min(targetVal, eVal));
+                        sEl.value = String(sVal);
+                        sEl.style.zIndex = '10';
+                        eEl.style.zIndex = '5';
+                    } else if (activeHandle === 'end') {
+                        eVal = Math.min(cfg.max, Math.max(targetVal, sVal));
+                        eEl.value = String(eVal);
+                        eEl.style.zIndex = '10';
+                        sEl.style.zIndex = '5';
+                    }
+                    updateDualSliderUI(rangeType, cfg.max, cfg.unit);
+                    requestLivePreviewUpdate(false);
+                    requestColdKlineUpdate(false);
+                };
+
+                wrap.addEventListener('pointerdown', (e) => {
+                    const sVal = parseInt(sEl.value, 10);
+                    const eVal = parseInt(eEl.value, 10);
+                    const targetVal = getValFromX(e.clientX);
+                    const distToStart = Math.abs(targetVal - sVal);
+                    const distToEnd = Math.abs(targetVal - eVal);
+
+                    if (e.target === sEl) {
+                        activeHandle = 'start';
+                    } else if (e.target === eEl) {
+                        activeHandle = 'end';
+                    } else if (distToStart <= distToEnd) {
+                        activeHandle = 'start';
+                    } else {
+                        activeHandle = 'end';
+                    }
+
+                    try {
+                        wrap.setPointerCapture(e.pointerId);
+                    } catch (err) {}
+
+                    updateSliderPosition(targetVal);
+                });
+
+                wrap.addEventListener('pointermove', (e) => {
+                    if (!activeHandle) return;
+                    e.preventDefault();
+                    const targetVal = getValFromX(e.clientX);
+                    updateSliderPosition(targetVal);
+                });
+
+                const onPointerEnd = (e) => {
+                    if (!activeHandle) return;
+                    activeHandle = null;
+                    try {
+                        wrap.releasePointerCapture(e.pointerId);
+                    } catch (err) {}
+                    onDualSliderCommit(rangeType);
+                };
+
+                wrap.addEventListener('pointerup', onPointerEnd);
+                wrap.addEventListener('pointercancel', onPointerEnd);
+
+                sEl.addEventListener('change', () => onDualSliderCommit(rangeType));
+                eEl.addEventListener('change', () => onDualSliderCommit(rangeType));
+            });
+        }
+
+        function stepDualRange(rangeType, bound, delta) {
+            const cb = document.getElementById(`coldOption_${rangeType}`);
+            if (cb && !cb.checked) cb.checked = true;
+            const cfg = DUAL_RANGE_CONFIGS[rangeType] || { max: 49, unit: '码' };
+            const sEl = document.getElementById(`coldOption_${rangeType}_start`);
+            const eEl = document.getElementById(`coldOption_${rangeType}_end`);
+            if (!sEl || !eEl) return;
+            let sVal = parseInt(sEl.value, 10) || 1;
+            let eVal = parseInt(eEl.value, 10) || cfg.max;
+
+            if (bound === 'start') {
+                sVal = Math.max(1, Math.min(cfg.max, sVal + delta));
+                if (sVal > eVal) {
+                    eVal = sVal;
+                    eEl.value = String(eVal);
+                }
+                sEl.value = String(sVal);
+            } else if (bound === 'end') {
+                eVal = Math.max(1, Math.min(cfg.max, eVal + delta));
+                if (eVal < sVal) {
+                    sVal = eVal;
+                    sEl.value = String(sVal);
+                }
+                eEl.value = String(eVal);
+            }
+            updateDualSliderUI(rangeType, cfg.max, cfg.unit);
+            requestLivePreviewUpdate(true);
+            requestColdKlineUpdate(true);
         }
 
         function setQuickRange(rangeType, start, end) {
@@ -4266,9 +4413,7 @@
             const cfg = DUAL_RANGE_CONFIGS[rangeType] || { max: 49, unit: '码' };
             updateDualSliderUI(rangeType, cfg.max, cfg.unit);
             updateLiveSelectionPreview();
-            if (state.currentMode === 'cold_custom') {
-                generateColdKline();
-            }
+            requestColdKlineUpdate(true);
             showNotification(`已设置区间: 第${start}至第${end}位`);
         }
 

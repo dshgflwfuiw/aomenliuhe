@@ -413,11 +413,25 @@
                             <input type="range" id="coldOption_omissionRange_start" min="1" max="49" value="1" step="1" class="range-slider-input range-slider-min" oninput="onDualSliderChange('omissionRange', 49, '码', true)">
                             <input type="range" id="coldOption_omissionRange_end" min="1" max="49" value="10" step="1" class="range-slider-input range-slider-max" oninput="onDualSliderChange('omissionRange', 49, '码', false)">
                         </div>
-                        <div class="quick-range-chips">
-                            <button type="button" class="quick-chip-btn" onclick="setQuickRange('omissionRange', 1, 10)">1-10冷</button>
-                            <button type="button" class="quick-chip-btn" onclick="setQuickRange('omissionRange', 1, 15)">1-15</button>
-                            <button type="button" class="quick-chip-btn" onclick="setQuickRange('omissionRange', 10, 25)">10-25</button>
-                            <button type="button" class="quick-chip-btn" onclick="setQuickRange('omissionRange', 25, 49)">25-49热</button>
+                        <div class="cold-range-bottom-row">
+                            <div class="range-steppers">
+                                <div class="stepper-unit">
+                                    <span class="stepper-lbl">起</span>
+                                    <button type="button" class="stepper-btn" onclick="stepDualRange('omissionRange', 'start', -1)" title="起点 -1">−</button>
+                                    <button type="button" class="stepper-btn" onclick="stepDualRange('omissionRange', 'start', 1)" title="起点 +1">+</button>
+                                </div>
+                                <div class="stepper-unit">
+                                    <span class="stepper-lbl">止</span>
+                                    <button type="button" class="stepper-btn" onclick="stepDualRange('omissionRange', 'end', -1)" title="终点 -1">−</button>
+                                    <button type="button" class="stepper-btn" onclick="stepDualRange('omissionRange', 'end', 1)" title="终点 +1">+</button>
+                                </div>
+                            </div>
+                            <div class="quick-range-chips">
+                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('omissionRange', 1, 10)">1-10冷</button>
+                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('omissionRange', 1, 15)">1-15</button>
+                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('omissionRange', 10, 25)">10-25</button>
+                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('omissionRange', 25, 49)">25-49热</button>
+                            </div>
                         </div>
                     </div>
 
@@ -435,11 +449,25 @@
                             <input type="range" id="coldOption_omissionZodiacRange_start" min="1" max="12" value="1" step="1" class="range-slider-input range-slider-min" oninput="onDualSliderChange('omissionZodiacRange', 12, '肖', true)">
                             <input type="range" id="coldOption_omissionZodiacRange_end" min="1" max="12" value="3" step="1" class="range-slider-input range-slider-max" oninput="onDualSliderChange('omissionZodiacRange', 12, '肖', false)">
                         </div>
-                        <div class="quick-range-chips">
-                            <button type="button" class="quick-chip-btn" onclick="setQuickRange('omissionZodiacRange', 1, 3)">1-3冷肖</button>
-                            <button type="button" class="quick-chip-btn" onclick="setQuickRange('omissionZodiacRange', 1, 6)">1-6半区</button>
-                            <button type="button" class="quick-chip-btn" onclick="setQuickRange('omissionZodiacRange', 4, 9)">4-9温肖</button>
-                            <button type="button" class="quick-chip-btn" onclick="setQuickRange('omissionZodiacRange', 7, 12)">7-12热肖</button>
+                        <div class="cold-range-bottom-row">
+                            <div class="range-steppers">
+                                <div class="stepper-unit">
+                                    <span class="stepper-lbl">起</span>
+                                    <button type="button" class="stepper-btn" onclick="stepDualRange('omissionZodiacRange', 'start', -1)" title="起点 -1">−</button>
+                                    <button type="button" class="stepper-btn" onclick="stepDualRange('omissionZodiacRange', 'start', 1)" title="起点 +1">+</button>
+                                </div>
+                                <div class="stepper-unit">
+                                    <span class="stepper-lbl">止</span>
+                                    <button type="button" class="stepper-btn" onclick="stepDualRange('omissionZodiacRange', 'end', -1)" title="终点 -1">−</button>
+                                    <button type="button" class="stepper-btn" onclick="stepDualRange('omissionZodiacRange', 'end', 1)" title="终点 +1">+</button>
+                                </div>
+                            </div>
+                            <div class="quick-range-chips">
+                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('omissionZodiacRange', 1, 3)">1-3冷肖</button>
+                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('omissionZodiacRange', 1, 6)">1-6半区</button>
+                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('omissionZodiacRange', 4, 9)">4-9温肖</button>
+                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('omissionZodiacRange', 7, 12)">7-12热肖</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -534,11 +562,25 @@
                             <input type="range" id="coldOption_hotNumberRange_start" min="1" max="49" value="1" step="1" class="range-slider-input range-slider-min" oninput="onDualSliderChange('hotNumberRange', 49, '码', true)">
                             <input type="range" id="coldOption_hotNumberRange_end" min="1" max="49" value="10" step="1" class="range-slider-input range-slider-max" oninput="onDualSliderChange('hotNumberRange', 49, '码', false)">
                         </div>
-                        <div class="quick-range-chips">
-                            <button type="button" class="quick-chip-btn" onclick="setQuickRange('hotNumberRange', 1, 10)">1-10热</button>
-                            <button type="button" class="quick-chip-btn" onclick="setQuickRange('hotNumberRange', 1, 15)">1-15</button>
-                            <button type="button" class="quick-chip-btn" onclick="setQuickRange('hotNumberRange', 1, 25)">1-25半区</button>
-                            <button type="button" class="quick-chip-btn" onclick="setQuickRange('hotNumberRange', 15, 35)">15-35温</button>
+                        <div class="cold-range-bottom-row">
+                            <div class="range-steppers">
+                                <div class="stepper-unit">
+                                    <span class="stepper-lbl">起</span>
+                                    <button type="button" class="stepper-btn" onclick="stepDualRange('hotNumberRange', 'start', -1)" title="起点 -1">−</button>
+                                    <button type="button" class="stepper-btn" onclick="stepDualRange('hotNumberRange', 'start', 1)" title="起点 +1">+</button>
+                                </div>
+                                <div class="stepper-unit">
+                                    <span class="stepper-lbl">止</span>
+                                    <button type="button" class="stepper-btn" onclick="stepDualRange('hotNumberRange', 'end', -1)" title="终点 -1">−</button>
+                                    <button type="button" class="stepper-btn" onclick="stepDualRange('hotNumberRange', 'end', 1)" title="终点 +1">+</button>
+                                </div>
+                            </div>
+                            <div class="quick-range-chips">
+                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('hotNumberRange', 1, 10)">1-10热</button>
+                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('hotNumberRange', 1, 15)">1-15</button>
+                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('hotNumberRange', 1, 25)">1-25半区</button>
+                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('hotNumberRange', 15, 35)">15-35温</button>
+                            </div>
                         </div>
                     </div>
 
@@ -556,11 +598,25 @@
                             <input type="range" id="coldOption_allHotNumberRange_start" min="1" max="49" value="1" step="1" class="range-slider-input range-slider-min" oninput="onDualSliderChange('allHotNumberRange', 49, '码', true)">
                             <input type="range" id="coldOption_allHotNumberRange_end" min="1" max="49" value="10" step="1" class="range-slider-input range-slider-max" oninput="onDualSliderChange('allHotNumberRange', 49, '码', false)">
                         </div>
-                        <div class="quick-range-chips">
-                            <button type="button" class="quick-chip-btn" onclick="setQuickRange('allHotNumberRange', 1, 10)">1-10特热</button>
-                            <button type="button" class="quick-chip-btn" onclick="setQuickRange('allHotNumberRange', 1, 15)">1-15</button>
-                            <button type="button" class="quick-chip-btn" onclick="setQuickRange('allHotNumberRange', 1, 20)">1-20</button>
-                            <button type="button" class="quick-chip-btn" onclick="setQuickRange('allHotNumberRange', 25, 49)">25-49冷</button>
+                        <div class="cold-range-bottom-row">
+                            <div class="range-steppers">
+                                <div class="stepper-unit">
+                                    <span class="stepper-lbl">起</span>
+                                    <button type="button" class="stepper-btn" onclick="stepDualRange('allHotNumberRange', 'start', -1)" title="起点 -1">−</button>
+                                    <button type="button" class="stepper-btn" onclick="stepDualRange('allHotNumberRange', 'start', 1)" title="起点 +1">+</button>
+                                </div>
+                                <div class="stepper-unit">
+                                    <span class="stepper-lbl">止</span>
+                                    <button type="button" class="stepper-btn" onclick="stepDualRange('allHotNumberRange', 'end', -1)" title="终点 -1">−</button>
+                                    <button type="button" class="stepper-btn" onclick="stepDualRange('allHotNumberRange', 'end', 1)" title="终点 +1">+</button>
+                                </div>
+                            </div>
+                            <div class="quick-range-chips">
+                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('allHotNumberRange', 1, 10)">1-10特热</button>
+                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('allHotNumberRange', 1, 15)">1-15</button>
+                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('allHotNumberRange', 1, 20)">1-20</button>
+                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('allHotNumberRange', 25, 49)">25-49冷</button>
+                            </div>
                         </div>
                     </div>
 
@@ -578,11 +634,25 @@
                             <input type="range" id="coldOption_hotZodiacRange_start" min="1" max="12" value="1" step="1" class="range-slider-input range-slider-min" oninput="onDualSliderChange('hotZodiacRange', 12, '肖', true)">
                             <input type="range" id="coldOption_hotZodiacRange_end" min="1" max="12" value="3" step="1" class="range-slider-input range-slider-max" oninput="onDualSliderChange('hotZodiacRange', 12, '肖', false)">
                         </div>
-                        <div class="quick-range-chips">
-                            <button type="button" class="quick-chip-btn" onclick="setQuickRange('hotZodiacRange', 1, 3)">1-3热肖</button>
-                            <button type="button" class="quick-chip-btn" onclick="setQuickRange('hotZodiacRange', 1, 6)">1-6半区</button>
-                            <button type="button" class="quick-chip-btn" onclick="setQuickRange('hotZodiacRange', 4, 8)">4-8中位</button>
-                            <button type="button" class="quick-chip-btn" onclick="setQuickRange('hotZodiacRange', 7, 12)">7-12冷区</button>
+                        <div class="cold-range-bottom-row">
+                            <div class="range-steppers">
+                                <div class="stepper-unit">
+                                    <span class="stepper-lbl">起</span>
+                                    <button type="button" class="stepper-btn" onclick="stepDualRange('hotZodiacRange', 'start', -1)" title="起点 -1">−</button>
+                                    <button type="button" class="stepper-btn" onclick="stepDualRange('hotZodiacRange', 'start', 1)" title="起点 +1">+</button>
+                                </div>
+                                <div class="stepper-unit">
+                                    <span class="stepper-lbl">止</span>
+                                    <button type="button" class="stepper-btn" onclick="stepDualRange('hotZodiacRange', 'end', -1)" title="终点 -1">−</button>
+                                    <button type="button" class="stepper-btn" onclick="stepDualRange('hotZodiacRange', 'end', 1)" title="终点 +1">+</button>
+                                </div>
+                            </div>
+                            <div class="quick-range-chips">
+                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('hotZodiacRange', 1, 3)">1-3热肖</button>
+                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('hotZodiacRange', 1, 6)">1-6半区</button>
+                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('hotZodiacRange', 4, 8)">4-8中位</button>
+                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('hotZodiacRange', 7, 12)">7-12冷区</button>
+                            </div>
                         </div>
                     </div>
 
@@ -600,11 +670,25 @@
                             <input type="range" id="coldOption_allHotZodiacRange_start" min="1" max="12" value="1" step="1" class="range-slider-input range-slider-min" oninput="onDualSliderChange('allHotZodiacRange', 12, '肖', true)">
                             <input type="range" id="coldOption_allHotZodiacRange_end" min="1" max="12" value="3" step="1" class="range-slider-input range-slider-max" oninput="onDualSliderChange('allHotZodiacRange', 12, '肖', false)">
                         </div>
-                        <div class="quick-range-chips">
-                            <button type="button" class="quick-chip-btn" onclick="setQuickRange('allHotZodiacRange', 1, 3)">1-3特热</button>
-                            <button type="button" class="quick-chip-btn" onclick="setQuickRange('allHotZodiacRange', 1, 6)">1-6半区</button>
-                            <button type="button" class="quick-chip-btn" onclick="setQuickRange('allHotZodiacRange', 4, 8)">4-8中位</button>
-                            <button type="button" class="quick-chip-btn" onclick="setQuickRange('allHotZodiacRange', 7, 12)">7-12冷肖</button>
+                        <div class="cold-range-bottom-row">
+                            <div class="range-steppers">
+                                <div class="stepper-unit">
+                                    <span class="stepper-lbl">起</span>
+                                    <button type="button" class="stepper-btn" onclick="stepDualRange('allHotZodiacRange', 'start', -1)" title="起点 -1">−</button>
+                                    <button type="button" class="stepper-btn" onclick="stepDualRange('allHotZodiacRange', 'start', 1)" title="起点 +1">+</button>
+                                </div>
+                                <div class="stepper-unit">
+                                    <span class="stepper-lbl">止</span>
+                                    <button type="button" class="stepper-btn" onclick="stepDualRange('allHotZodiacRange', 'end', -1)" title="终点 -1">−</button>
+                                    <button type="button" class="stepper-btn" onclick="stepDualRange('allHotZodiacRange', 'end', 1)" title="终点 +1">+</button>
+                                </div>
+                            </div>
+                            <div class="quick-range-chips">
+                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('allHotZodiacRange', 1, 3)">1-3特热</button>
+                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('allHotZodiacRange', 1, 6)">1-6半区</button>
+                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('allHotZodiacRange', 4, 8)">4-8中位</button>
+                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('allHotZodiacRange', 7, 12)">7-12冷肖</button>
+                            </div>
                         </div>
                     </div>
                 </div>
