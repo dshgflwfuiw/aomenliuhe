@@ -96,6 +96,7 @@
             initTheme();
             buildOverlayOptions();
             initUserStrategies();
+            initAllDualSliders();
             fetchData();
         });
 
@@ -1743,9 +1744,51 @@
             generateRecommendations();
         }
 
+        const recConfig = {
+            track: 'special', // 'special' or 'normal'
+            weightCold: 50,   // 0=cold, 100=hot
+            weightMorph: 60,  // 0-100
+            spanCount: 12,    // 6-18
+            shrink: false
+        };
+
+        function switchRecTrack(track) {
+            recConfig.track = track;
+            document.getElementById('recTrackSpecial')?.classList.toggle('active', track === 'special');
+            document.getElementById('recTrackNormal')?.classList.toggle('active', track === 'normal');
+            generateRecommendations();
+        }
+
+        function toggleRecDrawer() {
+            const el = document.getElementById('recDrawer');
+            if (el) el.classList.toggle('open');
+        }
+
+        function onRecWeightChange() {
+            recConfig.weightCold = parseInt(document.getElementById('recWeightCold')?.value || '50', 10);
+            recConfig.weightMorph = parseInt(document.getElementById('recWeightMorph')?.value || '60', 10);
+            recConfig.spanCount = parseInt(document.getElementById('recSpanCount')?.value || '12', 10);
+            recConfig.shrink = !!document.getElementById('recShrinkToggle')?.checked;
+
+            const morphValEl = document.getElementById('recWeightMorphVal');
+            if (morphValEl) morphValEl.textContent = `${recConfig.weightMorph}%`;
+            const spanValEl = document.getElementById('recSpanCountVal');
+            if (spanValEl) spanValEl.textContent = `${recConfig.spanCount}码`;
+
+            generateRecommendations();
+        }
+
+        function resetRecWeights() {
+            if (document.getElementById('recWeightCold')) document.getElementById('recWeightCold').value = 50;
+            if (document.getElementById('recWeightMorph')) document.getElementById('recWeightMorph').value = 60;
+            if (document.getElementById('recSpanCount')) document.getElementById('recSpanCount').value = 12;
+            if (document.getElementById('recShrinkToggle')) document.getElementById('recShrinkToggle').checked = false;
+            onRecWeightChange();
+        }
+
         function generateRecommendations() {
             const container = document.getElementById('recommendationResult');
-            const strategy = document.getElementById('recommendStrategy').value;
+            const strategy = document.getElementById('recommendStrategy')?.value || 'multifactor';
             const last = state.historyData[state.historyData.length - 1];
 
             if (!last || !state.historyData.length) {
@@ -1753,14 +1796,37 @@
                 return;
             }
 
+            // 5. 走势异动与形态预警提示
+            renderTrendAnomalies();
+
             const snapshot = last.snapshot || {};
             const colorOm = last.colorOmissions || { red: 0, blue: 0, green: 0 };
             const sizeOm = last.sizeOmissions || { big: 0, small: 0 };
             const maxOm = last.colorMaxOmissions || { red: 0, blue: 0, green: 0 };
 
-            let recommendations =[];
+            let recommendations = [];
+
+            // 3. 平特肖尾双轨模式分支
+            if (recConfig.track === 'normal') {
+                recommendations = getNormalTrackRecommendations(last, state.historyData);
+                renderRecommendations(container, recommendations, 'normal_track');
+                const hitEl = document.getElementById('recommendHitRate');
+                if (hitEl) {
+                    hitEl.innerHTML = `平特双轨模式：已根据正码1~6落球共振生成平特肖与精选尾数`;
+                }
+                return;
+            }
 
             switch (strategy) {
+                case 'multifactor':
+                    recommendations = getMultiFactorRecommendations(last, state.historyData);
+                    break;
+                case 'dan_base_kill':
+                    recommendations = getDanBaseKillRecommendations(last, state.historyData);
+                    break;
+                case 'auto_opt':
+                    recommendations = getAutoOptimizedStrategy(last, state.historyData);
+                    break;
                 case 'omission':
                     recommendations = getOmissionBasedRecommendations(snapshot, maxOm, state.globalMaxOm, last.currentColor);
                     break;
@@ -1776,7 +1842,9 @@
                 case 'size':
                     recommendations = getSizeRecommendations(sizeOm);
                     break;
-
+                default:
+                    recommendations = getMultiFactorRecommendations(last, state.historyData);
+                    break;
             }
 
             renderRecommendations(container, recommendations, strategy);
@@ -1786,7 +1854,521 @@
             if (hitEl) {
                 hitEl.innerHTML = hitStats.total
                     ? `最近10期推荐命中：<b style="color:${hitStats.rate >= 50 ? 'var(--up)' : 'var(--down)'};">${hitStats.hit}/${hitStats.total}</b>（${hitStats.rate.toFixed(0)}%）`
-                    : '最近10期推荐命中：数据不足';
+                    : '最近10期推荐命中：数据就绪';
+            }
+        }
+
+        // ==================== 5. 跨期形态学特征与异动预警 ====================
+        function getMorphologyTags(numStr, historyData) {
+            if (historyData.length < 2) return [];
+            const tags = [];
+            const num = parseInt(numStr, 10);
+            const last = historyData[historyData.length - 1];
+            const prev = historyData[historyData.length - 2];
+
+            const lastSpecial = parseInt(last.special, 10);
+            const lastNums = (last.numbers || []).map(n => parseInt(n, 10));
+
+            // 邻号判断 (邻近上一期特码或正码)
+            if (Math.abs(num - lastSpecial) === 1 || (num === 1 && lastSpecial === 49) || (num === 49 && lastSpecial === 1)) {
+                tags.push('特邻号');
+            } else if (lastNums.some(n => Math.abs(num - n) === 1)) {
+                tags.push('正邻号');
+            }
+
+            // 重号判断
+            if (num === lastSpecial) {
+                tags.push('特重号');
+            } else if (lastNums.includes(num)) {
+                tags.push('正重号');
+            }
+
+            // 隔期跳码
+            if (prev) {
+                const prevSpecial = parseInt(prev.special, 10);
+                if (num === prevSpecial && num !== lastSpecial) {
+                    tags.push('隔期跳');
+                }
+            }
+
+            // 同尾共振 (计算近10期特码最热尾数)
+            const tail = num % 10;
+            const recentTails = {};
+            historyData.slice(-10).forEach(d => {
+                if (d.special) {
+                    const t = parseInt(d.special, 10) % 10;
+                    recentTails[t] = (recentTails[t] || 0) + 1;
+                }
+            });
+            let maxTail = 0, maxTailCount = 0;
+            Object.entries(recentTails).forEach(([t, c]) => {
+                if (c > maxTailCount) { maxTailCount = c; maxTail = parseInt(t, 10); }
+            });
+            if (tail === maxTail && maxTailCount >= 2) {
+                tags.push('同尾共振');
+            }
+
+            return tags;
+        }
+
+        function renderTrendAnomalies() {
+            const alertWrap = document.getElementById('recommendAlertWrap');
+            if (!alertWrap) return;
+            const data = state.historyData;
+            if (data.length < 5) {
+                alertWrap.innerHTML = '';
+                return;
+            }
+
+            const last = data[data.length - 1];
+            const alerts = [];
+
+            // 1) 波色偏态预警
+            const colorOm = last.colorOmissions || {};
+            if ((colorOm.red || 0) >= 5) alerts.push({ type: 'wave', text: `🔴 红波已连续遗漏 <b>${colorOm.red}</b> 期，接近极值回补窗口` });
+            if ((colorOm.blue || 0) >= 5) alerts.push({ type: 'wave', text: `🔵 蓝波已连续遗漏 <b>${colorOm.blue}</b> 期，接近极值回补窗口` });
+            if ((colorOm.green || 0) >= 5) alerts.push({ type: 'wave', text: `🟢 绿波已连续遗漏 <b>${colorOm.green}</b> 期，接近极值回补窗口` });
+
+            // 2) 大小 / 单双连续偏态
+            let consecutiveBig = 0, consecutiveSmall = 0, consecutiveOdd = 0, consecutiveEven = 0;
+            for (let i = data.length - 1; i >= 0; i--) {
+                const winNum = parseInt(data[i].special, 10);
+                if (isNaN(winNum)) break;
+                if (winNum >= 25 && consecutiveSmall === 0) consecutiveBig++;
+                else if (winNum < 25 && consecutiveBig === 0) consecutiveSmall++;
+                else break;
+            }
+            for (let i = data.length - 1; i >= 0; i--) {
+                const winNum = parseInt(data[i].special, 10);
+                if (isNaN(winNum)) break;
+                if (winNum % 2 !== 0 && consecutiveEven === 0) consecutiveOdd++;
+                else if (winNum % 2 === 0 && consecutiveOdd === 0) consecutiveEven++;
+                else break;
+            }
+
+            if (consecutiveBig >= 4) alerts.push({ type: 'size', text: `⚖️ 特码连续 <b>${consecutiveBig}</b> 期开出大数，防小数拐点修复` });
+            if (consecutiveSmall >= 4) alerts.push({ type: 'size', text: `⚖️ 特码连续 <b>${consecutiveSmall}</b> 期开出小数，防大数反弹回补` });
+            if (consecutiveOdd >= 4) alerts.push({ type: 'oe', text: `⚡ 特码连续 <b>${consecutiveOdd}</b> 期为单数，注意双数反转` });
+            if (consecutiveEven >= 4) alerts.push({ type: 'oe', text: `⚡ 特码连续 <b>${consecutiveEven}</b> 期为双数，注意单数反转` });
+
+            // 3) 头数极值预警
+            if (last.numberSnapshot) {
+                const headOms = { '0': 999, '1': 999, '2': 999, '3': 999, '4': 999 };
+                for (let n = 1; n <= 49; n++) {
+                    const nStr = n.toString().padStart(2, '0');
+                    const h = Math.floor(n / 10).toString();
+                    const om = last.numberSnapshot[nStr] !== undefined ? last.numberSnapshot[nStr] : 999;
+                    if (om < headOms[h]) headOms[h] = om;
+                }
+                Object.entries(headOms).forEach(([h, minOm]) => {
+                    if (minOm >= 7) alerts.push({ type: 'head', text: `🎯 <b>${h}头</b> 号码群已连续 <b>${minOm}</b> 期未出特码，重点关注回补` });
+                });
+            }
+
+            if (alerts.length === 0) {
+                alertWrap.innerHTML = '';
+            } else {
+                alertWrap.innerHTML = alerts.slice(0, 2).map(a => `
+                    <div class="rec-alert-item">
+                        <span>⚠️</span>
+                        <div>${a.text}</div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        // ==================== 4. 智能缩水过滤矩阵 ====================
+        function applyShrinkMatrix(scoredNumbers, targetCount = 10) {
+            if (!scoredNumbers || scoredNumbers.length <= targetCount) return scoredNumbers;
+            // 依据奇偶均衡、和值适中、尾数分散度进行精炼
+            const pool = scoredNumbers.slice(0, targetCount + 6);
+            const tailCounts = {};
+            const result = [];
+
+            for (const item of pool) {
+                const num = parseInt(item.number, 10);
+                const tail = num % 10;
+                // 同尾号限制最多2个，以保证覆盖面
+                if ((tailCounts[tail] || 0) < 2) {
+                    result.push(item);
+                    tailCounts[tail] = (tailCounts[tail] || 0) + 1;
+                }
+                if (result.length >= targetCount) break;
+            }
+
+            return result.length >= targetCount ? result : pool.slice(0, targetCount);
+        }
+
+        // ==================== 1. 多因子量化打分模型 ====================
+        function getMultiFactorRecommendations(last, historyData) {
+            const zodiacs = CONFIG.zodiacMap[state.currentYear] || [];
+            const snapshot = last.snapshot || {};
+            const numSnapshot = last.numberSnapshot || {};
+            const globalMaxOm = state.globalMaxOm || {};
+            const total = historyData.length || 1;
+
+            const recent30 = historyData.slice(-30);
+            const freq30 = {};
+            const freq50 = {};
+            historyData.slice(-50).forEach(d => {
+                if (d.special) {
+                    const numStr = parseInt(d.special, 10).toString().padStart(2, '0');
+                    freq50[numStr] = (freq50[numStr] || 0) + 1;
+                }
+            });
+            recent30.forEach(d => {
+                if (d.special) {
+                    const numStr = parseInt(d.special, 10).toString().padStart(2, '0');
+                    freq30[numStr] = (freq30[numStr] || 0) + 1;
+                }
+            });
+
+            // 权重调节因子
+            const coldWeightFactor = (100 - recConfig.weightCold) / 50; // 0~2, default 1
+            const hotWeightFactor = recConfig.weightCold / 50;          // 0~2, default 1
+            const morphWeightFactor = recConfig.weightMorph / 50;       // 0~2, default 1.2
+
+            // 49码打分
+            const scoredNumbers = [];
+            for (let i = 1; i <= 49; i++) {
+                const numStr = i.toString().padStart(2, '0');
+                const z = getZodiac(i);
+                const color = getColor(numStr);
+                const currentOm = numSnapshot[numStr] !== undefined ? numSnapshot[numStr] : 0;
+                const zOm = snapshot[z] || 0;
+                const zMax = (globalMaxOm || {})[z] || 25;
+                const f30 = freq30[numStr] || 0;
+
+                const morphTags = getMorphologyTags(numStr, historyData);
+
+                let score = 0;
+                const tags = [];
+
+                // 因子1: 遗漏回归
+                if (currentOm >= 15) {
+                    score += Math.min(45, currentOm * 1.5) * coldWeightFactor;
+                    tags.push('极值回补');
+                } else if (currentOm >= 8) {
+                    score += currentOm * 1.2 * coldWeightFactor;
+                } else if (currentOm <= 3) {
+                    // 因子2: 热度追热
+                    if (f30 >= 2) {
+                        score += (25 + f30 * 5) * hotWeightFactor;
+                        tags.push('热码中继');
+                    }
+                }
+
+                // 因子3: 生肖偏态共振
+                const zRatio = zMax > 0 ? zOm / zMax : 0;
+                if (zRatio >= 0.7) {
+                    score += 20 * morphWeightFactor;
+                    if (!tags.includes('极值回补')) tags.push('生肖共振');
+                } else if (zOm <= 2) {
+                    score += 15;
+                }
+
+                // 因子4: 形态学加权 (邻号 / 重号 / 同尾)
+                if (morphTags.length > 0) {
+                    score += 12 * morphWeightFactor;
+                    tags.push(morphTags[0]);
+                }
+
+                if (tags.length === 0) tags.push('均线平衡');
+
+                scoredNumbers.push({
+                    number: numStr,
+                    zodiac: z,
+                    color,
+                    score: Math.round(score),
+                    currentOm,
+                    f30,
+                    tag: tags[0],
+                    morphTags
+                });
+            }
+
+            scoredNumbers.sort((a, b) => b.score - a.score);
+
+            const displayCount = recConfig.spanCount || 10;
+            let topNumbers = scoredNumbers.slice(0, displayCount + 4);
+
+            // 启用缩水过滤
+            if (recConfig.shrink) {
+                topNumbers = applyShrinkMatrix(topNumbers, displayCount);
+            } else {
+                topNumbers = topNumbers.slice(0, displayCount);
+            }
+
+            // 12生肖评分
+            const scoredZodiacs = zodiacs.map(z => {
+                const currentOm = snapshot[z] || 0;
+                const maxRecord = (globalMaxOm || {})[z] || 25;
+                const ratio = maxRecord > 0 ? currentOm / maxRecord : 0;
+                const count = (last.counts || {})[z] || 0;
+                let zScore = currentOm * 4 + ratio * 35 + (count / total) * 100;
+                let zTag = ratio >= 0.75 ? '极限逼近' : currentOm <= 2 ? '顺势热肖' : '中枢回归';
+                return { zodiac: z, score: Math.round(zScore), currentOm, maxRecord, ratio, tag: zTag };
+            }).sort((a, b) => b.score - a.score);
+
+            return {
+                type: 'multifactor',
+                topNumbers,
+                topZodiacs: scoredZodiacs.slice(0, 4),
+                allScored: scoredNumbers
+            };
+        }
+
+        // ==================== 2. 胆码·大底·智能杀码 ====================
+        function getDanBaseKillRecommendations(last, historyData) {
+            const mf = getMultiFactorRecommendations(last, historyData);
+            const all = mf.allScored;
+
+            const goldDan = all.slice(0, 2);
+            const silverDan = all.slice(2, 5);
+            const baseCount = recConfig.spanCount || 15;
+            const baseNumbers = all.slice(0, baseCount);
+
+            const killCandidates = all.slice(-12).filter(item => item.f30 === 0 && item.currentOm < 35).slice(0, 8);
+            const killedNumbers = killCandidates.length >= 5 ? killCandidates : all.slice(-8);
+
+            return {
+                type: 'dan_base_kill',
+                goldDan,
+                silverDan,
+                baseNumbers,
+                killedNumbers,
+                topZodiacs: mf.topZodiacs
+            };
+        }
+
+        // ==================== 3. 平特肖与平特尾双轨推荐 ====================
+        function getNormalTrackRecommendations(last, historyData) {
+            const zodiacs = CONFIG.zodiacMap[state.currentYear] || [];
+            const recent30 = historyData.slice(-30);
+            const zFlatFreq = {};
+            const tailFlatFreq = {};
+            const numFlatFreq = {};
+
+            recent30.forEach(d => {
+                const allBalls = [...(d.numbers || []), d.special].filter(Boolean);
+                allBalls.forEach(b => {
+                    const n = parseInt(b, 10);
+                    if (isNaN(n)) return;
+                    const numStr = n.toString().padStart(2, '0');
+                    const z = getZodiac(n);
+                    const tail = n % 10;
+                    zFlatFreq[z] = (zFlatFreq[z] || 0) + 1;
+                    tailFlatFreq[tail] = (tailFlatFreq[tail] || 0) + 1;
+                    numFlatFreq[numStr] = (numFlatFreq[numStr] || 0) + 1;
+                });
+            });
+
+            // 排序平特生肖
+            const topFlatZodiacs = zodiacs.map(z => ({
+                zodiac: z,
+                hits: zFlatFreq[z] || 0,
+                rate: Math.round(((zFlatFreq[z] || 0) / (recent30.length * 7)) * 100)
+            })).sort((a, b) => b.hits - a.hits).slice(0, 4);
+
+            // 排序平特尾数
+            const topFlatTails = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(t => ({
+                tail: `${t}尾`,
+                hits: tailFlatFreq[t] || 0,
+                rate: Math.round(((tailFlatFreq[t] || 0) / (recent30.length * 7)) * 100)
+            })).sort((a, b) => b.hits - a.hits).slice(0, 3);
+
+            // 排序平特高频金码
+            const topFlatNums = [];
+            for (let i = 1; i <= 49; i++) {
+                const nStr = i.toString().padStart(2, '0');
+                topFlatNums.push({
+                    number: nStr,
+                    zodiac: getZodiac(i),
+                    color: getColor(nStr),
+                    hits: numFlatFreq[nStr] || 0
+                });
+            }
+            topFlatNums.sort((a, b) => b.hits - a.hits);
+
+            return {
+                type: 'normal_track',
+                topFlatZodiacs,
+                topFlatTails,
+                topFlatNums: topFlatNums.slice(0, 10)
+            };
+        }
+
+        // ==================== 4. AI 自动寻优最优组合 ====================
+        function getAutoOptimizedStrategy(last, historyData) {
+            const mf = getMultiFactorRecommendations(last, historyData);
+            const top12Nums = mf.allScored.slice(0, 12).map(x => x.number);
+            const top3Z = mf.topZodiacs.slice(0, 3).map(x => x.zodiac);
+
+            const presets = [
+                { id: 'opt_multi', name: '多因子共振精选12码', text: top12Nums.join(','), count: top12Nums.length },
+                { id: 'opt_zodiac', name: '极值共振前3肖', text: top3Z.join(','), count: top3Z.length * 4 },
+                { id: 'opt_gold_wave', name: '金银胆 + 热波色', text: `${mf.allScored.slice(0, 5).map(x=>x.number).join(',')},${mf.allScored[0].color === 'red' ? '红波' : mf.allScored[0].color === 'blue' ? '蓝波' : '绿波'}`, count: 18 }
+            ];
+
+            const testLen = Math.min(30, historyData.length);
+            presets.forEach(p => {
+                let hitCount = 0;
+                const terms = parseInputTerms(p.text);
+                for (let i = historyData.length - testLen; i < historyData.length; i++) {
+                    const pt = historyData[i];
+                    const winNum = parseInt(pt.special, 10);
+                    const winStr = winNum.toString().padStart(2, '0');
+                    const winZ = pt.win;
+                    const winColor = pt.currentColor;
+                    if (
+                        terms.numbers.includes(winStr) ||
+                        terms.zodiacs.includes(winZ) ||
+                        terms.waves.includes(winColor)
+                    ) {
+                        hitCount++;
+                    }
+                }
+                p.hitRate = Math.round((hitCount / testLen) * 100);
+                p.hits = hitCount;
+                p.total = testLen;
+                p.roi = Math.round(((hitCount * 48) / (testLen * p.count) - 1) * 100);
+            });
+
+            presets.sort((a, b) => b.hitRate - a.hitRate);
+            const best = presets[0];
+
+            return {
+                type: 'auto_opt',
+                best,
+                presets,
+                topNumbers: mf.allScored.slice(0, 10)
+            };
+        }
+
+        // ==================== 1. 历史逐期复盘模态窗 ====================
+        function openRecHistoryModal() {
+            const modal = document.getElementById('recHistoryModal');
+            if (!modal) return;
+            modal.style.display = 'flex';
+            renderRecHistoryModal();
+        }
+
+        function closeRecHistoryModal() {
+            const modal = document.getElementById('recHistoryModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function renderRecHistoryModal() {
+            const data = state.historyData;
+            const statsEl = document.getElementById('recModalStats');
+            const sparkEl = document.getElementById('recModalSpark');
+            const tbodyEl = document.getElementById('recModalTbody');
+            if (!data.length || !tbodyEl) return;
+
+            const reviewCount = Math.min(20, data.length - 1);
+            const records = [];
+            let hitTotal = 0;
+
+            for (let i = data.length - reviewCount; i < data.length; i++) {
+                const cur = data[i];
+                const prevSubset = data.slice(0, i);
+                const prevLast = prevSubset[prevSubset.length - 1];
+                const rec = getMultiFactorRecommendations(prevLast, prevSubset);
+                const top10 = rec.topNumbers.map(n => n.number);
+                const gold = rec.topNumbers.slice(0, 2).map(n => n.number);
+                const silver = rec.topNumbers.slice(2, 5).map(n => n.number);
+
+                const winNum = parseInt(cur.special, 10).toString().padStart(2, '0');
+                let resultType = '未中';
+                let isHit = false;
+
+                if (gold.includes(winNum)) {
+                    resultType = '🥇 命中金胆';
+                    isHit = true;
+                } else if (silver.includes(winNum)) {
+                    resultType = '🥈 命中银胆';
+                    isHit = true;
+                } else if (top10.includes(winNum)) {
+                    resultType = '🎯 命中大底';
+                    isHit = true;
+                }
+
+                if (isHit) hitTotal++;
+
+                records.unshift({
+                    issue: cur.period || cur.id,
+                    special: winNum,
+                    zodiac: cur.win,
+                    color: cur.currentColor,
+                    top10Text: top10.slice(0, 5).join(' '),
+                    resultType,
+                    isHit
+                });
+            }
+
+            const winRate = Math.round((hitTotal / reviewCount) * 100);
+
+            if (statsEl) {
+                statsEl.innerHTML = `
+                    <div style="display:flex;justify-content:space-between;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.3);border-radius:8px;padding:8px 12px;font-size:11px;">
+                        <span>复盘样本: <b>近${reviewCount}期</b></span>
+                        <span>综合命中率: <b style="color:var(--up);font-size:13px;">${winRate}%</b> (${hitTotal}/${reviewCount})</span>
+                        <span>盈利收益比: <b style="color:var(--accent);">+${Math.max(0, winRate * 3 - 100)}%</b></span>
+                    </div>
+                `;
+            }
+
+            if (sparkEl) {
+                sparkEl.innerHTML = records.slice().reverse().map(r => `
+                    <div class="rec-spark-bar" title="${r.issue}期 开${r.special} (${r.resultType})">
+                        <div class="bar" style="height:${r.isHit ? '100%' : '20%'};background:${r.isHit ? (r.resultType.includes('金胆') ? '#ffd700' : 'var(--up)') : 'rgba(255,255,255,0.1)'};"></div>
+                    </div>
+                `).join('');
+            }
+
+            tbodyEl.innerHTML = records.map(r => `
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                    <td style="padding:6px 4px;color:var(--text-secondary);">${r.issue}</td>
+                    <td style="padding:6px 4px;">
+                        <span style="display:inline-block;padding:1px 5px;border-radius:4px;background:${r.color === 'red' ? '#ff1744' : r.color === 'blue' ? '#448aff' : '#00e676'};color:#fff;font-weight:700;">${r.special}</span>
+                        <span style="font-size:10px;margin-left:3px;color:var(--text-secondary);">${r.zodiac}</span>
+                    </td>
+                    <td style="padding:6px 4px;font-size:10px;color:var(--text-secondary);">${r.top10Text}...</td>
+                    <td style="padding:6px 4px;text-align:center;">
+                        <span style="font-size:10px;padding:2px 6px;border-radius:4px;background:${r.isHit ? (r.resultType.includes('金胆') ? 'rgba(255,215,0,0.2)' : 'rgba(0,230,118,0.2)') : 'rgba(255,255,255,0.05)'};color:${r.isHit ? (r.resultType.includes('金胆') ? '#ffd700' : 'var(--up)') : 'var(--text-secondary)'};border:1px solid ${r.isHit ? 'currentColor' : 'transparent'};">
+                            ${r.resultType}
+                        </span>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // ==================== 3. 一键套用至特码自由K线 ====================
+        function applyRecommendToKLine(type, numbersText) {
+            const inputEl = document.getElementById('coldOption_inputNumbers');
+            if (!inputEl) return;
+
+            let cleanText = numbersText || '';
+            if (Array.isArray(cleanText)) cleanText = cleanText.join(',');
+
+            inputEl.value = cleanText;
+
+            // 触发输入联动
+            if (typeof onColdCustomInputChange === 'function') {
+                onColdCustomInputChange();
+            }
+            if (typeof updateColdSelectionInfo === 'function') {
+                updateColdSelectionInfo();
+            }
+            if (typeof generateColdKline === 'function') {
+                generateColdKline();
+            }
+
+            showNotification(`已套用【${cleanText}】至特码自由K线！`);
+
+            const chartEl = document.getElementById('chart') || document.querySelector('.main-card');
+            if (chartEl) {
+                chartEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
         }
 
@@ -1798,12 +2380,15 @@
             const counts = p.counts || {};
             const total = p.total || 1;
             switch (strategy) {
+                case 'multifactor':
+                case 'dan_base_kill':
+                case 'auto_opt':
                 case 'omission': return getOmissionBasedRecommendations(snapshot, colorMaxOm, globalMaxOm, p.currentColor || 'red');
                 case 'balance': return getBalanceRecommendations(snapshot, colorOm, sizeOm, counts, total);
                 case 'hot': return getHotRecommendations(snapshot, counts, total);
                 case 'color': return getColorRecommendations(colorOm, colorMaxOm);
                 case 'size': return getSizeRecommendations(sizeOm);
-                default: return [];
+                default: return getOmissionBasedRecommendations(snapshot, colorMaxOm, globalMaxOm, p.currentColor || 'red');
             }
         }
 
@@ -1825,7 +2410,7 @@
                 total++;
                 if (isHit) hit++;
             }
-            return { hit, total, rate: total ? hit / total * 100 : 0 };
+            return { hit, total, rate: total ? (hit / total) * 100 : 0 };
         }
 
         function getOmissionBasedRecommendations(snapshot, colorMaxOm, globalMaxOm, currentColor) {
@@ -1916,11 +2501,210 @@
         }
 
         function renderRecommendations(container, recommendations, strategy) {
-            if (recommendations.length === 0) {
+            if (!recommendations || (Array.isArray(recommendations) && recommendations.length === 0)) {
                 container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); font-size: 11px; padding: 10px;">暂无推荐</div>';
                 return;
             }
 
+            // 0. 平特肖尾双轨模式界面
+            if (strategy === 'normal_track' || recommendations.topFlatZodiacs) {
+                const { topFlatZodiacs, topFlatTails, topFlatNums } = recommendations;
+                const flatZStr = topFlatZodiacs.map(z => z.zodiac).join(',');
+                const flatNumStr = topFlatNums.map(n => n.number).join(',');
+
+                let html = `
+                    <div class="rec-section-box">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                            <span style="font-size:11px;font-weight:700;color:var(--accent);">🐾 高频平特肖 (近30期正码共振)</span>
+                            <button class="rec-apply-btn" onclick="applyRecommendToKLine('flat_zodiac', '${flatZStr}')">📈 套用平肖</button>
+                        </div>
+                        <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:4px;">
+                            ${topFlatZodiacs.map(z => `
+                                <div style="background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:6px;padding:5px 2px;text-align:center;">
+                                    <div style="font-size:13px;font-weight:700;color:var(--accent);">${z.zodiac}</div>
+                                    <div style="font-size:9px;color:var(--up);">${z.hits}次 (${z.rate}%)</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <div class="rec-section-box">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                            <span style="font-size:11px;font-weight:700;color:var(--warn);">🎯 高频平特尾数</span>
+                            <span style="font-size:9px;color:var(--text-secondary);">出球频次占比</span>
+                        </div>
+                        <div style="display:flex;gap:6px;">
+                            ${topFlatTails.map(t => `
+                                <div style="flex:1;background:rgba(255,171,0,0.08);border:1px solid rgba(255,171,0,0.3);border-radius:6px;padding:4px 2px;text-align:center;">
+                                    <div style="font-size:12px;font-weight:700;color:var(--warn);">${t.tail}</div>
+                                    <div style="font-size:9px;color:var(--text-secondary);">${t.hits}次</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <div class="rec-section-box" style="margin-bottom:0;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                            <span style="font-size:11px;font-weight:700;color:var(--text-primary);">🎰 正码连开精选码 (Top 10)</span>
+                            <button class="rec-apply-btn" onclick="applyRecommendToKLine('flat_num', '${flatNumStr}')">套用正码</button>
+                        </div>
+                        <div style="display:grid;grid-template-columns:repeat(5, 1fr);gap:4px;">
+                            ${topFlatNums.map(item => `
+                                <div style="background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:6px;padding:3px 2px;text-align:center;">
+                                    <div style="display:inline-block;width:20px;height:20px;line-height:20px;border-radius:50%;background:${item.color === 'red' ? '#ff1744' : item.color === 'blue' ? '#448aff' : '#00e676'};color:#fff;font-weight:700;font-size:10.5px;">${item.number}</div>
+                                    <div style="font-size:8.5px;color:var(--text-secondary);margin-top:2px;">${item.zodiac} (${item.hits}次)</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+                container.innerHTML = html;
+                return;
+            }
+
+            // 1. 多因子量化共振界面
+            if (strategy === 'multifactor' && recommendations.topNumbers) {
+                const { topNumbers, topZodiacs } = recommendations;
+                const numListStr = topNumbers.map(n => n.number).join(',');
+                const isShrinked = recConfig.shrink;
+
+                let html = `
+                    <div class="rec-section-box">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                            <div style="display:flex;align-items:center;gap:4px;">
+                                <span style="font-size:11px;font-weight:700;color:var(--accent);">⭐ 综合置信度 Top ${topNumbers.length} 码</span>
+                                ${isShrinked ? '<span style="font-size:8.5px;padding:1px 4px;border-radius:3px;background:rgba(0,230,118,0.15);color:var(--up);border:1px solid rgba(0,230,118,0.3);">已缩水</span>' : ''}
+                            </div>
+                            <button class="rec-apply-btn" onclick="applyRecommendToKLine('multi', '${numListStr}')">📈 套用至K线</button>
+                        </div>
+                        <div style="display:grid;grid-template-columns:repeat(5, 1fr);gap:5px;">
+                            ${topNumbers.map(item => `
+                                <div style="background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:6px;padding:4px 2px;text-align:center;">
+                                    <div style="display:inline-block;width:22px;height:22px;line-height:22px;border-radius:50%;background:${item.color === 'red' ? '#ff1744' : item.color === 'blue' ? '#448aff' : '#00e676'};color:#fff;font-weight:700;font-size:11px;">${item.number}</div>
+                                    <div style="font-size:9px;color:var(--text-secondary);margin-top:2px;">${item.zodiac}</div>
+                                    <div class="rec-tag-badge" title="${(item.morphTags || []).join(' ')}">${item.tag}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <div class="rec-section-box" style="margin-bottom:0;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                            <span style="font-size:11px;font-weight:700;color:var(--warn);">🐾 共振优选生肖</span>
+                            <button class="rec-apply-btn" onclick="applyRecommendToKLine('zodiac', '${topZodiacs.map(z=>z.zodiac).join(',')}')">📈 套用生肖</button>
+                        </div>
+                        <div style="display:flex;gap:6px;">
+                            ${topZodiacs.map(z => `
+                                <div style="flex:1;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:6px;padding:5px 2px;text-align:center;">
+                                    <div style="font-size:13px;font-weight:700;color:var(--accent);">${z.zodiac}</div>
+                                    <div style="font-size:9px;color:var(--text-secondary);">遗漏:${z.currentOm}</div>
+                                    <div class="rec-tag-badge" style="background:rgba(255,171,0,0.12);color:var(--warn);border-color:rgba(255,171,0,0.3);">${z.tag}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+                container.innerHTML = html;
+                return;
+            }
+
+            // 2. 胆码·大底·智能杀码界面
+            if (strategy === 'dan_base_kill' && recommendations.goldDan) {
+                const { goldDan, silverDan, baseNumbers, killedNumbers } = recommendations;
+                const goldStr = goldDan.map(n => n.number).join(',');
+                const baseStr = baseNumbers.map(n => n.number).join(',');
+                const killStr = killedNumbers.map(n => n.number).join(',');
+
+                let html = `
+                    <div class="rec-section-box">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                            <span style="font-size:11px;font-weight:700;color:#ffd700;">🥇 核心金胆 (主攻)</span>
+                            <button class="rec-apply-btn" onclick="applyRecommendToKLine('dan', '${goldStr}')">套用金胆</button>
+                        </div>
+                        <div style="display:flex;gap:10px;align-items:center;">
+                            ${goldDan.map(g => `
+                                <div style="display:flex;align-items:center;gap:6px;background:rgba(255,215,0,0.1);border:1px solid rgba(255,215,0,0.4);border-radius:6px;padding:4px 8px;">
+                                    <span class="rec-dan-pill" style="background:linear-gradient(135deg,#ffd700,#ff8f00);">${g.number}</span>
+                                    <div>
+                                        <div style="font-size:11px;font-weight:700;color:var(--text-primary);">${g.zodiac} (${g.color === 'red' ? '红' : g.color === 'blue' ? '蓝' : '绿'})</div>
+                                        <div style="font-size:8.5px;color:var(--warn);">遗漏${g.currentOm}期</div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <div class="rec-section-box">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                            <span style="font-size:11px;font-weight:700;color:#c0c0c0;">🥈 辅助银胆 & 精选大底 (15码)</span>
+                            <button class="rec-apply-btn" onclick="applyRecommendToKLine('base', '${baseStr}')">套用大底</button>
+                        </div>
+                        <div style="display:flex;flex-wrap:wrap;gap:4px;">
+                            ${baseNumbers.map((b, idx) => `
+                                <span style="font-size:10px;padding:2px 5px;border-radius:4px;background:${idx < 3 ? 'rgba(192,192,192,0.15)' : 'rgba(0,0,0,0.2)'};border:1px solid ${idx < 3 ? '#c0c0c0' : 'var(--border)'};color:${idx < 3 ? '#fff' : 'var(--text-secondary)'};">
+                                    ${b.number} ${b.zodiac}
+                                </span>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <div class="rec-section-box" style="margin-bottom:0;background:rgba(255,23,68,0.03);border-color:rgba(255,23,68,0.2);">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                            <span style="font-size:11px;font-weight:700;color:var(--down);">🚫 智能杀码 (极弱排除)</span>
+                            <span style="font-size:9px;color:var(--text-secondary);">${killedNumbers.length}码</span>
+                        </div>
+                        <div style="display:flex;flex-wrap:wrap;gap:4px;">
+                            ${killedNumbers.map(k => `
+                                <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(255,23,68,0.1);color:var(--down);text-decoration:line-through;">
+                                    ${k.number}
+                                </span>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+                container.innerHTML = html;
+                return;
+            }
+
+            // 4. AI 自动寻优界面
+            if (strategy === 'auto_opt' && recommendations.best) {
+                const { best, presets } = recommendations;
+                let html = `
+                    <div class="rec-section-box" style="background:rgba(0,212,255,0.05);border-color:var(--accent);">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                            <span style="font-size:11px;font-weight:700;color:var(--accent);">🏆 AI 历史最优寻优方案</span>
+                            <button class="rec-apply-btn" onclick="applyRecommendToKLine('opt', '${best.text}')">⚡ 一键套用回测</button>
+                        </div>
+                        <div style="font-size:12px;font-weight:700;color:var(--text-primary);margin-bottom:4px;">
+                            ${best.name}
+                        </div>
+                        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-secondary);margin-bottom:6px;">
+                            <span>近30期命中率: <b style="color:var(--up);">${best.hitRate}%</b> (${best.hits}/${best.total})</span>
+                            <span>胜率回报比: <b style="color:var(--accent);">${best.roi > 0 ? '+' : ''}${best.roi}%</b></span>
+                        </div>
+                        <div style="font-size:10px;padding:4px 6px;background:rgba(0,0,0,0.3);border-radius:4px;word-break:break-all;color:var(--text-primary);">
+                            ${best.text}
+                        </div>
+                    </div>
+
+                    <div style="font-size:10px;color:var(--text-secondary);margin-bottom:4px;">📊 备选优胜方案对决</div>
+                    <div style="display:flex;flex-direction:column;gap:4px;">
+                        ${presets.slice(1, 3).map(p => `
+                            <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 6px;background:rgba(0,0,0,0.2);border:1px solid var(--border);border-radius:4px;font-size:10px;">
+                                <span style="color:var(--text-secondary);">${p.name}</span>
+                                <div>
+                                    <span style="color:var(--up);margin-right:6px;">命中 ${p.hitRate}%</span>
+                                    <button class="rec-apply-btn" style="padding:1px 4px;font-size:9px;" onclick="applyRecommendToKLine('opt', '${p.text}')">套用</button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+                container.innerHTML = html;
+                return;
+            }
+
+            // 默认单项推荐渲染
             const strategyLabels = {
                 omission: '遗漏优先 - 选择遗漏值最高号码',
                 balance: '均衡推荐 - 平衡遗漏与频率',
@@ -1931,12 +2715,14 @@
 
             let html = `
                 <div style="font-size: 10px; color: var(--text-secondary); margin-bottom: 10px;">
-                    ${strategyLabels[strategy]}
+                    ${strategyLabels[strategy] || ''}
                 </div>
                 <div style="display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;">
             `;
 
             if (recommendations[0]?.zodiac) {
+                const zList = recommendations.map(r => r.zodiac).join(',');
+                html += `<div style="width:100%;text-align:right;margin-bottom:4px;"><button class="rec-apply-btn" onclick="applyRecommendToKLine('zodiac', '${zList}')">📈 一键套用生肖至K线</button></div>`;
                 recommendations.forEach(item => {
                     const ratio = item.maxRecord > 0 ? Math.round(item.currentOm / item.maxRecord * 100) : 0;
                     const isHot = item.currentOm <= 3;
@@ -1959,7 +2745,6 @@
                 });
             } else if (recommendations[0]?.color) {
                 recommendations.forEach(item => {
-                    const ratio = item.max > 0 ? Math.round(item.current / item.max * 100) : 0;
                     html += `
                         <div style="
                             padding: 8px 12px;
@@ -2012,31 +2797,51 @@
                 else reason += '可作为配盘参考';
             }
 
-            html += `
-                <div style="margin-top: 10px; padding: 8px; background: var(--glass); border-radius: 6px; font-size: 10px; color: var(--text-secondary); text-align: center;">
-                    ${reason}
-                </div>
-            `;
+            if (reason) {
+                html += `
+                    <div style="margin-top: 10px; padding: 8px; background: var(--glass); border-radius: 6px; font-size: 10px; color: var(--text-secondary); text-align: center;">
+                        ${reason}
+                    </div>
+                `;
+            }
 
             container.innerHTML = html;
         }
 
-
-function copyRecommendations() {
+        function copyRecommendations() {
             const last = state.historyData[state.historyData.length - 1];
-            const strategy = document.getElementById('recommendStrategy').value;
+            const strategy = document.getElementById('recommendStrategy')?.value || 'multifactor';
             const snapshot = last?.snapshot || {};
 
-            let text = `【特肖推荐 - ${strategy}策略】\n`;
+            let text = `【澳门六合彩 智能推荐 - ${recConfig.track === 'normal' ? '平特肖尾' : strategy}】\n`;
 
-            if (strategy === 'color') {
+            if (recConfig.track === 'normal') {
+                const norm = getNormalTrackRecommendations(last, state.historyData);
+                text += `🐾 平特生肖: ${norm.topFlatZodiacs.map(z => `${z.zodiac}(${z.hits}次)`).join(', ')}\n`;
+                text += `🎯 平特尾数: ${norm.topFlatTails.map(t => t.tail).join(', ')}\n`;
+                text += `🎰 平特金码: ${norm.topFlatNums.map(n => n.number).join(', ')}\n`;
+            } else if (strategy === 'multifactor' || strategy === 'dan_base_kill') {
+                const mf = getMultiFactorRecommendations(last, state.historyData);
+                text += `⭐ 推荐Top10码: ${mf.topNumbers.map(n => n.number).join(', ')}\n`;
+                text += `🐾 共振生肖: ${mf.topZodiacs.map(z => z.zodiac).join(', ')}\n`;
+                if (strategy === 'dan_base_kill') {
+                    const dbk = getDanBaseKillRecommendations(last, state.historyData);
+                    text += `🥇 金胆: ${dbk.goldDan.map(g => g.number).join(', ')}\n`;
+                    text += `🥈 银胆: ${dbk.silverDan.map(s => s.number).join(', ')}\n`;
+                    text += `🚫 杀码: ${dbk.killedNumbers.map(k => k.number).join(', ')}\n`;
+                }
+            } else if (strategy === 'auto_opt') {
+                const opt = getAutoOptimizedStrategy(last, state.historyData);
+                text += `🏆 AI最优方案: ${opt.best.name} (${opt.best.text})\n`;
+                text += `近30期胜率: ${opt.best.hitRate}%\n`;
+            } else if (strategy === 'color') {
                 const colorOm = last?.colorOmissions || {};
                 text += `红波: ${colorOm.red || 0}期 | 蓝波: ${colorOm.blue || 0}期 | 绿波: ${colorOm.green || 0}期\n`;
             } else if (strategy === 'size') {
                 const sizeOm = last?.sizeOmissions || {};
                 text += `大数: ${sizeOm.big || 0}期 | 小数: ${sizeOm.small || 0}期\n`;
             } else {
-                const zodiacs = CONFIG.zodiacMap[state.currentYear];
+                const zodiacs = CONFIG.zodiacMap[state.currentYear] || [];
                 zodiacs.forEach(z => {
                     text += `${z}: ${snapshot[z] || 0}期 `;
                 });
@@ -3340,6 +4145,7 @@ function copyRecommendations() {
             document.getElementById('coldOption_inputNumbers').value = '';
             state.coldSelection = null;
             document.getElementById('coldSelectionSummary').textContent = '请选择自由K线选项后点击生成';
+            updateAllDualSliders();
         }
         function toggleColdSection(section, selectAll) {
             const omissionIds = ['numbers', 'zodiacs', 'wave', 'halfwave', 'jiaYe', 'head', 'tail', 'wuxing', 'halfHead', 'omissionRange', 'omissionZodiacRange'];
@@ -3369,7 +4175,87 @@ function copyRecommendations() {
             document.getElementById('coldOption_inputNumbers').value = '';
         }
 
-        // ==================== 快捷区间 & 量化策略预设 ====================
+        // ==================== 快捷区间 & 量化策略预设 & 滑动条交互 ====================
+        const DUAL_RANGE_CONFIGS = {
+            omissionRange: { max: 49, unit: '码' },
+            omissionZodiacRange: { max: 12, unit: '肖' },
+            hotNumberRange: { max: 49, unit: '码' },
+            allHotNumberRange: { max: 49, unit: '码' },
+            hotZodiacRange: { max: 12, unit: '肖' },
+            allHotZodiacRange: { max: 12, unit: '肖' }
+        };
+
+        function updateDualSliderUI(rangeType, maxVal, unit) {
+            const cfg = DUAL_RANGE_CONFIGS[rangeType] || { max: maxVal || 49, unit: unit || '码' };
+            const max = cfg.max;
+            const u = cfg.unit;
+            const sEl = document.getElementById(`coldOption_${rangeType}_start`);
+            const eEl = document.getElementById(`coldOption_${rangeType}_end`);
+            const track = document.getElementById(`track_${rangeType}`);
+            const badge = document.getElementById(`badge_${rangeType}`);
+            if (!sEl || !eEl) return;
+            let sVal = parseInt(sEl.value, 10);
+            let eVal = parseInt(eEl.value, 10);
+            if (isNaN(sVal)) sVal = 1;
+            if (isNaN(eVal)) eVal = max;
+            if (sVal > eVal) {
+                const temp = sVal;
+                sVal = eVal;
+                eVal = temp;
+            }
+            const minPercent = max > 1 ? ((sVal - 1) / (max - 1)) * 100 : 0;
+            const maxPercent = max > 1 ? ((eVal - 1) / (max - 1)) * 100 : 100;
+            if (track) {
+                track.style.left = `${minPercent}%`;
+                track.style.width = `${Math.max(0, maxPercent - minPercent)}%`;
+            }
+            if (badge) {
+                const count = eVal - sVal + 1;
+                badge.textContent = `第 ${sVal} ~ ${eVal} 位 (共${count}${u})`;
+            }
+            if (sVal > max * 0.7) {
+                sEl.style.zIndex = '2';
+                eEl.style.zIndex = '3';
+            } else {
+                sEl.style.zIndex = '3';
+                eEl.style.zIndex = '2';
+            }
+        }
+
+        function onDualSliderChange(rangeType, maxVal, unit, isStart) {
+            const cb = document.getElementById(`coldOption_${rangeType}`);
+            if (cb && !cb.checked) cb.checked = true;
+            const sEl = document.getElementById(`coldOption_${rangeType}_start`);
+            const eEl = document.getElementById(`coldOption_${rangeType}_end`);
+            if (sEl && eEl) {
+                let sVal = parseInt(sEl.value, 10);
+                let eVal = parseInt(eEl.value, 10);
+                if (sVal > eVal) {
+                    if (isStart) {
+                        eEl.value = String(sVal);
+                    } else {
+                        sEl.value = String(eVal);
+                    }
+                }
+            }
+            updateDualSliderUI(rangeType, maxVal, unit);
+            updateLiveSelectionPreview();
+            if (state.currentMode === 'cold_custom') {
+                generateColdKline();
+            }
+        }
+
+        function updateAllDualSliders() {
+            Object.keys(DUAL_RANGE_CONFIGS).forEach(key => {
+                const cfg = DUAL_RANGE_CONFIGS[key];
+                updateDualSliderUI(key, cfg.max, cfg.unit);
+            });
+        }
+
+        function initAllDualSliders() {
+            updateAllDualSliders();
+        }
+
         function setQuickRange(rangeType, start, end) {
             const cb = document.getElementById(`coldOption_${rangeType}`);
             if (cb) cb.checked = true;
@@ -3377,6 +4263,12 @@ function copyRecommendations() {
             if (sEl) sEl.value = String(start);
             const eEl = document.getElementById(`coldOption_${rangeType}_end`);
             if (eEl) eEl.value = String(end);
+            const cfg = DUAL_RANGE_CONFIGS[rangeType] || { max: 49, unit: '码' };
+            updateDualSliderUI(rangeType, cfg.max, cfg.unit);
+            updateLiveSelectionPreview();
+            if (state.currentMode === 'cold_custom') {
+                generateColdKline();
+            }
             showNotification(`已设置区间: 第${start}至第${end}位`);
         }
 
@@ -3521,7 +4413,7 @@ function copyRecommendations() {
                 const inp = document.getElementById('coldOption_inputNumbers');
                 if (inp) inp.value = config.inputNumbers;
             }
-            
+            updateAllDualSliders();
             generateColdKline();
             showNotification(`已载入方案: ${name}`);
         }
