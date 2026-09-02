@@ -2407,6 +2407,7 @@
             border: 1px solid rgba(255, 255, 255, 0.04);
             transition: all 0.15s ease;
             min-width: 0;
+            overflow: hidden;
         }
         .cold-factor-item:hover {
             background: rgba(0, 212, 255, 0.04);
@@ -2415,6 +2416,9 @@
         .cold-factor-item input[type="checkbox"] {
             flex-shrink: 0;
             margin: 0;
+            width: 14px;
+            height: 14px;
+            min-width: 14px;
         }
         .cold-factor-item label {
             flex: 1 1 auto;
@@ -2424,14 +2428,18 @@
             user-select: none;
             font-size: 11px;
             line-height: 1.2;
+            overflow: visible;
         }
         .cold-factor-item select {
             font-size: 10px;
-            padding: 1px 2px;
+            padding: 0 2px;
             height: 20px;
-            min-width: 28px;
+            width: 32px !important;
+            min-width: 32px !important;
+            max-width: 32px !important;
             border-radius: 3px;
-            flex-shrink: 0;
+            flex: 0 0 32px !important;
+            text-align: center;
         }
         .cold-factor-item .unit {
             font-size: 10px;
@@ -2467,8 +2475,12 @@
             font-size: 9.5px;
             padding: 0 2px;
             height: 19px;
-            min-width: 32px;
+            width: 34px !important;
+            min-width: 34px !important;
+            max-width: 34px !important;
+            flex: 0 0 34px !important;
             border-radius: 3px;
+            text-align: center;
         }
         .cold-range-top .range-sep {
             font-size: 10px;
