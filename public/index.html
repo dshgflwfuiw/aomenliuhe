@@ -322,8 +322,6 @@
                 </div>
             </div>
 
-            <div id="coldSelectionSummary" class="cold-summary-badge" style="margin-top: 6px;">请勾选或输入选项组合号码</div>
-
             <!-- 模块一：遗漏选号因子库 -->
             <div class="cold-subcard">
                 <div class="cold-subcard-header">
@@ -334,22 +332,6 @@
                     </div>
                 </div>
                 <div class="cold-factors-grid">
-                    <div class="cold-factor-item">
-                        <input type="checkbox" id="coldOption_numbers">
-                        <label for="coldOption_numbers">遗漏最多</label>
-                        <select id="coldOption_numbers_count">
-                            <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10" selected>10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option><option value="24">24</option><option value="25">25</option><option value="26">26</option><option value="27">27</option><option value="28">28</option><option value="29">29</option><option value="30">30</option><option value="31">31</option><option value="32">32</option><option value="33">33</option><option value="34">34</option><option value="35">35</option>
-                        </select>
-                        <span class="unit">号</span>
-                    </div>
-                    <div class="cold-factor-item">
-                        <input type="checkbox" id="coldOption_zodiacs">
-                        <label for="coldOption_zodiacs">遗漏最多</label>
-                        <select id="coldOption_zodiacs_count">
-                            <option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option>
-                        </select>
-                        <span class="unit">肖</span>
-                    </div>
                     <div class="cold-factor-item">
                         <input type="checkbox" id="coldOption_wave">
                         <label for="coldOption_wave" title="统计最近遗漏最多的波色">最多波色</label>
@@ -410,28 +392,45 @@
                         <div class="dual-slider-wrap">
                             <div class="dual-slider-track-bg"></div>
                             <div class="dual-slider-track-active" id="track_omissionRange"></div>
+                            <div class="slider-coord-pill" id="coordPill_omissionRange_start">1</div>
+                            <div class="slider-coord-pill" id="coordPill_omissionRange_end">10</div>
                             <input type="range" id="coldOption_omissionRange_start" min="1" max="49" value="1" step="1" class="range-slider-input range-slider-min" oninput="onDualSliderChange('omissionRange', 49, '码', true)">
                             <input type="range" id="coldOption_omissionRange_end" min="1" max="49" value="10" step="1" class="range-slider-input range-slider-max" oninput="onDualSliderChange('omissionRange', 49, '码', false)">
+                        </div>
+                        <div class="dual-slider-scale">
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0);">1</span>
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.1875);">10</span>
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.3958);">20</span>
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.6042);">30</span>
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.8125);">40</span>
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 1);">49</span>
                         </div>
                         <div class="cold-range-bottom-row">
                             <div class="range-steppers">
                                 <div class="stepper-unit">
                                     <span class="stepper-lbl">起</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('omissionRange', 'start', -1)" title="起点 -1">−</button>
+                                    <span class="stepper-val" id="stepperVal_omissionRange_start">1</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('omissionRange', 'start', 1)" title="起点 +1">+</button>
                                 </div>
                                 <div class="stepper-unit">
                                     <span class="stepper-lbl">止</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('omissionRange', 'end', -1)" title="终点 -1">−</button>
+                                    <span class="stepper-val" id="stepperVal_omissionRange_end">10</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('omissionRange', 'end', 1)" title="终点 +1">+</button>
                                 </div>
                             </div>
                             <div class="quick-range-chips">
-                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('omissionRange', 1, 10)">1-10冷</button>
-                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('omissionRange', 1, 15)">1-15</button>
-                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('omissionRange', 10, 25)">10-25</button>
-                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('omissionRange', 25, 49)">25-49热</button>
+                                <button type="button" class="quick-chip-btn add-segment-btn" id="btn_addSegment_omissionRange" onclick="addRangeSegment('omissionRange')" title="将当前滑块设定的区间添加为多段选区之一">➕存为选区</button>
                             </div>
+                        </div>
+                        <!-- 遗漏码多段选区标签容器 -->
+                        <div id="segments_container_omissionRange" class="multi-segments-wrap" style="display:none;">
+                            <div class="multi-segments-header">
+                                <span class="multi-segments-title">已组合多段选区:</span>
+                                <button type="button" class="multi-segments-clear" onclick="clearRangeSegments('omissionRange')">清空所有分段</button>
+                            </div>
+                            <div id="chips_omissionRange" class="multi-segments-chips"></div>
                         </div>
                     </div>
 
@@ -446,28 +445,44 @@
                         <div class="dual-slider-wrap">
                             <div class="dual-slider-track-bg"></div>
                             <div class="dual-slider-track-active" id="track_omissionZodiacRange"></div>
+                            <div class="slider-coord-pill" id="coordPill_omissionZodiacRange_start">1</div>
+                            <div class="slider-coord-pill" id="coordPill_omissionZodiacRange_end">3</div>
                             <input type="range" id="coldOption_omissionZodiacRange_start" min="1" max="12" value="1" step="1" class="range-slider-input range-slider-min" oninput="onDualSliderChange('omissionZodiacRange', 12, '肖', true)">
                             <input type="range" id="coldOption_omissionZodiacRange_end" min="1" max="12" value="3" step="1" class="range-slider-input range-slider-max" oninput="onDualSliderChange('omissionZodiacRange', 12, '肖', false)">
+                        </div>
+                        <div class="dual-slider-scale">
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0);">1</span>
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.1818);">3</span>
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.4545);">6</span>
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.7273);">9</span>
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 1);">12</span>
                         </div>
                         <div class="cold-range-bottom-row">
                             <div class="range-steppers">
                                 <div class="stepper-unit">
                                     <span class="stepper-lbl">起</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('omissionZodiacRange', 'start', -1)" title="起点 -1">−</button>
+                                    <span class="stepper-val" id="stepperVal_omissionZodiacRange_start">1</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('omissionZodiacRange', 'start', 1)" title="起点 +1">+</button>
                                 </div>
                                 <div class="stepper-unit">
                                     <span class="stepper-lbl">止</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('omissionZodiacRange', 'end', -1)" title="终点 -1">−</button>
+                                    <span class="stepper-val" id="stepperVal_omissionZodiacRange_end">3</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('omissionZodiacRange', 'end', 1)" title="终点 +1">+</button>
                                 </div>
                             </div>
                             <div class="quick-range-chips">
-                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('omissionZodiacRange', 1, 3)">1-3冷肖</button>
-                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('omissionZodiacRange', 1, 6)">1-6半区</button>
-                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('omissionZodiacRange', 4, 9)">4-9温肖</button>
-                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('omissionZodiacRange', 7, 12)">7-12热肖</button>
+                                <button type="button" class="quick-chip-btn add-segment-btn" id="btn_addSegment_omissionZodiacRange" onclick="addRangeSegment('omissionZodiacRange')" title="将当前滑块设定的区间添加为多段选区之一">➕存为选区</button>
                             </div>
+                        </div>
+                        <!-- 遗漏肖多段选区标签容器 -->
+                        <div id="segments_container_omissionZodiacRange" class="multi-segments-wrap" style="display:none;">
+                            <div class="multi-segments-header">
+                                <span class="multi-segments-title">已组合多段选区:</span>
+                                <button type="button" class="multi-segments-clear" onclick="clearRangeSegments('omissionZodiacRange')">清空所有分段</button>
+                            </div>
+                            <div id="chips_omissionZodiacRange" class="multi-segments-chips"></div>
                         </div>
                     </div>
                 </div>
@@ -483,71 +498,6 @@
                     </div>
                 </div>
                 <div class="cold-factors-grid">
-                    <div class="cold-factor-item">
-                        <input type="checkbox" id="coldOption_hotNumbers">
-                        <label for="coldOption_hotNumbers">平特最热</label>
-                        <select id="coldOption_hotNumbers_count">
-                            <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10" selected>10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option><option value="24">24</option><option value="25">25</option><option value="26">26</option><option value="27">27</option><option value="28">28</option><option value="29">29</option><option value="30">30</option><option value="31">31</option><option value="32">32</option><option value="33">33</option><option value="34">34</option><option value="35">35</option>
-                        </select>
-                        <span class="unit">号</span>
-                    </div>
-                    <div class="cold-factor-item">
-                        <input type="checkbox" id="coldOption_coldNumbers">
-                        <label for="coldOption_coldNumbers">平特最冷</label>
-                        <select id="coldOption_coldNumbers_count">
-                            <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10" selected>10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option><option value="24">24</option><option value="25">25</option><option value="26">26</option><option value="27">27</option><option value="28">28</option><option value="29">29</option><option value="30">30</option><option value="31">31</option><option value="32">32</option><option value="33">33</option><option value="34">34</option><option value="35">35</option>
-                        </select>
-                        <span class="unit">号</span>
-                    </div>
-                    <div class="cold-factor-item">
-                        <input type="checkbox" id="coldOption_allHotNumbers">
-                        <label for="coldOption_allHotNumbers">特码最热</label>
-                        <select id="coldOption_allHotNumbers_count">
-                            <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10" selected>10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option><option value="24">24</option><option value="25">25</option><option value="26">26</option><option value="27">27</option><option value="28">28</option><option value="29">29</option><option value="30">30</option><option value="31">31</option><option value="32">32</option><option value="33">33</option><option value="34">34</option><option value="35">35</option>
-                        </select>
-                        <span class="unit">号</span>
-                    </div>
-                    <div class="cold-factor-item">
-                        <input type="checkbox" id="coldOption_allColdNumbers">
-                        <label for="coldOption_allColdNumbers">特码最冷</label>
-                        <select id="coldOption_allColdNumbers_count">
-                            <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10" selected>10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option><option value="24">24</option><option value="25">25</option><option value="26">26</option><option value="27">27</option><option value="28">28</option><option value="29">29</option><option value="30">30</option><option value="31">31</option><option value="32">32</option><option value="33">33</option><option value="34">34</option><option value="35">35</option>
-                        </select>
-                        <span class="unit">号</span>
-                    </div>
-                    <div class="cold-factor-item">
-                        <input type="checkbox" id="coldOption_hotZodiacs">
-                        <label for="coldOption_hotZodiacs">平特最热</label>
-                        <select id="coldOption_hotZodiacs_count">
-                            <option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option>
-                        </select>
-                        <span class="unit">肖</span>
-                    </div>
-                    <div class="cold-factor-item">
-                        <input type="checkbox" id="coldOption_coldZodiacs">
-                        <label for="coldOption_coldZodiacs">平特最冷</label>
-                        <select id="coldOption_coldZodiacs_count">
-                            <option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option>
-                        </select>
-                        <span class="unit">肖</span>
-                    </div>
-                    <div class="cold-factor-item">
-                        <input type="checkbox" id="coldOption_allHotZodiacs">
-                        <label for="coldOption_allHotZodiacs">特码最热</label>
-                        <select id="coldOption_allHotZodiacs_count">
-                            <option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option>
-                        </select>
-                        <span class="unit">肖</span>
-                    </div>
-                    <div class="cold-factor-item">
-                        <input type="checkbox" id="coldOption_allColdZodiacs">
-                        <label for="coldOption_allColdZodiacs">特码最冷</label>
-                        <select id="coldOption_allColdZodiacs_count">
-                            <option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option>
-                        </select>
-                        <span class="unit">肖</span>
-                    </div>
-
                     <div class="cold-range-box" id="box_hotNumberRange">
                         <div class="cold-range-top">
                             <div class="cold-range-title-wrap">
@@ -559,28 +509,45 @@
                         <div class="dual-slider-wrap">
                             <div class="dual-slider-track-bg"></div>
                             <div class="dual-slider-track-active" id="track_hotNumberRange"></div>
+                            <div class="slider-coord-pill" id="coordPill_hotNumberRange_start">1</div>
+                            <div class="slider-coord-pill" id="coordPill_hotNumberRange_end">10</div>
                             <input type="range" id="coldOption_hotNumberRange_start" min="1" max="49" value="1" step="1" class="range-slider-input range-slider-min" oninput="onDualSliderChange('hotNumberRange', 49, '码', true)">
                             <input type="range" id="coldOption_hotNumberRange_end" min="1" max="49" value="10" step="1" class="range-slider-input range-slider-max" oninput="onDualSliderChange('hotNumberRange', 49, '码', false)">
+                        </div>
+                        <div class="dual-slider-scale">
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0);">1</span>
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.1875);">10</span>
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.3958);">20</span>
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.6042);">30</span>
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.8125);">40</span>
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 1);">49</span>
                         </div>
                         <div class="cold-range-bottom-row">
                             <div class="range-steppers">
                                 <div class="stepper-unit">
                                     <span class="stepper-lbl">起</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('hotNumberRange', 'start', -1)" title="起点 -1">−</button>
+                                    <span class="stepper-val" id="stepperVal_hotNumberRange_start">1</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('hotNumberRange', 'start', 1)" title="起点 +1">+</button>
                                 </div>
                                 <div class="stepper-unit">
                                     <span class="stepper-lbl">止</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('hotNumberRange', 'end', -1)" title="终点 -1">−</button>
+                                    <span class="stepper-val" id="stepperVal_hotNumberRange_end">10</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('hotNumberRange', 'end', 1)" title="终点 +1">+</button>
                                 </div>
                             </div>
                             <div class="quick-range-chips">
-                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('hotNumberRange', 1, 10)">1-10热</button>
-                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('hotNumberRange', 1, 15)">1-15</button>
-                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('hotNumberRange', 1, 25)">1-25半区</button>
-                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('hotNumberRange', 15, 35)">15-35温</button>
+                                <button type="button" class="quick-chip-btn add-segment-btn" id="btn_addSegment_hotNumberRange" onclick="addRangeSegment('hotNumberRange')" title="将当前滑块设定的区间添加为多段选区之一">➕存为选区</button>
                             </div>
+                        </div>
+                        <!-- 平特热码多段选区标签容器 -->
+                        <div id="segments_container_hotNumberRange" class="multi-segments-wrap" style="display:none;">
+                            <div class="multi-segments-header">
+                                <span class="multi-segments-title">已组合多段选区:</span>
+                                <button type="button" class="multi-segments-clear" onclick="clearRangeSegments('hotNumberRange')">清空所有分段</button>
+                            </div>
+                            <div id="chips_hotNumberRange" class="multi-segments-chips"></div>
                         </div>
                     </div>
 
@@ -595,28 +562,45 @@
                         <div class="dual-slider-wrap">
                             <div class="dual-slider-track-bg"></div>
                             <div class="dual-slider-track-active" id="track_allHotNumberRange"></div>
+                            <div class="slider-coord-pill" id="coordPill_allHotNumberRange_start">1</div>
+                            <div class="slider-coord-pill" id="coordPill_allHotNumberRange_end">10</div>
                             <input type="range" id="coldOption_allHotNumberRange_start" min="1" max="49" value="1" step="1" class="range-slider-input range-slider-min" oninput="onDualSliderChange('allHotNumberRange', 49, '码', true)">
                             <input type="range" id="coldOption_allHotNumberRange_end" min="1" max="49" value="10" step="1" class="range-slider-input range-slider-max" oninput="onDualSliderChange('allHotNumberRange', 49, '码', false)">
+                        </div>
+                        <div class="dual-slider-scale">
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0);">1</span>
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.1875);">10</span>
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.3958);">20</span>
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.6042);">30</span>
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.8125);">40</span>
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 1);">49</span>
                         </div>
                         <div class="cold-range-bottom-row">
                             <div class="range-steppers">
                                 <div class="stepper-unit">
                                     <span class="stepper-lbl">起</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('allHotNumberRange', 'start', -1)" title="起点 -1">−</button>
+                                    <span class="stepper-val" id="stepperVal_allHotNumberRange_start">1</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('allHotNumberRange', 'start', 1)" title="起点 +1">+</button>
                                 </div>
                                 <div class="stepper-unit">
                                     <span class="stepper-lbl">止</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('allHotNumberRange', 'end', -1)" title="终点 -1">−</button>
+                                    <span class="stepper-val" id="stepperVal_allHotNumberRange_end">10</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('allHotNumberRange', 'end', 1)" title="终点 +1">+</button>
                                 </div>
                             </div>
                             <div class="quick-range-chips">
-                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('allHotNumberRange', 1, 10)">1-10特热</button>
-                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('allHotNumberRange', 1, 15)">1-15</button>
-                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('allHotNumberRange', 1, 20)">1-20</button>
-                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('allHotNumberRange', 25, 49)">25-49冷</button>
+                                <button type="button" class="quick-chip-btn add-segment-btn" id="btn_addSegment_allHotNumberRange" onclick="addRangeSegment('allHotNumberRange')" title="将当前滑块设定的区间添加为多段选区之一">➕存为选区</button>
                             </div>
+                        </div>
+                        <!-- 特码热码多段选区标签容器 -->
+                        <div id="segments_container_allHotNumberRange" class="multi-segments-wrap" style="display:none;">
+                            <div class="multi-segments-header">
+                                <span class="multi-segments-title">已组合多段选区:</span>
+                                <button type="button" class="multi-segments-clear" onclick="clearRangeSegments('allHotNumberRange')">清空所有分段</button>
+                            </div>
+                            <div id="chips_allHotNumberRange" class="multi-segments-chips"></div>
                         </div>
                     </div>
 
@@ -631,28 +615,44 @@
                         <div class="dual-slider-wrap">
                             <div class="dual-slider-track-bg"></div>
                             <div class="dual-slider-track-active" id="track_hotZodiacRange"></div>
+                            <div class="slider-coord-pill" id="coordPill_hotZodiacRange_start">1</div>
+                            <div class="slider-coord-pill" id="coordPill_hotZodiacRange_end">3</div>
                             <input type="range" id="coldOption_hotZodiacRange_start" min="1" max="12" value="1" step="1" class="range-slider-input range-slider-min" oninput="onDualSliderChange('hotZodiacRange', 12, '肖', true)">
                             <input type="range" id="coldOption_hotZodiacRange_end" min="1" max="12" value="3" step="1" class="range-slider-input range-slider-max" oninput="onDualSliderChange('hotZodiacRange', 12, '肖', false)">
+                        </div>
+                        <div class="dual-slider-scale">
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0);">1</span>
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.1818);">3</span>
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.4545);">6</span>
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.7273);">9</span>
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 1);">12</span>
                         </div>
                         <div class="cold-range-bottom-row">
                             <div class="range-steppers">
                                 <div class="stepper-unit">
                                     <span class="stepper-lbl">起</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('hotZodiacRange', 'start', -1)" title="起点 -1">−</button>
+                                    <span class="stepper-val" id="stepperVal_hotZodiacRange_start">1</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('hotZodiacRange', 'start', 1)" title="起点 +1">+</button>
                                 </div>
                                 <div class="stepper-unit">
                                     <span class="stepper-lbl">止</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('hotZodiacRange', 'end', -1)" title="终点 -1">−</button>
+                                    <span class="stepper-val" id="stepperVal_hotZodiacRange_end">3</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('hotZodiacRange', 'end', 1)" title="终点 +1">+</button>
                                 </div>
                             </div>
                             <div class="quick-range-chips">
-                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('hotZodiacRange', 1, 3)">1-3热肖</button>
-                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('hotZodiacRange', 1, 6)">1-6半区</button>
-                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('hotZodiacRange', 4, 8)">4-8中位</button>
-                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('hotZodiacRange', 7, 12)">7-12冷区</button>
+                                <button type="button" class="quick-chip-btn add-segment-btn" id="btn_addSegment_hotZodiacRange" onclick="addRangeSegment('hotZodiacRange')" title="将当前滑块设定的区间添加为多段选区之一">➕存为选区</button>
                             </div>
+                        </div>
+                        <!-- 平特热肖多段选区标签容器 -->
+                        <div id="segments_container_hotZodiacRange" class="multi-segments-wrap" style="display:none;">
+                            <div class="multi-segments-header">
+                                <span class="multi-segments-title">已组合多段选区:</span>
+                                <button type="button" class="multi-segments-clear" onclick="clearRangeSegments('hotZodiacRange')">清空所有分段</button>
+                            </div>
+                            <div id="chips_hotZodiacRange" class="multi-segments-chips"></div>
                         </div>
                     </div>
 
@@ -667,28 +667,44 @@
                         <div class="dual-slider-wrap">
                             <div class="dual-slider-track-bg"></div>
                             <div class="dual-slider-track-active" id="track_allHotZodiacRange"></div>
+                            <div class="slider-coord-pill" id="coordPill_allHotZodiacRange_start">1</div>
+                            <div class="slider-coord-pill" id="coordPill_allHotZodiacRange_end">3</div>
                             <input type="range" id="coldOption_allHotZodiacRange_start" min="1" max="12" value="1" step="1" class="range-slider-input range-slider-min" oninput="onDualSliderChange('allHotZodiacRange', 12, '肖', true)">
                             <input type="range" id="coldOption_allHotZodiacRange_end" min="1" max="12" value="3" step="1" class="range-slider-input range-slider-max" oninput="onDualSliderChange('allHotZodiacRange', 12, '肖', false)">
+                        </div>
+                        <div class="dual-slider-scale">
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0);">1</span>
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.1818);">3</span>
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.4545);">6</span>
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.7273);">9</span>
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 1);">12</span>
                         </div>
                         <div class="cold-range-bottom-row">
                             <div class="range-steppers">
                                 <div class="stepper-unit">
                                     <span class="stepper-lbl">起</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('allHotZodiacRange', 'start', -1)" title="起点 -1">−</button>
+                                    <span class="stepper-val" id="stepperVal_allHotZodiacRange_start">1</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('allHotZodiacRange', 'start', 1)" title="起点 +1">+</button>
                                 </div>
                                 <div class="stepper-unit">
                                     <span class="stepper-lbl">止</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('allHotZodiacRange', 'end', -1)" title="终点 -1">−</button>
+                                    <span class="stepper-val" id="stepperVal_allHotZodiacRange_end">3</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('allHotZodiacRange', 'end', 1)" title="终点 +1">+</button>
                                 </div>
                             </div>
                             <div class="quick-range-chips">
-                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('allHotZodiacRange', 1, 3)">1-3特热</button>
-                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('allHotZodiacRange', 1, 6)">1-6半区</button>
-                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('allHotZodiacRange', 4, 8)">4-8中位</button>
-                                <button type="button" class="quick-chip-btn" onclick="setQuickRange('allHotZodiacRange', 7, 12)">7-12冷肖</button>
+                                <button type="button" class="quick-chip-btn add-segment-btn" id="btn_addSegment_allHotZodiacRange" onclick="addRangeSegment('allHotZodiacRange')" title="将当前滑块设定的区间添加为多段选区之一">➕存为选区</button>
                             </div>
+                        </div>
+                        <!-- 特码热肖多段选区标签容器 -->
+                        <div id="segments_container_allHotZodiacRange" class="multi-segments-wrap" style="display:none;">
+                            <div class="multi-segments-header">
+                                <span class="multi-segments-title">已组合多段选区:</span>
+                                <button type="button" class="multi-segments-clear" onclick="clearRangeSegments('allHotZodiacRange')">清空所有分段</button>
+                            </div>
+                            <div id="chips_allHotZodiacRange" class="multi-segments-chips"></div>
                         </div>
                     </div>
                 </div>

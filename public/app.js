@@ -32,6 +32,15 @@
             pageState: { pageSize: 100, currPage: 0, totalPage: 0 },
             viewState: { scale: 1, x: 0, y: 0, offsetX: 50 },
             coldSelection: null,
+            omissionRangeSegments: [],
+            rangeSegments: {
+                omissionRange: [],
+                omissionZodiacRange: [],
+                hotNumberRange: [],
+                allHotNumberRange: [],
+                hotZodiacRange: [],
+                allHotZodiacRange: []
+            },
             followPosition: 2,
             followMode: 'zodiac',
             followZodiac: '马',
@@ -3316,35 +3325,42 @@
             if (types.includes('wuxing')) sets.wuxing = getColdSegment(omissionSourceData, counts.wuxing || 1);
             if (types.includes('halfHead')) sets.halfHead = getColdHalfHead(omissionSourceData, counts.halfHead || 1);
             if (types.includes('region')) sets.region = getColdRegion(omissionSourceData, counts.region || 1);
+            const resolveRangeItems = (rangeKey, getter, source) => {
+                const segs = counts[`${rangeKey}Segments`];
+                if (segs && segs.length > 0) {
+                    const itemSet = new Set();
+                    segs.forEach(seg => {
+                        const s = seg.start !== undefined ? seg.start : 1;
+                        const defaultEnd = (DUAL_RANGE_CONFIGS[rangeKey]?.max) || (rangeKey.includes('Zodiac') ? 3 : 10);
+                        const e = seg.end !== undefined ? seg.end : defaultEnd;
+                        getter(source, s, e).forEach(item => itemSet.add(item));
+                    });
+                    return Array.from(itemSet);
+                } else {
+                    const s = counts[`${rangeKey}Start`] !== undefined ? counts[`${rangeKey}Start`] : 1;
+                    const defaultEnd = (DUAL_RANGE_CONFIGS[rangeKey]?.max) || (rangeKey.includes('Zodiac') ? 3 : 10);
+                    const e = counts[`${rangeKey}End`] !== undefined ? counts[`${rangeKey}End`] : defaultEnd;
+                    return getter(source, s, e);
+                }
+            };
+
             if (types.includes('omissionRange')) {
-                const s = counts.omissionRangeStart !== undefined ? counts.omissionRangeStart : 1;
-                const e = counts.omissionRangeEnd !== undefined ? counts.omissionRangeEnd : 10;
-                sets.omissionRange = getColdOmissionRangeNumbers(omissionSourceData, s, e);
+                sets.omissionRange = resolveRangeItems('omissionRange', getColdOmissionRangeNumbers, omissionSourceData);
             }
             if (types.includes('omissionZodiacRange')) {
-                const s = counts.omissionZodiacRangeStart !== undefined ? counts.omissionZodiacRangeStart : 1;
-                const e = counts.omissionZodiacRangeEnd !== undefined ? counts.omissionZodiacRangeEnd : 3;
-                sets.omissionZodiacRange = getColdOmissionRangeZodiacs(omissionSourceData, s, e);
+                sets.omissionZodiacRange = resolveRangeItems('omissionZodiacRange', getColdOmissionRangeZodiacs, omissionSourceData);
             }
             if (types.includes('hotNumberRange')) {
-                const s = counts.hotNumberRangeStart !== undefined ? counts.hotNumberRangeStart : 1;
-                const e = counts.hotNumberRangeEnd !== undefined ? counts.hotNumberRangeEnd : 10;
-                sets.hotNumberRange = getHotNumberRange(hotColdSourceData, s, e);
+                sets.hotNumberRange = resolveRangeItems('hotNumberRange', getHotNumberRange, hotColdSourceData);
             }
             if (types.includes('allHotNumberRange')) {
-                const s = counts.allHotNumberRangeStart !== undefined ? counts.allHotNumberRangeStart : 1;
-                const e = counts.allHotNumberRangeEnd !== undefined ? counts.allHotNumberRangeEnd : 10;
-                sets.allHotNumberRange = getAllHotNumberRange(hotColdSourceData, s, e);
+                sets.allHotNumberRange = resolveRangeItems('allHotNumberRange', getAllHotNumberRange, hotColdSourceData);
             }
             if (types.includes('hotZodiacRange')) {
-                const s = counts.hotZodiacRangeStart !== undefined ? counts.hotZodiacRangeStart : 1;
-                const e = counts.hotZodiacRangeEnd !== undefined ? counts.hotZodiacRangeEnd : 3;
-                sets.hotZodiacRange = getHotZodiacRange(hotColdSourceData, s, e);
+                sets.hotZodiacRange = resolveRangeItems('hotZodiacRange', getHotZodiacRange, hotColdSourceData);
             }
             if (types.includes('allHotZodiacRange')) {
-                const s = counts.allHotZodiacRangeStart !== undefined ? counts.allHotZodiacRangeStart : 1;
-                const e = counts.allHotZodiacRangeEnd !== undefined ? counts.allHotZodiacRangeEnd : 3;
-                sets.allHotZodiacRange = getAllHotZodiacRange(hotColdSourceData, s, e);
+                sets.allHotZodiacRange = resolveRangeItems('allHotZodiacRange', getAllHotZodiacRange, hotColdSourceData);
             }
             if (types.includes('inputNumbers') && counts.inputTerms) {
                 if (counts.inputTerms.omissionRanges) {
@@ -3390,7 +3406,7 @@
         function updateColdSummary() {
             const summary = document.getElementById('coldSelectionSummary');
             if (!state.coldSelection) {
-                summary.textContent = '请选择特码综合K线选项后点击生成';
+                if (summary) summary.textContent = '请选择特码综合K线选项后点击生成';
                 return;
             }
 
@@ -3457,12 +3473,14 @@
                 const nums = state.coldSelection.setNumbers || [];
                 setLine = `<div style="margin-top:4px;color:var(--warn);">扣选包含号码（${nums.length}个）: ${nums.map(n => parseInt(n, 10)).join(' ')}</div>`;
             }
-            summary.innerHTML = (state.coldSelection && state.coldSelection.setKline)
-                ? (setLine || '已生成自由K线')
-                : (sortedNumbers.length
-                    ? `<div>扣选包含号码（共${sortedNumbers.length}个）: ${sortedNumbers.join(' ')}</div>`
-                    : '已生成自由K线')
-                  + (inputDesc.length ? `<div style="margin-top:4px;">输入条件: ${inputDesc.join(' ')}</div>` : '');
+            if (summary) {
+                summary.innerHTML = (state.coldSelection && state.coldSelection.setKline)
+                    ? (setLine || '已生成自由K线')
+                    : (sortedNumbers.length
+                        ? `<div>扣选包含号码（共${sortedNumbers.length}个）: ${sortedNumbers.join(' ')}</div>`
+                        : '已生成自由K线')
+                      + (inputDesc.length ? `<div style="margin-top:4px;">输入条件: ${inputDesc.join(' ')}</div>` : '');
+            }
 
             // Show inline selection results next to each checked option (skip zodiac types - self-explanatory)
             const skipTypes = ['zodiacs', 'hotZodiacs', 'coldZodiacs', 'allHotZodiacs', 'allColdZodiacs', 'hotZodiacRange', 'allHotZodiacRange', 'selectZodiacs'];
@@ -3663,16 +3681,22 @@
                 region: parseInt(document.getElementById('coldOption_region_count')?.value || '1'),
                 omissionRangeStart: parseInt(document.getElementById('coldOption_omissionRange_start')?.value || '1', 10),
                 omissionRangeEnd: parseInt(document.getElementById('coldOption_omissionRange_end')?.value || '10', 10),
+                omissionRangeSegments: (getRangeSegments('omissionRange').length > 0) ? getRangeSegments('omissionRange').map(s => ({ ...s })) : null,
                 omissionZodiacRangeStart: parseInt(document.getElementById('coldOption_omissionZodiacRange_start')?.value || '1', 10),
                 omissionZodiacRangeEnd: parseInt(document.getElementById('coldOption_omissionZodiacRange_end')?.value || '3', 10),
+                omissionZodiacRangeSegments: (getRangeSegments('omissionZodiacRange').length > 0) ? getRangeSegments('omissionZodiacRange').map(s => ({ ...s })) : null,
                 hotNumberRangeStart: parseInt(document.getElementById('coldOption_hotNumberRange_start')?.value || '1', 10),
                 hotNumberRangeEnd: parseInt(document.getElementById('coldOption_hotNumberRange_end')?.value || '10', 10),
+                hotNumberRangeSegments: (getRangeSegments('hotNumberRange').length > 0) ? getRangeSegments('hotNumberRange').map(s => ({ ...s })) : null,
                 allHotNumberRangeStart: parseInt(document.getElementById('coldOption_allHotNumberRange_start')?.value || '1', 10),
                 allHotNumberRangeEnd: parseInt(document.getElementById('coldOption_allHotNumberRange_end')?.value || '10', 10),
+                allHotNumberRangeSegments: (getRangeSegments('allHotNumberRange').length > 0) ? getRangeSegments('allHotNumberRange').map(s => ({ ...s })) : null,
                 hotZodiacRangeStart: parseInt(document.getElementById('coldOption_hotZodiacRange_start')?.value || '1', 10),
                 hotZodiacRangeEnd: parseInt(document.getElementById('coldOption_hotZodiacRange_end')?.value || '3', 10),
+                hotZodiacRangeSegments: (getRangeSegments('hotZodiacRange').length > 0) ? getRangeSegments('hotZodiacRange').map(s => ({ ...s })) : null,
                 allHotZodiacRangeStart: parseInt(document.getElementById('coldOption_allHotZodiacRange_start')?.value || '1', 10),
                 allHotZodiacRangeEnd: parseInt(document.getElementById('coldOption_allHotZodiacRange_end')?.value || '3', 10),
+                allHotZodiacRangeSegments: (getRangeSegments('allHotZodiacRange').length > 0) ? getRangeSegments('allHotZodiacRange').map(s => ({ ...s })) : null,
                 inputTerms
             };
 
@@ -4144,7 +4168,13 @@
             });
             document.getElementById('coldOption_inputNumbers').value = '';
             state.coldSelection = null;
-            document.getElementById('coldSelectionSummary').textContent = '请选择自由K线选项后点击生成';
+            state.omissionRangeSegments = [];
+            if (state.rangeSegments) {
+                Object.keys(state.rangeSegments).forEach(k => { state.rangeSegments[k] = []; });
+            }
+            renderAllRangeSegments();
+            const summaryEl = document.getElementById('coldSelectionSummary');
+            if (summaryEl) summaryEl.textContent = '请选择自由K线选项后点击生成';
             updateAllDualSliders();
         }
         function toggleColdSection(section, selectAll) {
@@ -4168,6 +4198,17 @@
                     const el = document.getElementById(`coldOption_${type}`);
                     if (el) el.checked = selectAll;
                 });
+                if (!selectAll) {
+                    if (section === 'omission') {
+                        clearRangeSegments('omissionRange');
+                        clearRangeSegments('omissionZodiacRange');
+                    } else if (section === 'hotcold') {
+                        clearRangeSegments('hotNumberRange');
+                        clearRangeSegments('allHotNumberRange');
+                        clearRangeSegments('hotZodiacRange');
+                        clearRangeSegments('allHotZodiacRange');
+                    }
+                }
             }
         }
 
@@ -4229,6 +4270,11 @@
             const eEl = document.getElementById(`coldOption_${rangeType}_end`);
             const track = document.getElementById(`track_${rangeType}`);
             const badge = document.getElementById(`badge_${rangeType}`);
+            const pillStart = document.getElementById(`coordPill_${rangeType}_start`);
+            const pillEnd = document.getElementById(`coordPill_${rangeType}_end`);
+            const sValEl = document.getElementById(`stepperVal_${rangeType}_start`);
+            const eValEl = document.getElementById(`stepperVal_${rangeType}_end`);
+
             if (!sEl || !eEl) return;
             let sVal = parseInt(sEl.value, 10);
             let eVal = parseInt(eEl.value, 10);
@@ -4239,15 +4285,57 @@
                 sVal = eVal;
                 eVal = temp;
             }
-            const minPercent = max > 1 ? ((sVal - 1) / (max - 1)) * 100 : 0;
-            const maxPercent = max > 1 ? ((eVal - 1) / (max - 1)) * 100 : 100;
+            const minRatio = max > 1 ? (sVal - 1) / (max - 1) : 0;
+            const maxRatio = max > 1 ? (eVal - 1) / (max - 1) : 1;
+            const minPercent = minRatio * 100;
+            const maxPercent = maxRatio * 100;
+
             if (track) {
                 track.style.left = `${minPercent}%`;
                 track.style.width = `${Math.max(0, maxPercent - minPercent)}%`;
             }
+
+            if (sValEl) sValEl.textContent = String(sVal);
+            if (eValEl) eValEl.textContent = String(eVal);
+
+            if (pillStart) {
+                if (sVal === eVal) {
+                    pillStart.style.left = `calc(9px + (100% - 18px) * ${minRatio})`;
+                    pillStart.textContent = String(sVal);
+                    pillStart.style.display = 'block';
+                    if (pillEnd) pillEnd.style.display = 'none';
+                } else if (Math.abs(maxPercent - minPercent) < 7) {
+                    const midRatio = (minRatio + maxRatio) / 2;
+                    pillStart.style.left = `calc(9px + (100% - 18px) * ${midRatio})`;
+                    pillStart.textContent = `${sVal}~${eVal}`;
+                    pillStart.style.display = 'block';
+                    if (pillEnd) pillEnd.style.display = 'none';
+                } else {
+                    pillStart.style.left = `calc(9px + (100% - 18px) * ${minRatio})`;
+                    pillStart.textContent = String(sVal);
+                    pillStart.style.display = 'block';
+                    if (pillEnd) {
+                        pillEnd.style.left = `calc(9px + (100% - 18px) * ${maxRatio})`;
+                        pillEnd.textContent = String(eVal);
+                        pillEnd.style.display = 'block';
+                    }
+                }
+            }
+
             if (badge) {
                 const count = eVal - sVal + 1;
-                badge.textContent = `第 ${sVal} ~ ${eVal} 位 (共${count}${u})`;
+                const segs = getRangeSegments(rangeType);
+                if (segs && segs.length > 0) {
+                    const omissionSourceData = getSelectedColdSourceData();
+                    const hotColdSourceData = (typeof getSelectedHotColdSourceData === 'function') ? getSelectedHotColdSourceData() : omissionSourceData;
+                    const itemSet = new Set();
+                    segs.forEach(seg => {
+                        getItemsForRangeType(rangeType, seg.start, seg.end, omissionSourceData, hotColdSourceData).forEach(it => itemSet.add(it));
+                    });
+                    badge.textContent = `滑块:第${sVal}~${eVal}位 | 多段(${segs.length}段)共${itemSet.size}${u}`;
+                } else {
+                    badge.textContent = `第 ${sVal} ~ ${eVal} 位 (共${count}${u})`;
+                }
             }
         }
 
@@ -4285,6 +4373,7 @@
         }
 
         function initAllDualSliders() {
+            renderAllRangeSegments();
             updateAllDualSliders();
             Object.keys(DUAL_RANGE_CONFIGS).forEach(rangeType => {
                 const cfg = DUAL_RANGE_CONFIGS[rangeType];
@@ -4417,6 +4506,165 @@
             showNotification(`已设置区间: 第${start}至第${end}位`);
         }
 
+        const RANGE_TYPE_NAMES = {
+            omissionRange: '遗漏码',
+            omissionZodiacRange: '遗漏肖',
+            hotNumberRange: '平特热码',
+            allHotNumberRange: '特码热码',
+            hotZodiacRange: '平特热肖',
+            allHotZodiacRange: '特码热肖'
+        };
+
+        function getRangeSegments(rangeType) {
+            if (!state.rangeSegments) {
+                state.rangeSegments = {
+                    omissionRange: [],
+                    omissionZodiacRange: [],
+                    hotNumberRange: [],
+                    allHotNumberRange: [],
+                    hotZodiacRange: [],
+                    allHotZodiacRange: []
+                };
+            }
+            if (!state.rangeSegments[rangeType]) {
+                state.rangeSegments[rangeType] = [];
+            }
+            if (rangeType === 'omissionRange' && state.omissionRangeSegments && state.omissionRangeSegments.length > 0 && state.rangeSegments.omissionRange.length === 0) {
+                state.rangeSegments.omissionRange = state.omissionRangeSegments;
+            }
+            return state.rangeSegments[rangeType];
+        }
+
+        function getItemsForRangeType(rangeType, start, end, omissionSourceData, hotColdSourceData) {
+            const omSrc = omissionSourceData || getSelectedColdSourceData();
+            const hcSrc = hotColdSourceData || ((typeof getSelectedHotColdSourceData === 'function') ? getSelectedHotColdSourceData() : omSrc);
+            if (rangeType === 'omissionRange') {
+                return getColdOmissionRangeNumbers(omSrc, start, end);
+            } else if (rangeType === 'omissionZodiacRange') {
+                return getColdOmissionRangeZodiacs(omSrc, start, end);
+            } else if (rangeType === 'hotNumberRange') {
+                return getHotNumberRange(hcSrc, start, end);
+            } else if (rangeType === 'allHotNumberRange') {
+                return getAllHotNumberRange(hcSrc, start, end);
+            } else if (rangeType === 'hotZodiacRange') {
+                return getHotZodiacRange(hcSrc, start, end);
+            } else if (rangeType === 'allHotZodiacRange') {
+                return getAllHotZodiacRange(hcSrc, start, end);
+            }
+            return [];
+        }
+
+        function addRangeSegment(rangeType) {
+            const cb = document.getElementById(`coldOption_${rangeType}`);
+            if (cb && !cb.checked) cb.checked = true;
+            const sEl = document.getElementById(`coldOption_${rangeType}_start`);
+            const eEl = document.getElementById(`coldOption_${rangeType}_end`);
+            const cfg = DUAL_RANGE_CONFIGS[rangeType] || { max: 49, unit: '码' };
+            const u = cfg.unit;
+            const rName = RANGE_TYPE_NAMES[rangeType] || '区间';
+            if (!sEl || !eEl) return;
+            const s = Math.min(parseInt(sEl.value, 10) || 1, parseInt(eEl.value, 10) || cfg.max);
+            const e = Math.max(parseInt(sEl.value, 10) || 1, parseInt(eEl.value, 10) || cfg.max);
+
+            const segments = getRangeSegments(rangeType);
+            const exists = segments.some(seg => seg.start === s && seg.end === e);
+            if (exists) {
+                showNotification(`[${rName}] 分段 [第${s}~${e}位] 已在多段选区中`);
+                return;
+            }
+
+            segments.push({ start: s, end: e });
+            segments.sort((a, b) => a.start - b.start || a.end - b.end);
+
+            if (rangeType === 'omissionRange') {
+                state.omissionRangeSegments = segments;
+            }
+
+            renderRangeSegments(rangeType);
+            updateDualSliderUI(rangeType, cfg.max, u);
+            updateLiveSelectionPreview();
+            requestColdKlineUpdate(true);
+            showNotification(`已添加[${rName}]分段: 第${s}至第${e}位 (共${e - s + 1}${u})`);
+        }
+
+        function removeRangeSegment(rangeType, index) {
+            const segments = getRangeSegments(rangeType);
+            if (!segments) return;
+            segments.splice(index, 1);
+            if (rangeType === 'omissionRange') {
+                state.omissionRangeSegments = segments;
+            }
+            const cfg = DUAL_RANGE_CONFIGS[rangeType] || { max: 49, unit: '码' };
+            renderRangeSegments(rangeType);
+            updateDualSliderUI(rangeType, cfg.max, cfg.unit);
+            updateLiveSelectionPreview();
+            requestColdKlineUpdate(true);
+        }
+
+        function clearRangeSegments(rangeType) {
+            const segments = getRangeSegments(rangeType);
+            segments.length = 0;
+            if (rangeType === 'omissionRange') {
+                state.omissionRangeSegments = [];
+            }
+            const cfg = DUAL_RANGE_CONFIGS[rangeType] || { max: 49, unit: '码' };
+            const rName = RANGE_TYPE_NAMES[rangeType] || '区间';
+            renderRangeSegments(rangeType);
+            updateDualSliderUI(rangeType, cfg.max, cfg.unit);
+            updateLiveSelectionPreview();
+            requestColdKlineUpdate(true);
+            showNotification(`已清空[${rName}]所有多段选区，恢复单段模式`);
+        }
+
+        function loadRangeSegment(rangeType, start, end) {
+            const sEl = document.getElementById(`coldOption_${rangeType}_start`);
+            const eEl = document.getElementById(`coldOption_${rangeType}_end`);
+            if (sEl) sEl.value = String(start);
+            if (eEl) eEl.value = String(end);
+            const cfg = DUAL_RANGE_CONFIGS[rangeType] || { max: 49, unit: '码' };
+            updateDualSliderUI(rangeType, cfg.max, cfg.unit);
+            const rName = RANGE_TYPE_NAMES[rangeType] || '区间';
+            showNotification(`已载入[${rName}]分段: 第${start}至第${end}位`);
+        }
+
+        function renderRangeSegments(rangeType) {
+            const container = document.getElementById(`segments_container_${rangeType}`);
+            const chipsEl = document.getElementById(`chips_${rangeType}`);
+            if (!container || !chipsEl) return;
+
+            const segments = getRangeSegments(rangeType);
+            if (!segments || segments.length === 0) {
+                container.style.display = 'none';
+                chipsEl.innerHTML = '';
+                return;
+            }
+
+            const cfg = DUAL_RANGE_CONFIGS[rangeType] || { max: 49, unit: '码' };
+            const u = cfg.unit;
+
+            container.style.display = 'block';
+            chipsEl.innerHTML = segments.map((seg, idx) => {
+                const count = Math.max(0, seg.end - seg.start + 1);
+                return `<span class="segment-chip" title="点击载入滑块，点击✕删除" onclick="loadRangeSegment('${rangeType}', ${seg.start}, ${seg.end})">` +
+                    `<span>第 ${seg.start}~${seg.end}位 (${count}${u})</span>` +
+                    `<span class="chip-del-btn" onclick="event.stopPropagation(); removeRangeSegment('${rangeType}', ${idx});" title="移除此段">✕</span>` +
+                `</span>`;
+            }).join('');
+        }
+
+        function renderAllRangeSegments() {
+            ['omissionRange', 'omissionZodiacRange', 'hotNumberRange', 'allHotNumberRange', 'hotZodiacRange', 'allHotZodiacRange'].forEach(rk => {
+                renderRangeSegments(rk);
+            });
+        }
+
+        // Backwards compatibility wrappers
+        function addOmissionRangeSegment() { addRangeSegment('omissionRange'); }
+        function removeOmissionRangeSegment(idx) { removeRangeSegment('omissionRange', idx); }
+        function clearOmissionRangeSegments() { clearRangeSegments('omissionRange'); }
+        function loadOmissionRangeSegment(s, e) { loadRangeSegment('omissionRange', s, e); }
+        function renderOmissionRangeSegments() { renderRangeSegments('omissionRange'); }
+
         function applyStrategyPreset(presetKey) {
             resetColdSelection();
             if (presetKey === 'hot_combo' || presetKey === 'hotCore10') {
@@ -4474,6 +4722,15 @@
                 checkedOptions: {},
                 selectCounts: {},
                 ranges: {},
+                rangeSegments: {
+                    omissionRange: getRangeSegments('omissionRange').map(s => ({ ...s })),
+                    omissionZodiacRange: getRangeSegments('omissionZodiacRange').map(s => ({ ...s })),
+                    hotNumberRange: getRangeSegments('hotNumberRange').map(s => ({ ...s })),
+                    allHotNumberRange: getRangeSegments('allHotNumberRange').map(s => ({ ...s })),
+                    hotZodiacRange: getRangeSegments('hotZodiacRange').map(s => ({ ...s })),
+                    allHotZodiacRange: getRangeSegments('allHotZodiacRange').map(s => ({ ...s }))
+                },
+                omissionRangeSegments: getRangeSegments('omissionRange').map(s => ({ ...s })),
                 zodiacs: [],
                 waves: [],
                 inputNumbers: document.getElementById('coldOption_inputNumbers')?.value || ''
@@ -4541,6 +4798,23 @@
                     if (sEl && config.ranges[rk].start) sEl.value = config.ranges[rk].start;
                     if (eEl && config.ranges[rk].end) eEl.value = config.ranges[rk].end;
                 });
+            }
+            if (config.rangeSegments) {
+                Object.keys(config.rangeSegments).forEach(rk => {
+                    if (Array.isArray(config.rangeSegments[rk])) {
+                        const segs = getRangeSegments(rk);
+                        segs.length = 0;
+                        config.rangeSegments[rk].forEach(s => segs.push({ ...s }));
+                        if (rk === 'omissionRange') state.omissionRangeSegments = segs;
+                        renderRangeSegments(rk);
+                    }
+                });
+            } else if (config.omissionRangeSegments && Array.isArray(config.omissionRangeSegments)) {
+                const segs = getRangeSegments('omissionRange');
+                segs.length = 0;
+                config.omissionRangeSegments.forEach(s => segs.push({ ...s }));
+                state.omissionRangeSegments = segs;
+                renderRangeSegments('omissionRange');
             }
             if (config.zodiacs && Array.isArray(config.zodiacs)) {
                 config.zodiacs.forEach(z => {
