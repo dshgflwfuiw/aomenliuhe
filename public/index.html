@@ -322,10 +322,38 @@
                 </div>
             </div>
 
+            <!-- 统计计算窗口控制器 -->
+            <div class="cold-window-control-bar" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 8px 12px; background: rgba(0, 230, 118, 0.06); border: 1px solid rgba(0, 230, 118, 0.25); border-radius: 6px; margin-bottom: 12px;">
+                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                    <span style="font-size: 11px; font-weight: 700; color: var(--text-primary); white-space: nowrap;">📊 统计计算窗口期数:</span>
+                    <select id="coldCalcWindowSel" onchange="onColdCalcWindowChange(this.value)" style="font-size: 11px; padding: 4px 8px; border-radius: 4px; background: var(--card-bg); border: 1px solid var(--border); color: var(--text-primary); cursor: pointer;">
+                        <option value="auto" selected>🔗 跟随主图期数 (当前50期)</option>
+                        <option value="20">最近 20 期 (超短期活跃)</option>
+                        <option value="30">最近 30 期 (短期冷热)</option>
+                        <option value="50">最近 50 期 (中期参考)</option>
+                        <option value="75">最近 75 期</option>
+                        <option value="100">最近 100 期 (中长期)</option>
+                        <option value="150">最近 150 期</option>
+                        <option value="200">最近 200 期 (宏观统计)</option>
+                        <option value="300">最近 300 期</option>
+                        <option value="500">最近 500 期</option>
+                        <option value="all">全部历史数据 (全局统计)</option>
+                    </select>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <span id="coldCalcWindowBadge" style="font-size: 10px; color: var(--accent); font-weight: 700; background: rgba(0,230,118,0.12); padding: 3px 8px; border-radius: 3px; border: 1px solid rgba(0,230,118,0.2); white-space: nowrap;">
+                        实取 50 期样本
+                    </span>
+                </div>
+            </div>
+
             <!-- 模块一：遗漏选号因子库 -->
             <div class="cold-subcard">
                 <div class="cold-subcard-header">
-                    <span class="title-tag">🔍 遗漏选号因子</span>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <span class="title-tag">🔍 遗漏选号因子</span>
+                        <span id="factorWindowTag_omission" style="font-size: 10px; color: var(--text-secondary); font-weight: normal;">(基于最近50期统计)</span>
+                    </div>
                     <div style="display: flex; gap: 4px;">
                         <button type="button" onclick="toggleColdSection('omission', true)" style="font-size:9px;padding:2px 7px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--accent);cursor:pointer;">全选</button>
                         <button type="button" onclick="toggleColdSection('omission', false)" style="font-size:9px;padding:2px 7px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--text-secondary);cursor:pointer;">清空</button>
@@ -491,7 +519,10 @@
             <!-- 模块二：冷热选号因子库 -->
             <div class="cold-subcard">
                 <div class="cold-subcard-header">
-                    <span class="title-tag">🔥 冷热选号因子</span>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <span class="title-tag">🔥 冷热选号因子</span>
+                        <span id="factorWindowTag_hotcold" style="font-size: 10px; color: var(--text-secondary); font-weight: normal;">(基于最近50期统计)</span>
+                    </div>
                     <div style="display: flex; gap: 4px;">
                         <button type="button" onclick="toggleColdSection('hotcold', true)" style="font-size:9px;padding:2px 7px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--accent);cursor:pointer;">全选</button>
                         <button type="button" onclick="toggleColdSection('hotcold', false)" style="font-size:9px;padding:2px 7px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--text-secondary);cursor:pointer;">清空</button>
@@ -936,9 +967,13 @@
             <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
                 <span style="font-size:11px;color:var(--text-secondary);">统计最近</span>
                 <select id="matrixWindow" onchange="renderHotColdMatrix()" style="font-size:11px;flex:1;">
+                    <option value="auto" selected>🔗 跟随主图期数</option>
                     <option value="20">20期</option>
-                    <option value="50" selected>50期</option>
+                    <option value="30">30期</option>
+                    <option value="50">50期</option>
                     <option value="100">100期</option>
+                    <option value="200">200期</option>
+                    <option value="all">全部历史</option>
                 </select>
             </div>
             <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">

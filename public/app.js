@@ -101,6 +101,7 @@
             updateFollowPanelSummaries();
             updateSetModeButton();
             updateKillChipsUI();
+            updateColdCalcWindowUI();
             updateLiveSelectionPreview();
             initTheme();
             buildOverlayOptions();
@@ -647,17 +648,15 @@
                             selectZodiacs: cold.selectedZodiacs,
                             selectedWaves: cold.selectedWaves
                         });
-                        const smode = cold.setMode || 'all';
-                        const pickNums = optionSets => {
-                            const cntMap = {};
-                            optionSets.forEach(set => set.forEach(n => { cntMap[n] = (cntMap[n] || 0) + 1; }));
-                            let arr;
-                            if (smode === 'same') arr = Object.entries(cntMap).filter(([, c]) => c >= 2).map(([n]) => n);
-                            else if (smode === 'diff') arr = Object.entries(cntMap).filter(([, c]) => c === 1).map(([n]) => n);
-                            else arr = Object.keys(cntMap);
-                            return arr.sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
-                        };
-                        const nums = pickNums(rollingOptionSets);
+                        const smode = cold.setMode || cold.filterCalcMode || 'all';
+                        const killsToUse = cold.excludeKills || state.excludeKills;
+                        const rollingColdSource = getRollingColdSourceData(state.historyData, idx);
+                        const { finalNumbers: nums } = applySetModeAndExcludeKills(
+                            rollingOptionSets,
+                            smode,
+                            killsToUse,
+                            rollingColdSource
+                        );
                         // 悬浮显示用含本期的窗口（本期开奖后数据）
                         const currentPointForSets = {
                             winNum,
@@ -679,7 +678,13 @@
                             selectZodiacs: cold.selectedZodiacs,
                             selectedWaves: cold.selectedWaves
                         });
-                        coldHitSetsForPoint = { ...currentSets, setKline: pickNums(currentOptionSets).map(n => parseInt(n, 10)) };
+                        const { finalNumbers: curNums } = applySetModeAndExcludeKills(
+                            currentOptionSets,
+                            smode,
+                            killsToUse,
+                            getCurrentColdSourceData(currentData)
+                        );
+                        coldHitSetsForPoint = { ...currentSets, setKline: curNums.map(n => parseInt(n, 10)) };
                         if (cold.inputTerms) coldHitSetsForPoint.inputNumbers = formatInputTerms(cold.inputTerms);
                         if (cold.selectedZodiacs && cold.selectedZodiacs.length) coldHitSetsForPoint.selectZodiacs = cold.selectedZodiacs;
                         if (cold.selectedWaves && cold.selectedWaves.length) coldHitSetsForPoint.selectedWaves = cold.selectedWaves;
@@ -799,7 +804,27 @@
                         step = targets.every(n => !cList.includes(n)) ? 1 : -1;
                     }
                 } else if (state.currentMode === 'zodiac_hotcold' || state.currentMode === 'number_hotcold') {
-                    step = 0; 
+                    const N = parseInt(document.getElementById('pageSizeSel')?.value) || state.historyData.length;
+                    const isAll = document.getElementById('pageSizeSel')?.value === 'all';
+                    const pageN = isAll ? Math.max(1, idx) : N;
+                    const windowData = state.historyData.slice(Math.max(0, idx - pageN), idx);
+                    if (windowData.length > 0) {
+                        if (state.currentMode === 'zodiac_hotcold') {
+                            const zCounts = {};
+                            zodiacs.forEach(z => zCounts[z] = 0);
+                            windowData.forEach(item => { if (item.win) zCounts[item.win]++; });
+                            const hotZ = new Set(Object.entries(zCounts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 6).map(e => e[0]));
+                            step = hotZ.has(winZ) ? 1 : -1;
+                        } else {
+                            const nCounts = {};
+                            for (let n = 1; n <= 49; n++) nCounts[n] = 0;
+                            windowData.forEach(item => { if (item.winNum) nCounts[item.winNum]++; });
+                            const hotN = new Set(Object.entries(nCounts).sort((a, b) => b[1] - a[1] || parseInt(a[0]) - parseInt(b[0])).slice(0, 25).map(e => parseInt(e[0])));
+                            step = hotN.has(winNum) ? 1 : -1;
+                        }
+                    } else {
+                        step = -1;
+                    }
                 }
 
                 ['red', 'blue', 'green'].forEach(c => {
@@ -975,22 +1000,14 @@
                         selectZodiacs: cold.selectedZodiacs,
                         selectedWaves: cold.selectedWaves
                     });
-                    const latestCountMap = {};
-                    latestOptionSets.forEach(set => set.forEach(n => {
-                        latestCountMap[n] = (latestCountMap[n] || 0) + 1;
-                    }));
-                    const setMode = cold.setMode || 'all';
-                    let latestSetNumbers;
-                    if (setMode === 'same') {
-                        latestSetNumbers = Object.entries(latestCountMap)
-                            .filter(([, count]) => count >= 2).map(([num]) => num);
-                    } else if (setMode === 'diff') {
-                        latestSetNumbers = Object.entries(latestCountMap)
-                            .filter(([, count]) => count === 1).map(([num]) => num);
-                    } else {
-                        latestSetNumbers = Object.keys(latestCountMap);
-                    }
-                    latestSetNumbers.sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+                    const setMode = cold.setMode || cold.filterCalcMode || 'all';
+                    const killsToUse = cold.excludeKills || state.excludeKills;
+                    const { finalNumbers: latestSetNumbers } = applySetModeAndExcludeKills(
+                        latestOptionSets,
+                        setMode,
+                        killsToUse,
+                        selectedSourceData
+                    );
                     cold.setNumbers = latestSetNumbers;
                     cold.sets = { ...latestSets, setNumbers: latestSetNumbers };
                 } else {
@@ -1033,6 +1050,8 @@
             const overall = computeMaxRiseFall(state.historyData);
             state.overallMaxRise = overall.maxRiseCount;
             state.overallMaxFall = overall.maxFallCount;
+            updateColdCalcWindowUI();
+            updateLiveSelectionPreview();
             schedulePanelUpdates();
         }
 
@@ -2983,35 +3002,90 @@
             return { maxRiseCount, maxFallCount, currentRise, currentFall };
         }
 
-        // “遗漏最多”使用固定的最近 300 期窗口，不受右上角K线显示期数影响。
-        const MAX_COLD_OMISSION_PERIODS = 300;
+        function getEffectiveColdWindow() {
+            const sel = document.getElementById('coldCalcWindowSel');
+            if (!sel || sel.value === 'auto') {
+                const pageSizeSel = document.getElementById('pageSizeSel');
+                if (!pageSizeSel) return 50;
+                return pageSizeSel.value === 'all' ? Infinity : (parseInt(pageSizeSel.value, 10) || 50);
+            }
+            return sel.value === 'all' ? Infinity : (parseInt(sel.value, 10) || 50);
+        }
+
+        function updateColdCalcWindowUI() {
+            const sel = document.getElementById('coldCalcWindowSel');
+            const badge = document.getElementById('coldCalcWindowBadge');
+            const tagHot = document.getElementById('factorWindowTag_hotcold');
+            const tagOm = document.getElementById('factorWindowTag_omission');
+            
+            const pageSizeSel = document.getElementById('pageSizeSel');
+            const autoCount = pageSizeSel ? (pageSizeSel.value === 'all' ? '全部' : pageSizeSel.value) : '50';
+            
+            if (sel) {
+                const autoOpt = sel.querySelector('option[value="auto"]');
+                if (autoOpt) {
+                    autoOpt.textContent = `🔗 跟随主图期数 (当前${autoCount}期)`;
+                }
+            }
+
+            const win = getEffectiveColdWindow();
+            const totalLen = state.historyData ? state.historyData.length : 0;
+            const actualCount = win === Infinity ? totalLen : Math.min(win, totalLen);
+            const txt = `基于最近 ${actualCount} 期样本`;
+
+            if (badge) badge.textContent = txt;
+            if (tagHot) tagHot.textContent = `(${txt})`;
+            if (tagOm) tagOm.textContent = `(${txt})`;
+        }
+
+        function onColdCalcWindowChange(val) {
+            state.coldCalcWindow = val;
+            updateColdCalcWindowUI();
+            updateLiveSelectionPreview();
+            if (state.currentMode === 'cold_custom' && state.coldSelection) {
+                recalcData();
+            }
+        }
 
         function getSelectedColdSourceData() {
-            return state.historyData.slice(-MAX_COLD_OMISSION_PERIODS);
+            const win = getEffectiveColdWindow();
+            const totalLen = state.historyData ? state.historyData.length : 0;
+            const count = win === Infinity ? totalLen : Math.min(win, totalLen);
+            return state.historyData.slice(-count);
         }
 
         function getRollingColdSourceData(historyData, currentIndex) {
-            return historyData.slice(Math.max(0, currentIndex - MAX_COLD_OMISSION_PERIODS), currentIndex);
+            const win = getEffectiveColdWindow();
+            const count = win === Infinity ? currentIndex : Math.min(win, currentIndex);
+            return historyData.slice(Math.max(0, currentIndex - count), currentIndex);
         }
 
         function getCurrentColdSourceData(historyData) {
-            return historyData.slice(-MAX_COLD_OMISSION_PERIODS);
+            const win = getEffectiveColdWindow();
+            const totalLen = historyData ? historyData.length : 0;
+            const count = win === Infinity ? totalLen : Math.min(win, totalLen);
+            return historyData.slice(-count);
         }
 
-        // 冷热统计跟随右上角选择的期数，最多使用 300 期以控制历史K线的计算量。
+        // 冷热统计跟随设置的统计窗口（默认跟随右上角选择的期数）
         function getSelectedHotColdSourceData() {
-            const selectedCount = Math.min(getSelectedLoadCount(), 300);
-            return state.historyData.slice(-selectedCount);
+            const win = getEffectiveColdWindow();
+            const totalLen = state.historyData ? state.historyData.length : 0;
+            const count = win === Infinity ? totalLen : Math.min(win, totalLen);
+            return state.historyData.slice(-count);
         }
 
         function getRollingHotColdSourceData(historyData, currentIndex) {
-            const selectedCount = Math.min(getSelectedLoadCount(), 300);
-            return historyData.slice(Math.max(0, currentIndex - selectedCount), currentIndex);
+            const win = getEffectiveColdWindow();
+            const count = win === Infinity ? currentIndex : Math.min(win, currentIndex);
+            return historyData.slice(Math.max(0, currentIndex - count), currentIndex);
         }
 
         function getCurrentHotColdSourceData(historyData) {
-            const selectedCount = Math.min(getSelectedLoadCount(), 300);
-            return historyData.slice(-selectedCount);
+            const win = getEffectiveColdWindow();
+            const totalLen = historyData ? historyData.length : 0;
+            const count = win === Infinity ? totalLen : Math.min(win, totalLen);
+            return historyData.slice(-count);
         }
 
         function calculateOmissionCounts(keys, matchFn, sourceData = state.historyData) {
@@ -3707,58 +3781,13 @@
             if (hasInput) sets.inputTerms = inputTerms;
 
             const optionSets = getColdOptionNumberSets(sets);
-            const cntMap = {};
-            optionSets.forEach(set => set.forEach(n => { cntMap[n] = (cntMap[n] || 0) + 1; }));
-
             const mode = state.filterCalcMode || state.setMode || 'all';
-            let candidateNumbers = [];
-            if (mode === 'and') {
-                if (optionSets.length > 0) {
-                    const totalSets = optionSets.length;
-                    candidateNumbers = Object.entries(cntMap).filter(([, c]) => c === totalSets).map(([n]) => n);
-                }
-            } else if (mode === 'same') {
-                candidateNumbers = Object.entries(cntMap).filter(([, c]) => c >= 2).map(([n]) => n);
-            } else if (mode === 'diff') {
-                candidateNumbers = Object.entries(cntMap).filter(([, c]) => c === 1).map(([n]) => n);
-            } else {
-                candidateNumbers = Object.keys(cntMap);
-            }
-            candidateNumbers.sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
-
-            // Top 5 cold numbers for omission kill
-            let top5ColdNumbers = [];
-            if (state.excludeKills.coldTop5) {
-                const latest = coldSourceData;
-                if (latest && latest.numberSnapshot) {
-                    top5ColdNumbers = Object.entries(latest.numberSnapshot)
-                        .sort((a, b) => b[1] - a[1])
-                        .slice(0, 5)
-                        .map(([n]) => n.toString().padStart(2, '0'));
-                }
-            }
-
-            const excludedNumbers = [];
-            const finalNumbers = [];
-
-            candidateNumbers.forEach(num => {
-                const z = getZodiac(parseInt(num, 10));
-                const tail = parseInt(num, 10) % 10;
-                const wave = getColor(num);
-
-                const isKilled = 
-                    (state.excludeKills.zodiacs && state.excludeKills.zodiacs.includes(z)) ||
-                    (state.excludeKills.tails && state.excludeKills.tails.includes(tail)) ||
-                    (state.excludeKills.waves && state.excludeKills.waves.includes(wave)) ||
-                    (state.excludeKills.coldTop5 && top5ColdNumbers.includes(num)) ||
-                    (state.excludeKills.excludedSingles && state.excludeKills.excludedSingles.includes(num));
-
-                if (isKilled) {
-                    excludedNumbers.push(num);
-                } else {
-                    finalNumbers.push(num);
-                }
-            });
+            const { candidateNumbers, finalNumbers, excludedNumbers } = applySetModeAndExcludeKills(
+                optionSets,
+                mode,
+                state.excludeKills,
+                coldSourceData
+            );
 
             return {
                 types,
@@ -3784,10 +3813,13 @@
             }
             
             const mode = state.filterCalcMode || state.setMode || 'all';
+            const excludeKillsCopy = JSON.parse(JSON.stringify(state.excludeKills || {}));
             state.coldSelection = {
                 types: ['setKline'],
                 setKline: true,
                 setMode: mode,
+                filterCalcMode: mode,
+                excludeKills: excludeKillsCopy,
                 setNumbers: finalNumbers,
                 setTypes: types,
                 setCounts: counts,
@@ -4122,8 +4154,69 @@
             return out;
         }
 
-        const SET_MODE_LABELS = { all: '所有号码', same: '相同号码', diff: '不同号码' };
-        const SET_MODE_ORDER = ['all', 'same', 'diff'];
+        function applySetModeAndExcludeKills(optionSets, setMode, excludeKills, coldSourceData) {
+            const cntMap = {};
+            optionSets.forEach(set => set.forEach(n => {
+                cntMap[n] = (cntMap[n] || 0) + 1;
+            }));
+            const totalSets = optionSets.length;
+            let candidateNumbers = [];
+            if (setMode === 'and') {
+                if (totalSets > 0) {
+                    candidateNumbers = Object.entries(cntMap).filter(([, c]) => c === totalSets).map(([n]) => n);
+                } else {
+                    candidateNumbers = [];
+                }
+            } else if (setMode === 'same') {
+                candidateNumbers = Object.entries(cntMap).filter(([, c]) => c >= 2).map(([n]) => n);
+            } else if (setMode === 'diff') {
+                candidateNumbers = Object.entries(cntMap).filter(([, c]) => c === 1).map(([n]) => n);
+            } else {
+                candidateNumbers = Object.keys(cntMap);
+            }
+            candidateNumbers.sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+
+            const kills = excludeKills || {};
+            let top5ColdNumbers = [];
+            if (kills.coldTop5 && coldSourceData && coldSourceData.numberSnapshot) {
+                top5ColdNumbers = Object.entries(coldSourceData.numberSnapshot)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 5)
+                    .map(([n]) => n.toString().padStart(2, '0'));
+            }
+
+            const excludedNumbers = [];
+            const finalNumbers = [];
+
+            candidateNumbers.forEach(num => {
+                const numInt = parseInt(num, 10);
+                const z = getZodiac(numInt);
+                const tail = numInt % 10;
+                const wave = getColor(num);
+
+                const isKilled = 
+                    (kills.zodiacs && kills.zodiacs.includes(z)) ||
+                    (kills.tails && kills.tails.includes(tail)) ||
+                    (kills.waves && kills.waves.includes(wave)) ||
+                    (kills.coldTop5 && top5ColdNumbers.includes(num)) ||
+                    (kills.excludedSingles && kills.excludedSingles.includes(num));
+
+                if (isKilled) {
+                    excludedNumbers.push(num);
+                } else {
+                    finalNumbers.push(num);
+                }
+            });
+
+            return {
+                candidateNumbers,
+                finalNumbers,
+                excludedNumbers
+            };
+        }
+
+        const SET_MODE_LABELS = { all: '并集所有号码', and: '严格交集号码', same: '共有重合号码', diff: '独有特征号码' };
+        const SET_MODE_ORDER = ['all', 'and', 'same', 'diff'];
 
         function cycleSetMode() {
             const idx = SET_MODE_ORDER.indexOf(state.setMode);
@@ -4173,6 +4266,8 @@
                 Object.keys(state.rangeSegments).forEach(k => { state.rangeSegments[k] = []; });
             }
             renderAllRangeSegments();
+            clearAllKills();
+            setFilterCalcMode('all');
             const summaryEl = document.getElementById('coldSelectionSummary');
             if (summaryEl) summaryEl.textContent = '请选择自由K线选项后点击生成';
             updateAllDualSliders();
@@ -4733,7 +4828,10 @@
                 omissionRangeSegments: getRangeSegments('omissionRange').map(s => ({ ...s })),
                 zodiacs: [],
                 waves: [],
-                inputNumbers: document.getElementById('coldOption_inputNumbers')?.value || ''
+                inputNumbers: document.getElementById('coldOption_inputNumbers')?.value || '',
+                calcWindow: document.getElementById('coldCalcWindowSel')?.value || 'auto',
+                filterCalcMode: state.filterCalcMode || 'all',
+                excludeKills: JSON.parse(JSON.stringify(state.excludeKills || {}))
             };
             
             const types = ['numbers', 'zodiacs', 'hotNumbers', 'coldNumbers', 'hotZodiacs', 'coldZodiacs', 'allHotNumbers', 'allColdNumbers', 'allHotZodiacs', 'allColdZodiacs', 'hotNumberRange', 'allHotNumberRange', 'hotZodiacRange', 'allHotZodiacRange', 'wave', 'halfwave', 'jiaYe', 'head', 'tail', 'wuxing', 'halfHead', 'region', 'omissionRange', 'omissionZodiacRange'];
@@ -4831,6 +4929,19 @@
             if (config.inputNumbers) {
                 const inp = document.getElementById('coldOption_inputNumbers');
                 if (inp) inp.value = config.inputNumbers;
+            }
+            if (config.filterCalcMode) {
+                setFilterCalcMode(config.filterCalcMode);
+            }
+            if (config.excludeKills) {
+                state.excludeKills = JSON.parse(JSON.stringify(config.excludeKills));
+                updateKillChipsUI();
+            }
+            if (config.calcWindow) {
+                const sel = document.getElementById('coldCalcWindowSel');
+                if (sel) sel.value = config.calcWindow;
+                state.coldCalcWindow = config.calcWindow;
+                updateColdCalcWindowUI();
             }
             updateAllDualSliders();
             generateColdKline();
@@ -5860,8 +5971,25 @@
         function renderHotColdMatrix() {
             const grid = document.getElementById('matrixGrid');
             if (!grid) return;
-            const N = parseInt(document.getElementById('matrixWindow')?.value) || 50;
-            const data = state.historyData.slice(-N);
+            const matrixWinSel = document.getElementById('matrixWindow');
+            const selVal = matrixWinSel ? matrixWinSel.value : 'auto';
+            const pageSizeSel = document.getElementById('pageSizeSel');
+            const currentAutoCount = pageSizeSel ? (pageSizeSel.value === 'all' ? '全部' : pageSizeSel.value) : '50';
+            if (matrixWinSel) {
+                const autoOpt = matrixWinSel.querySelector('option[value="auto"]');
+                if (autoOpt) autoOpt.textContent = `🔗 跟随主图期数 (当前${currentAutoCount}期)`;
+            }
+            let N = 50;
+            const totalLen = state.historyData ? state.historyData.length : 0;
+            if (selVal === 'auto') {
+                const loadCount = getSelectedLoadCount();
+                N = loadCount === Infinity ? totalLen : Math.min(loadCount, totalLen);
+            } else if (selVal === 'all') {
+                N = totalLen;
+            } else {
+                N = parseInt(selVal, 10) || 50;
+            }
+            const data = (state.historyData || []).slice(-N);
             const counts = {};
             for (let n = 1; n <= 49; n++) counts[n] = 0;
             data.forEach(d => {
@@ -5888,7 +6016,6 @@
                     });
                 }
             });
-            const totalLen = allData.length;
             const max = Math.max(...Object.values(counts), 1);
             grid.innerHTML = Array.from({ length: 49 }, (_, i) => {
                 const n = i + 1;
