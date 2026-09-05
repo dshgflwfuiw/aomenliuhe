@@ -426,23 +426,23 @@
                             <input type="range" id="coldOption_omissionRange_end" min="1" max="49" value="10" step="1" class="range-slider-input range-slider-max" oninput="onDualSliderChange('omissionRange', 49, '码', false)">
                         </div>
                         <div class="dual-slider-scale">
-                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0);">1</span>
+                            <span class="dual-slider-scale-item scale-endpoint-left scale-endpoint-more"><span class="scale-text-tag">多</span> 1</span>
                             <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.1875);">10</span>
                             <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.3958);">20</span>
                             <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.6042);">30</span>
                             <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.8125);">40</span>
-                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 1);">49</span>
+                            <span class="dual-slider-scale-item scale-endpoint-right scale-endpoint-less">49 <span class="scale-text-tag">少</span></span>
                         </div>
                         <div class="cold-range-bottom-row">
                             <div class="range-steppers">
                                 <div class="stepper-unit">
-                                    <span class="stepper-lbl">起</span>
+                                    <span class="stepper-lbl" title="起点（遗漏最多）">起·多</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('omissionRange', 'start', -1)" title="起点 -1">−</button>
                                     <span class="stepper-val" id="stepperVal_omissionRange_start">1</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('omissionRange', 'start', 1)" title="起点 +1">+</button>
                                 </div>
                                 <div class="stepper-unit">
-                                    <span class="stepper-lbl">止</span>
+                                    <span class="stepper-lbl" title="终点（遗漏较少）">止·少</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('omissionRange', 'end', -1)" title="终点 -1">−</button>
                                     <span class="stepper-val" id="stepperVal_omissionRange_end">10</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('omissionRange', 'end', 1)" title="终点 +1">+</button>
@@ -479,22 +479,22 @@
                             <input type="range" id="coldOption_omissionZodiacRange_end" min="1" max="12" value="3" step="1" class="range-slider-input range-slider-max" oninput="onDualSliderChange('omissionZodiacRange', 12, '肖', false)">
                         </div>
                         <div class="dual-slider-scale">
-                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0);">1</span>
+                            <span class="dual-slider-scale-item scale-endpoint-left scale-endpoint-more"><span class="scale-text-tag">多</span> 1</span>
                             <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.1818);">3</span>
                             <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.4545);">6</span>
                             <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.7273);">9</span>
-                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 1);">12</span>
+                            <span class="dual-slider-scale-item scale-endpoint-right scale-endpoint-less">12 <span class="scale-text-tag">少</span></span>
                         </div>
                         <div class="cold-range-bottom-row">
                             <div class="range-steppers">
                                 <div class="stepper-unit">
-                                    <span class="stepper-lbl">起</span>
+                                    <span class="stepper-lbl" title="起点（遗漏最多）">起·多</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('omissionZodiacRange', 'start', -1)" title="起点 -1">−</button>
                                     <span class="stepper-val" id="stepperVal_omissionZodiacRange_start">1</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('omissionZodiacRange', 'start', 1)" title="起点 +1">+</button>
                                 </div>
                                 <div class="stepper-unit">
-                                    <span class="stepper-lbl">止</span>
+                                    <span class="stepper-lbl" title="终点（遗漏较少）">止·少</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('omissionZodiacRange', 'end', -1)" title="终点 -1">−</button>
                                     <span class="stepper-val" id="stepperVal_omissionZodiacRange_end">3</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('omissionZodiacRange', 'end', 1)" title="终点 +1">+</button>
@@ -546,23 +546,23 @@
                             <input type="range" id="coldOption_hotNumberRange_end" min="1" max="49" value="10" step="1" class="range-slider-input range-slider-max" oninput="onDualSliderChange('hotNumberRange', 49, '码', false)">
                         </div>
                         <div class="dual-slider-scale">
-                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0);">1</span>
+                            <span class="dual-slider-scale-item scale-endpoint-left scale-endpoint-hot"><span class="scale-text-tag">热</span> 1</span>
                             <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.1875);">10</span>
                             <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.3958);">20</span>
                             <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.6042);">30</span>
                             <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.8125);">40</span>
-                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 1);">49</span>
+                            <span class="dual-slider-scale-item scale-endpoint-right scale-endpoint-cold">49 <span class="scale-text-tag">冷</span></span>
                         </div>
                         <div class="cold-range-bottom-row">
                             <div class="range-steppers">
                                 <div class="stepper-unit">
-                                    <span class="stepper-lbl">起</span>
+                                    <span class="stepper-lbl" title="起点（最热）">起·热</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('hotNumberRange', 'start', -1)" title="起点 -1">−</button>
                                     <span class="stepper-val" id="stepperVal_hotNumberRange_start">1</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('hotNumberRange', 'start', 1)" title="起点 +1">+</button>
                                 </div>
                                 <div class="stepper-unit">
-                                    <span class="stepper-lbl">止</span>
+                                    <span class="stepper-lbl" title="终点（最冷）">止·冷</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('hotNumberRange', 'end', -1)" title="终点 -1">−</button>
                                     <span class="stepper-val" id="stepperVal_hotNumberRange_end">10</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('hotNumberRange', 'end', 1)" title="终点 +1">+</button>
@@ -599,23 +599,23 @@
                             <input type="range" id="coldOption_allHotNumberRange_end" min="1" max="49" value="10" step="1" class="range-slider-input range-slider-max" oninput="onDualSliderChange('allHotNumberRange', 49, '码', false)">
                         </div>
                         <div class="dual-slider-scale">
-                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0);">1</span>
+                            <span class="dual-slider-scale-item scale-endpoint-left scale-endpoint-hot"><span class="scale-text-tag">热</span> 1</span>
                             <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.1875);">10</span>
                             <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.3958);">20</span>
                             <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.6042);">30</span>
                             <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.8125);">40</span>
-                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 1);">49</span>
+                            <span class="dual-slider-scale-item scale-endpoint-right scale-endpoint-cold">49 <span class="scale-text-tag">冷</span></span>
                         </div>
                         <div class="cold-range-bottom-row">
                             <div class="range-steppers">
                                 <div class="stepper-unit">
-                                    <span class="stepper-lbl">起</span>
+                                    <span class="stepper-lbl" title="起点（最热）">起·热</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('allHotNumberRange', 'start', -1)" title="起点 -1">−</button>
                                     <span class="stepper-val" id="stepperVal_allHotNumberRange_start">1</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('allHotNumberRange', 'start', 1)" title="起点 +1">+</button>
                                 </div>
                                 <div class="stepper-unit">
-                                    <span class="stepper-lbl">止</span>
+                                    <span class="stepper-lbl" title="终点（最冷）">止·冷</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('allHotNumberRange', 'end', -1)" title="终点 -1">−</button>
                                     <span class="stepper-val" id="stepperVal_allHotNumberRange_end">10</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('allHotNumberRange', 'end', 1)" title="终点 +1">+</button>
@@ -652,22 +652,22 @@
                             <input type="range" id="coldOption_hotZodiacRange_end" min="1" max="12" value="3" step="1" class="range-slider-input range-slider-max" oninput="onDualSliderChange('hotZodiacRange', 12, '肖', false)">
                         </div>
                         <div class="dual-slider-scale">
-                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0);">1</span>
+                            <span class="dual-slider-scale-item scale-endpoint-left scale-endpoint-hot"><span class="scale-text-tag">热</span> 1</span>
                             <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.1818);">3</span>
                             <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.4545);">6</span>
                             <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.7273);">9</span>
-                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 1);">12</span>
+                            <span class="dual-slider-scale-item scale-endpoint-right scale-endpoint-cold">12 <span class="scale-text-tag">冷</span></span>
                         </div>
                         <div class="cold-range-bottom-row">
                             <div class="range-steppers">
                                 <div class="stepper-unit">
-                                    <span class="stepper-lbl">起</span>
+                                    <span class="stepper-lbl" title="起点（最热）">起·热</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('hotZodiacRange', 'start', -1)" title="起点 -1">−</button>
                                     <span class="stepper-val" id="stepperVal_hotZodiacRange_start">1</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('hotZodiacRange', 'start', 1)" title="起点 +1">+</button>
                                 </div>
                                 <div class="stepper-unit">
-                                    <span class="stepper-lbl">止</span>
+                                    <span class="stepper-lbl" title="终点（最冷）">止·冷</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('hotZodiacRange', 'end', -1)" title="终点 -1">−</button>
                                     <span class="stepper-val" id="stepperVal_hotZodiacRange_end">3</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('hotZodiacRange', 'end', 1)" title="终点 +1">+</button>
@@ -704,22 +704,22 @@
                             <input type="range" id="coldOption_allHotZodiacRange_end" min="1" max="12" value="3" step="1" class="range-slider-input range-slider-max" oninput="onDualSliderChange('allHotZodiacRange', 12, '肖', false)">
                         </div>
                         <div class="dual-slider-scale">
-                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0);">1</span>
+                            <span class="dual-slider-scale-item scale-endpoint-left scale-endpoint-hot"><span class="scale-text-tag">热</span> 1</span>
                             <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.1818);">3</span>
                             <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.4545);">6</span>
                             <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.7273);">9</span>
-                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 1);">12</span>
+                            <span class="dual-slider-scale-item scale-endpoint-right scale-endpoint-cold">12 <span class="scale-text-tag">冷</span></span>
                         </div>
                         <div class="cold-range-bottom-row">
                             <div class="range-steppers">
                                 <div class="stepper-unit">
-                                    <span class="stepper-lbl">起</span>
+                                    <span class="stepper-lbl" title="起点（最热）">起·热</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('allHotZodiacRange', 'start', -1)" title="起点 -1">−</button>
                                     <span class="stepper-val" id="stepperVal_allHotZodiacRange_start">1</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('allHotZodiacRange', 'start', 1)" title="起点 +1">+</button>
                                 </div>
                                 <div class="stepper-unit">
-                                    <span class="stepper-lbl">止</span>
+                                    <span class="stepper-lbl" title="终点（最冷）">止·冷</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('allHotZodiacRange', 'end', -1)" title="终点 -1">−</button>
                                     <span class="stepper-val" id="stepperVal_allHotZodiacRange_end">3</span>
                                     <button type="button" class="stepper-btn" onclick="stepDualRange('allHotZodiacRange', 'end', 1)" title="终点 +1">+</button>
@@ -818,14 +818,14 @@
             </div>
         </div>
 
-        <div class="sidebar-card" style="border-color: var(--accent);">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                <h3 style="color: var(--warn);margin-bottom:0;">🎯 智能量化推荐</h3>
-                <div style="display:flex;gap:4px;">
-                    <button class="rec-apply-btn" style="padding:2px 5px;" onclick="toggleRecDrawer()">⚙️ 微调</button>
-                    <button class="rec-apply-btn" style="padding:2px 5px;" onclick="openRecHistoryModal()">📜 复盘</button>
-                </div>
-            </div>
+        <div class="sidebar-card" id="recommendCard" style="border-color: var(--accent);">
+            <h3 style="color: var(--warn);margin-bottom:8px;">
+                <span style="display:flex;align-items:center;gap:6px;">🎯 智能量化推荐</span>
+                <span class="rec-header-actions" style="display:inline-flex;gap:4px;align-items:center;">
+                    <button type="button" class="rec-apply-btn" style="padding:2px 5px;font-weight:normal;" onclick="toggleRecDrawer()">⚙️ 微调</button>
+                    <button type="button" class="rec-apply-btn" style="padding:2px 5px;font-weight:normal;" onclick="openRecHistoryModal()">📜 复盘</button>
+                </span>
+            </h3>
 
             <!-- 3. 特码 / 平特肖尾 双轨切换 -->
             <div class="rec-track-tabs">
@@ -837,28 +837,30 @@
             <div id="recDrawer" class="rec-drawer">
                 <div style="font-size:10.5px;font-weight:700;color:var(--accent);margin-bottom:6px;display:flex;justify-content:space-between;">
                     <span>⚙️ 策略权重与过滤微调</span>
-                    <span style="font-size:9px;color:var(--text-secondary);cursor:pointer;" onclick="resetRecWeights()">重置</span>
+                    <span style="font-size:9px;color:var(--text-secondary);cursor:pointer;" onclick="resetRecWeights()">重置默认</span>
                 </div>
                 <div class="rec-slider-row">
-                    <span>❄️ 冷号反弹</span>
-                    <input type="range" id="recWeightCold" min="0" max="100" value="50" oninput="onRecWeightChange()">
-                    <span>🔥 连开追热</span>
+                    <span style="font-size:10px;white-space:nowrap;">❄️冷</span>
+                    <input type="range" id="recWeightCold" min="0" max="100" value="50" oninput="onRecWeightChange()" style="margin:0 6px;">
+                    <span style="font-size:10px;white-space:nowrap;">🔥热</span>
+                    <span id="recWeightColdVal" style="font-size:10px;font-weight:700;color:var(--accent);min-width:62px;text-align:right;white-space:nowrap;">⚖️ 均衡50%</span>
                 </div>
                 <div class="rec-slider-row">
-                    <span>五行波色形态</span>
-                    <input type="range" id="recWeightMorph" min="0" max="100" value="60" oninput="onRecWeightChange()">
-                    <span id="recWeightMorphVal">60%</span>
+                    <span style="font-size:10px;white-space:nowrap;">形态共振</span>
+                    <input type="range" id="recWeightMorph" min="0" max="100" value="60" oninput="onRecWeightChange()" style="margin:0 6px;">
+                    <span id="recWeightMorphVal" style="font-size:10px;font-weight:700;color:var(--accent);min-width:62px;text-align:right;white-space:nowrap;">60%</span>
                 </div>
                 <div class="rec-slider-row">
-                    <span>覆盖跨度</span>
-                    <input type="range" id="recSpanCount" min="6" max="18" value="12" oninput="onRecWeightChange()">
-                    <span id="recSpanCountVal">12码</span>
+                    <span style="font-size:10px;white-space:nowrap;">推荐范围</span>
+                    <input type="range" id="recSpanCount" min="6" max="18" value="12" oninput="onRecWeightChange()" style="margin:0 6px;">
+                    <span id="recSpanCountVal" style="font-size:10px;font-weight:700;color:var(--accent);min-width:62px;text-align:right;white-space:nowrap;">12码</span>
                 </div>
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.05);">
                     <label style="font-size:10px;color:var(--text-primary);cursor:pointer;display:flex;align-items:center;gap:4px;">
-                        <input type="checkbox" id="recShrinkToggle" onchange="generateRecommendations()">
-                        <span>🧩 智能容错缩水矩阵 (和值/奇偶/同尾瘦身)</span>
+                        <input type="checkbox" id="recShrinkToggle" onchange="onRecWeightChange()">
+                        <span>🧩 智能容错缩水矩阵 (同尾/同肖/冷态瘦身)</span>
                     </label>
+                    <span id="recShrinkStatus" style="font-size:9.5px;color:var(--text-secondary);">未启用</span>
                 </div>
             </div>
 

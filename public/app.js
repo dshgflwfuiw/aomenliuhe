@@ -275,7 +275,13 @@
                 const arrow = document.createElement('span');
                 arrow.className = 'card-toggle-arrow';
                 arrow.textContent = '▼';
-                header.appendChild(arrow);
+
+                const actionGroup = header.querySelector('.rec-header-actions');
+                if (actionGroup) {
+                    actionGroup.appendChild(arrow);
+                } else {
+                    header.appendChild(arrow);
+                }
 
                 header.addEventListener('click', (e) => {
                     if (e.target && ['INPUT', 'SELECT', 'BUTTON', 'LABEL'].includes(e.target.tagName)) return;
@@ -1051,6 +1057,7 @@
             state.overallMaxRise = overall.maxRiseCount;
             state.overallMaxFall = overall.maxFallCount;
             updateColdCalcWindowUI();
+            updateAllDualSliders();
             updateLiveSelectionPreview();
             schedulePanelUpdates();
         }
@@ -1145,10 +1152,36 @@
             if (infoDiv) {
                 infoDiv.style.display = 'flex';
                 const periodText = pageSizeVal === 'all' ? '全部' : pageSizeVal;
+
+                // 顶部横幅展示全量样本中最新 N 期的全局最新冷热分布，确保不受历史翻页影响
+                let bannerHotZ = latestHotZ;
+                let bannerColdZ = latestColdZ;
+                let bannerHotN = latestHotN;
+                let bannerColdN = latestColdN;
+
+                const latestSlice = state.historyData.slice(Math.max(0, state.historyData.length - N));
+                if (latestSlice.length > 0) {
+                    const zCounts = {};
+                    const nCounts = {};
+                    const zMap = (CONFIG.zodiacMap && CONFIG.zodiacMap[state.currentYear]) || [];
+                    zMap.forEach(z => { zCounts[z] = 0; });
+                    for (let i = 1; i <= 49; i++) nCounts[i] = 0;
+                    latestSlice.forEach(item => {
+                        if (item.win && zCounts[item.win] !== undefined) zCounts[item.win]++;
+                        if (item.winNum && nCounts[item.winNum] !== undefined) nCounts[item.winNum]++;
+                    });
+                    const sortedZ = Object.entries(zCounts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+                    bannerHotZ = sortedZ.slice(0, 6).map(e => e[0]);
+                    bannerColdZ = sortedZ.slice(6).map(e => e[0]);
+
+                    const sortedN = Object.entries(nCounts).sort((a, b) => b[1] - a[1] || parseInt(a[0], 10) - parseInt(b[0], 10));
+                    bannerHotN = sortedN.slice(0, 25).map(e => parseInt(e[0], 10));
+                    bannerColdN = sortedN.slice(25).map(e => parseInt(e[0], 10));
+                }
                 
                 if (state.currentMode === 'zodiac_hotcold') {
-                    const hotStr = latestHotZ.join(' ') || '加载中...';
-                    const coldStr = latestColdZ.join(' ') || '加载中...';
+                    const hotStr = bannerHotZ.join(' ') || '加载中...';
+                    const coldStr = bannerColdZ.join(' ') || '加载中...';
                     infoDiv.innerHTML = `
                         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap: wrap; gap: 4px;">
                             <span style="white-space: nowrap;"><span style="color:var(--text-secondary);">基于前[${periodText}期] 最新热肖:</span> <span style="color:var(--up); font-weight:bold; font-size:13px; margin-left:4px;">${hotStr}</span></span>
@@ -1156,8 +1189,8 @@
                         </div>
                     `;
                 } else {
-                    const hotStr = latestHotN.map(n => n.toString().padStart(2, '0')).join(' ') || '加载中...';
-                    const coldStr = latestColdN.map(n => n.toString().padStart(2, '0')).join(' ') || '加载中...';
+                    const hotStr = bannerHotN.map(n => n.toString().padStart(2, '0')).join(' ') || '加载中...';
+                    const coldStr = bannerColdN.map(n => n.toString().padStart(2, '0')).join(' ') || '加载中...';
                     infoDiv.innerHTML = `
                         <div style="white-space: nowrap; overflow-x: auto; padding-bottom: 2px;">
                             <span style="color:var(--text-secondary);">基于前[${periodText}期] 最新热码:</span> <span style="color:var(--up); font-weight:bold; font-size:12px; margin-left:4px;">${hotStr}</span>
@@ -1759,15 +1792,39 @@
 
         function updateStats() {
             const last = state.historyData[state.historyData.length - 1];
-            document.getElementById('statTotal').textContent = state.historyData.length;
-            document.getElementById('statScore').textContent = last ? (last.score > 0 ? '+' : '') + last.score : 0;
-            document.getElementById('statScore').style.color = last && last.score >= 0 ? 'var(--up)' : 'var(--down)';
+            const totalEl = document.getElementById('statTotal');
+            if (totalEl) totalEl.textContent = state.historyData.length;
+            const scoreEl = document.getElementById('statScore');
+            if (scoreEl) {
+                scoreEl.textContent = last ? (last.score > 0 ? '+' : '') + last.score : 0;
+                scoreEl.style.color = last && last.score >= 0 ? 'var(--up)' : 'var(--down)';
+            }
 
-            const snapshot = last?.snapshot || {};
-            const hot = Object.values(snapshot).filter(om => om <= 3).length;
-            const cold = Object.values(snapshot).filter(om => om >= 15).length;
-            document.getElementById('statHot').textContent = hot;
-            document.getElementById('statCold').textContent = cold;
+            const hotEl = document.getElementById('statHot');
+            const coldEl = document.getElementById('statCold');
+            if (hotEl && coldEl) {
+                const source = (typeof getSelectedColdSourceData === 'function') ? getSelectedColdSourceData() : state.historyData;
+                if (source && source.length > 0) {
+                    const keys = Array.from({ length: 49 }, (_, i) => (i + 1).toString().padStart(2, '0'));
+                    const counts = (typeof calculateFrequencyCounts === 'function') 
+                        ? calculateFrequencyCounts(keys, item => getAllDrawNumbers(item), source)
+                        : {};
+                    const freqs = Object.values(counts);
+                    if (freqs.length > 0) {
+                        const avg = freqs.reduce((a, b) => a + b, 0) / freqs.length;
+                        const hotCount = freqs.filter(f => f > avg).length;
+                        const coldCount = freqs.filter(f => f < avg).length;
+                        hotEl.textContent = hotCount;
+                        coldEl.textContent = coldCount;
+                    } else {
+                        hotEl.textContent = '0';
+                        coldEl.textContent = '0';
+                    }
+                } else {
+                    hotEl.textContent = '0';
+                    coldEl.textContent = '0';
+                }
+            }
 
             generateRecommendations();
         }
@@ -1788,6 +1845,10 @@
         }
 
         function toggleRecDrawer() {
+            const card = document.getElementById('recommendCard') || document.getElementById('recDrawer')?.closest('.sidebar-card');
+            if (card && card.classList.contains('collapsed')) {
+                card.classList.remove('collapsed');
+            }
             const el = document.getElementById('recDrawer');
             if (el) el.classList.toggle('open');
         }
@@ -1798,10 +1859,28 @@
             recConfig.spanCount = parseInt(document.getElementById('recSpanCount')?.value || '12', 10);
             recConfig.shrink = !!document.getElementById('recShrinkToggle')?.checked;
 
+            const coldValEl = document.getElementById('recWeightColdVal');
+            if (coldValEl) {
+                if (recConfig.weightCold <= 35) {
+                    coldValEl.textContent = `❄️ 冷偏 ${100 - recConfig.weightCold}%`;
+                    coldValEl.style.color = 'var(--down)';
+                } else if (recConfig.weightCold >= 65) {
+                    coldValEl.textContent = `🔥 热偏 ${recConfig.weightCold}%`;
+                    coldValEl.style.color = 'var(--up)';
+                } else {
+                    coldValEl.textContent = `⚖️ 均衡 50%`;
+                    coldValEl.style.color = 'var(--accent)';
+                }
+            }
+
             const morphValEl = document.getElementById('recWeightMorphVal');
             if (morphValEl) morphValEl.textContent = `${recConfig.weightMorph}%`;
             const spanValEl = document.getElementById('recSpanCountVal');
             if (spanValEl) spanValEl.textContent = `${recConfig.spanCount}码`;
+            const shrinkStatusEl = document.getElementById('recShrinkStatus');
+            if (shrinkStatusEl) {
+                shrinkStatusEl.innerHTML = recConfig.shrink ? '<b style="color:var(--up);">已启用</b>' : '未启用';
+            }
 
             generateRecommendations();
         }
@@ -1822,6 +1901,20 @@
             if (!last || !state.historyData.length) {
                 container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); font-size: 11px; padding: 10px;">暂无数据</div>';
                 return;
+            }
+
+            // 同步微调控制项最新状态
+            if (document.getElementById('recWeightCold')) {
+                recConfig.weightCold = parseInt(document.getElementById('recWeightCold').value || '50', 10);
+            }
+            if (document.getElementById('recWeightMorph')) {
+                recConfig.weightMorph = parseInt(document.getElementById('recWeightMorph').value || '60', 10);
+            }
+            if (document.getElementById('recSpanCount')) {
+                recConfig.spanCount = parseInt(document.getElementById('recSpanCount').value || '12', 10);
+            }
+            if (document.getElementById('recShrinkToggle')) {
+                recConfig.shrink = !!document.getElementById('recShrinkToggle').checked;
             }
 
             // 5. 走势异动与形态预警提示
@@ -2007,24 +2100,95 @@
 
         // ==================== 4. 智能缩水过滤矩阵 ====================
         function applyShrinkMatrix(scoredNumbers, targetCount = 10) {
-            if (!scoredNumbers || scoredNumbers.length <= targetCount) return scoredNumbers;
-            // 依据奇偶均衡、和值适中、尾数分散度进行精炼
-            const pool = scoredNumbers.slice(0, targetCount + 6);
-            const tailCounts = {};
-            const result = [];
+            if (!scoredNumbers || scoredNumbers.length <= targetCount) {
+                return { result: scoredNumbers ? scoredNumbers.slice(0, targetCount) : [], shrinkCount: 0, details: [] };
+            }
+            const target = targetCount;
+            const selected = [];
+            const details = [];
+            let shrinkCount = 0;
 
-            for (const item of pool) {
+            const tailCounts = {};
+            const zodiacCounts = {};
+            const colorCounts = { red: 0, blue: 0, green: 0 };
+            let oddCount = 0;
+            let evenCount = 0;
+            let extremeColdCount = 0;
+
+            const maxPerTail = target <= 8 ? 1 : 2;
+            const maxPerZodiac = target <= 10 ? 1 : 2;
+            const maxColor = Math.ceil(target * 0.55);
+            const maxExtremeCold = Math.max(1, Math.floor(target * 0.25));
+
+            for (let i = 0; i < scoredNumbers.length; i++) {
+                const item = scoredNumbers[i];
                 const num = parseInt(item.number, 10);
                 const tail = num % 10;
-                // 同尾号限制最多2个，以保证覆盖面
-                if ((tailCounts[tail] || 0) < 2) {
-                    result.push(item);
-                    tailCounts[tail] = (tailCounts[tail] || 0) + 1;
+                const z = item.zodiac;
+                const color = item.color;
+                const isOdd = num % 2 !== 0;
+                const isExtremeCold = item.currentOm >= 18;
+
+                let rejectReason = null;
+
+                // 1. 同尾扎堆过滤
+                if ((tailCounts[tail] || 0) >= maxPerTail) {
+                    rejectReason = `同尾(${tail}尾超标)`;
                 }
-                if (result.length >= targetCount) break;
+                // 2. 同肖扎堆过滤
+                else if ((zodiacCounts[z] || 0) >= maxPerZodiac) {
+                    rejectReason = `同肖(${z}超标)`;
+                }
+                // 3. 极冷号码扎堆过滤 (防全冷死单)
+                else if (isExtremeCold && extremeColdCount >= maxExtremeCold) {
+                    rejectReason = `极冷超跌过多`;
+                }
+                // 4. 单一波色超标过滤
+                else if ((colorCounts[color] || 0) >= maxColor && (selected.length < target - 2)) {
+                    rejectReason = `波色失衡(${color === 'red' ? '红' : color === 'blue' ? '蓝' : '绿'}波过载)`;
+                }
+                // 5. 奇偶极端失衡过滤
+                else if (selected.length >= target - 3) {
+                    if (isOdd && oddCount >= Math.ceil(target * 0.75)) {
+                        rejectReason = `奇数过载`;
+                    } else if (!isOdd && evenCount >= Math.ceil(target * 0.75)) {
+                        rejectReason = `偶数过载`;
+                    }
+                }
+
+                if (rejectReason && selected.length < target) {
+                    if (i < target) {
+                        shrinkCount++;
+                        details.push(`${item.number}(${rejectReason})`);
+                    }
+                    continue;
+                }
+
+                selected.push(item);
+                tailCounts[tail] = (tailCounts[tail] || 0) + 1;
+                zodiacCounts[z] = (zodiacCounts[z] || 0) + 1;
+                if (colorCounts[color] !== undefined) colorCounts[color]++;
+                if (isOdd) oddCount++; else evenCount++;
+                if (isExtremeCold) extremeColdCount++;
+
+                if (selected.length >= target) break;
             }
 
-            return result.length >= targetCount ? result : pool.slice(0, targetCount);
+            // 若候选耗尽未达 target 则顺延补齐
+            if (selected.length < target) {
+                for (const item of scoredNumbers) {
+                    if (!selected.some(s => s.number === item.number)) {
+                        selected.push(item);
+                        if (selected.length >= target) break;
+                    }
+                }
+            }
+
+            return {
+                result: selected,
+                shrinkCount,
+                details
+            };
         }
 
         // ==================== 1. 多因子量化打分模型 ====================
@@ -2036,25 +2200,40 @@
             const total = historyData.length || 1;
 
             const recent30 = historyData.slice(-30);
+            const recent10 = historyData.slice(-10);
             const freq30 = {};
-            const freq50 = {};
-            historyData.slice(-50).forEach(d => {
-                if (d.special) {
-                    const numStr = parseInt(d.special, 10).toString().padStart(2, '0');
-                    freq50[numStr] = (freq50[numStr] || 0) + 1;
-                }
-            });
+            const freq10 = {};
+            const recentColorCounts = { red: 0, blue: 0, green: 0 };
+
             recent30.forEach(d => {
                 if (d.special) {
                     const numStr = parseInt(d.special, 10).toString().padStart(2, '0');
                     freq30[numStr] = (freq30[numStr] || 0) + 1;
                 }
             });
+            recent10.forEach(d => {
+                if (d.special) {
+                    const numStr = parseInt(d.special, 10).toString().padStart(2, '0');
+                    freq10[numStr] = (freq10[numStr] || 0) + 1;
+                    const c = getColor(numStr);
+                    if (recentColorCounts[c] !== undefined) recentColorCounts[c]++;
+                }
+            });
+
+            let dominantColor = 'red';
+            let maxColorF = -1;
+            Object.entries(recentColorCounts).forEach(([c, cnt]) => {
+                if (cnt > maxColorF) { maxColorF = cnt; dominantColor = c; }
+            });
 
             // 权重调节因子
-            const coldWeightFactor = (100 - recConfig.weightCold) / 50; // 0~2, default 1
-            const hotWeightFactor = recConfig.weightCold / 50;          // 0~2, default 1
-            const morphWeightFactor = recConfig.weightMorph / 50;       // 0~2, default 1.2
+            const wCold = Math.max(0, Math.min(100, recConfig.weightCold !== undefined ? recConfig.weightCold : 50));
+            const wMorph = Math.max(0, Math.min(100, recConfig.weightMorph !== undefined ? recConfig.weightMorph : 60));
+
+            // coldBias (0~2) & hotBias (0~2)
+            const coldBias = (100 - wCold) / 50;
+            const hotBias = wCold / 50;
+            const morphWeight = wMorph / 100;
 
             // 49码打分
             const scoredNumbers = [];
@@ -2065,66 +2244,105 @@
                 const currentOm = numSnapshot[numStr] !== undefined ? numSnapshot[numStr] : 0;
                 const zOm = snapshot[z] || 0;
                 const zMax = (globalMaxOm || {})[z] || 25;
+                const zRatio = zMax > 0 ? zOm / zMax : 0;
                 const f30 = freq30[numStr] || 0;
+                const f10 = freq10[numStr] || 0;
 
                 const morphTags = getMorphologyTags(numStr, historyData);
 
-                let score = 0;
-                const tags = [];
-
-                // 因子1: 遗漏回归
-                if (currentOm >= 15) {
-                    score += Math.min(45, currentOm * 1.5) * coldWeightFactor;
-                    tags.push('极值回补');
-                } else if (currentOm >= 8) {
-                    score += currentOm * 1.2 * coldWeightFactor;
-                } else if (currentOm <= 3) {
-                    // 因子2: 热度追热
-                    if (f30 >= 2) {
-                        score += (25 + f30 * 5) * hotWeightFactor;
-                        tags.push('热码中继');
-                    }
+                // 1. 遗漏冷度得分 (0 ~ 100)
+                let coldScore = 0;
+                if (currentOm >= 20) {
+                    coldScore = 75 + Math.min(25, (currentOm - 20) * 1.5);
+                } else if (currentOm >= 12) {
+                    coldScore = 50 + (currentOm - 12) * 3;
+                } else if (currentOm >= 6) {
+                    coldScore = 24 + (currentOm - 6) * 4;
+                } else {
+                    coldScore = currentOm * 4;
                 }
+                if (zRatio >= 0.75) coldScore = Math.min(100, coldScore + 15);
 
-                // 因子3: 生肖偏态共振
-                const zRatio = zMax > 0 ? zOm / zMax : 0;
+                // 2. 热度活跃得分 (0 ~ 100)
+                let hotScore = (f30 * 12) + (f10 * 18);
+                if (currentOm === 0) {
+                    hotScore += 35;
+                } else if (currentOm <= 2) {
+                    hotScore += 22;
+                } else if (currentOm <= 5) {
+                    hotScore += 10;
+                } else if (currentOm >= 12) {
+                    hotScore = Math.max(0, hotScore - (currentOm - 10) * 3);
+                }
+                if (zOm <= 1) hotScore = Math.min(100, hotScore + 15);
+                hotScore = Math.min(100, hotScore);
+
+                // 3. 形态学共振得分 (0 ~ 100)
+                let morphScore = 0;
+                if (morphTags.includes('特重号')) morphScore += 30;
+                if (morphTags.includes('特邻号')) morphScore += 26;
+                if (morphTags.includes('正邻号')) morphScore += 16;
+                if (morphTags.includes('隔期跳')) morphScore += 22;
+                if (morphTags.includes('同尾共振')) morphScore += 25;
+                if (color === dominantColor) {
+                    morphScore += 18;
+                    if (!morphTags.includes('热波共振')) morphTags.push('热波共振');
+                }
                 if (zRatio >= 0.7) {
-                    score += 20 * morphWeightFactor;
-                    if (!tags.includes('极值回补')) tags.push('生肖共振');
-                } else if (zOm <= 2) {
-                    score += 15;
+                    morphScore += 20;
+                    if (!morphTags.includes('生肖偏态')) morphTags.push('生肖偏态');
                 }
+                morphScore = Math.min(100, morphScore);
 
-                // 因子4: 形态学加权 (邻号 / 重号 / 同尾)
-                if (morphTags.length > 0) {
-                    score += 12 * morphWeightFactor;
-                    tags.push(morphTags[0]);
+                // 综合评分计算：冷热平衡基底 + 形态加权
+                const statBase = (coldScore * coldBias) + (hotScore * hotBias);
+                const statPart = statBase * (1.0 - morphWeight * 0.4);
+                const morphPart = morphScore * (morphWeight * 2.0);
+                const finalScore = Math.round(statPart + morphPart);
+
+                // 标签匹配
+                let primaryTag = '均线平衡';
+                if (wCold <= 35 && currentOm >= 8) {
+                    primaryTag = currentOm >= 20 ? '极冷超跌' : '遗漏反弹';
+                } else if (wCold >= 65 && (f30 >= 2 || currentOm <= 2)) {
+                    primaryTag = currentOm <= 1 ? '顺势连庄' : '高频热码';
+                } else if (morphWeight >= 0.45 && morphTags.length > 0) {
+                    primaryTag = morphTags[0];
+                } else if (currentOm >= 15) {
+                    primaryTag = '极值回补';
+                } else if (f30 >= 3) {
+                    primaryTag = '热码中继';
+                } else if (morphTags.length > 0) {
+                    primaryTag = morphTags[0];
                 }
-
-                if (tags.length === 0) tags.push('均线平衡');
 
                 scoredNumbers.push({
                     number: numStr,
                     zodiac: z,
                     color,
-                    score: Math.round(score),
+                    score: finalScore,
                     currentOm,
                     f30,
-                    tag: tags[0],
+                    f10,
+                    tag: primaryTag,
                     morphTags
                 });
             }
 
             scoredNumbers.sort((a, b) => b.score - a.score);
 
-            const displayCount = recConfig.spanCount || 10;
-            let topNumbers = scoredNumbers.slice(0, displayCount + 4);
+            const displayCount = recConfig.spanCount || 12;
+            let topNumbers = [];
+            let shrinkCount = 0;
+            let shrinkInfo = '';
 
-            // 启用缩水过滤
             if (recConfig.shrink) {
-                topNumbers = applyShrinkMatrix(topNumbers, displayCount);
+                const shrinkRes = applyShrinkMatrix(scoredNumbers, displayCount);
+                topNumbers = shrinkRes.result;
+                shrinkCount = shrinkRes.shrinkCount;
+                shrinkInfo = shrinkRes.details.length > 0 ? shrinkRes.details.join('、') : '优化同尾与生肖过度集中';
             } else {
-                topNumbers = topNumbers.slice(0, displayCount);
+                topNumbers = scoredNumbers.slice(0, displayCount);
             }
 
             // 12生肖评分
@@ -2133,7 +2351,7 @@
                 const maxRecord = (globalMaxOm || {})[z] || 25;
                 const ratio = maxRecord > 0 ? currentOm / maxRecord : 0;
                 const count = (last.counts || {})[z] || 0;
-                let zScore = currentOm * 4 + ratio * 35 + (count / total) * 100;
+                let zScore = (currentOm * 4 * coldBias) + (ratio * 35) + ((count / total) * 100 * hotBias);
                 let zTag = ratio >= 0.75 ? '极限逼近' : currentOm <= 2 ? '顺势热肖' : '中枢回归';
                 return { zodiac: z, score: Math.round(zScore), currentOm, maxRecord, ratio, tag: zTag };
             }).sort((a, b) => b.score - a.score);
@@ -2142,7 +2360,10 @@
                 type: 'multifactor',
                 topNumbers,
                 topZodiacs: scoredZodiacs.slice(0, 4),
-                allScored: scoredNumbers
+                allScored: scoredNumbers,
+                shrinkApplied: recConfig.shrink,
+                shrinkCount,
+                shrinkInfo
             };
         }
 
@@ -2153,8 +2374,8 @@
 
             const goldDan = all.slice(0, 2);
             const silverDan = all.slice(2, 5);
-            const baseCount = recConfig.spanCount || 15;
-            const baseNumbers = all.slice(0, baseCount);
+            const baseCount = recConfig.spanCount || 12;
+            const baseNumbers = mf.topNumbers;
 
             const killCandidates = all.slice(-12).filter(item => item.f30 === 0 && item.currentOm < 35).slice(0, 8);
             const killedNumbers = killCandidates.length >= 5 ? killCandidates : all.slice(-8);
@@ -2165,7 +2386,9 @@
                 silverDan,
                 baseNumbers,
                 killedNumbers,
-                topZodiacs: mf.topZodiacs
+                topZodiacs: mf.topZodiacs,
+                shrinkCount: mf.shrinkCount,
+                shrinkInfo: mf.shrinkInfo
             };
         }
 
@@ -2191,6 +2414,11 @@
                 });
             });
 
+            // 权重调节因子
+            const wCold = Math.max(0, Math.min(100, recConfig.weightCold !== undefined ? recConfig.weightCold : 50));
+            const cBias = (100 - wCold) / 50;
+            const hBias = wCold / 50;
+
             // 排序平特生肖
             const topFlatZodiacs = zodiacs.map(z => ({
                 zodiac: z,
@@ -2205,24 +2433,29 @@
                 rate: Math.round(((tailFlatFreq[t] || 0) / (recent30.length * 7)) * 100)
             })).sort((a, b) => b.hits - a.hits).slice(0, 3);
 
-            // 排序平特高频金码
+            // 排序平特推荐码（结合冷热偏好）
             const topFlatNums = [];
             for (let i = 1; i <= 49; i++) {
                 const nStr = i.toString().padStart(2, '0');
+                const om = (last.numberSnapshot || {})[nStr] || 0;
+                const hits = numFlatFreq[nStr] || 0;
+                const flatScore = (hits * 6 * hBias) + (Math.min(30, om * 2) * cBias);
                 topFlatNums.push({
                     number: nStr,
                     zodiac: getZodiac(i),
                     color: getColor(nStr),
-                    hits: numFlatFreq[nStr] || 0
+                    hits,
+                    flatScore
                 });
             }
-            topFlatNums.sort((a, b) => b.hits - a.hits);
+            topFlatNums.sort((a, b) => b.flatScore - a.flatScore);
 
+            const displayCount = recConfig.spanCount || 10;
             return {
                 type: 'normal_track',
                 topFlatZodiacs,
                 topFlatTails,
-                topFlatNums: topFlatNums.slice(0, 10)
+                topFlatNums: topFlatNums.slice(0, displayCount)
             };
         }
 
@@ -2573,7 +2806,7 @@
 
                     <div class="rec-section-box" style="margin-bottom:0;">
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                            <span style="font-size:11px;font-weight:700;color:var(--text-primary);">🎰 正码连开精选码 (Top 10)</span>
+                            <span style="font-size:11px;font-weight:700;color:var(--text-primary);">🎰 正码连开精选码 (Top ${topFlatNums.length})</span>
                             <button class="rec-apply-btn" onclick="applyRecommendToKLine('flat_num', '${flatNumStr}')">套用正码</button>
                         </div>
                         <div style="display:grid;grid-template-columns:repeat(5, 1fr);gap:4px;">
@@ -2592,7 +2825,7 @@
 
             // 1. 多因子量化共振界面
             if (strategy === 'multifactor' && recommendations.topNumbers) {
-                const { topNumbers, topZodiacs } = recommendations;
+                const { topNumbers, topZodiacs, shrinkCount, shrinkInfo } = recommendations;
                 const numListStr = topNumbers.map(n => n.number).join(',');
                 const isShrinked = recConfig.shrink;
 
@@ -2601,7 +2834,7 @@
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
                             <div style="display:flex;align-items:center;gap:4px;">
                                 <span style="font-size:11px;font-weight:700;color:var(--accent);">⭐ 综合置信度 Top ${topNumbers.length} 码</span>
-                                ${isShrinked ? '<span style="font-size:8.5px;padding:1px 4px;border-radius:3px;background:rgba(0,230,118,0.15);color:var(--up);border:1px solid rgba(0,230,118,0.3);">已缩水</span>' : ''}
+                                ${isShrinked ? `<span style="font-size:8.5px;padding:1px 4px;border-radius:3px;background:rgba(0,230,118,0.15);color:var(--up);border:1px solid rgba(0,230,118,0.3);" title="${shrinkInfo || '已自动进行同尾/同肖/冷态瘦身'}">已缩水${shrinkCount ? `(滤换${shrinkCount}码)` : ''}</span>` : ''}
                             </div>
                             <button class="rec-apply-btn" onclick="applyRecommendToKLine('multi', '${numListStr}')">📈 套用至K线</button>
                         </div>
@@ -2664,7 +2897,7 @@
 
                     <div class="rec-section-box">
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                            <span style="font-size:11px;font-weight:700;color:#c0c0c0;">🥈 辅助银胆 & 精选大底 (15码)</span>
+                            <span style="font-size:11px;font-weight:700;color:#c0c0c0;">🥈 辅助银胆 & 精选大底 (${baseNumbers.length}码)</span>
                             <button class="rec-apply-btn" onclick="applyRecommendToKLine('base', '${baseStr}')">套用大底</button>
                         </div>
                         <div style="display:flex;flex-wrap:wrap;gap:4px;">
@@ -3041,7 +3274,9 @@
         function onColdCalcWindowChange(val) {
             state.coldCalcWindow = val;
             updateColdCalcWindowUI();
+            updateAllDualSliders();
             updateLiveSelectionPreview();
+            updateStats();
             if (state.currentMode === 'cold_custom' && state.coldSelection) {
                 recalcData();
             }
@@ -4313,12 +4548,12 @@
 
         // ==================== 快捷区间 & 量化策略预设 & 滑动条交互 ====================
         const DUAL_RANGE_CONFIGS = {
-            omissionRange: { max: 49, unit: '码' },
-            omissionZodiacRange: { max: 12, unit: '肖' },
-            hotNumberRange: { max: 49, unit: '码' },
-            allHotNumberRange: { max: 49, unit: '码' },
-            hotZodiacRange: { max: 12, unit: '肖' },
-            allHotZodiacRange: { max: 12, unit: '肖' }
+            omissionRange: { max: 49, unit: '码', leftLabel: '多', rightLabel: '少' },
+            omissionZodiacRange: { max: 12, unit: '肖', leftLabel: '多', rightLabel: '少' },
+            hotNumberRange: { max: 49, unit: '码', leftLabel: '热', rightLabel: '冷' },
+            allHotNumberRange: { max: 49, unit: '码', leftLabel: '热', rightLabel: '冷' },
+            hotZodiacRange: { max: 12, unit: '肖', leftLabel: '热', rightLabel: '冷' },
+            allHotZodiacRange: { max: 12, unit: '肖', leftLabel: '热', rightLabel: '冷' }
         };
 
         let coldKlineDebounceTimer = null;
@@ -4420,6 +4655,7 @@
             if (badge) {
                 const count = eVal - sVal + 1;
                 const segs = getRangeSegments(rangeType);
+                const orient = (cfg.leftLabel && cfg.rightLabel) ? `[${cfg.leftLabel}→${cfg.rightLabel}] ` : '';
                 if (segs && segs.length > 0) {
                     const omissionSourceData = getSelectedColdSourceData();
                     const hotColdSourceData = (typeof getSelectedHotColdSourceData === 'function') ? getSelectedHotColdSourceData() : omissionSourceData;
@@ -4427,9 +4663,9 @@
                     segs.forEach(seg => {
                         getItemsForRangeType(rangeType, seg.start, seg.end, omissionSourceData, hotColdSourceData).forEach(it => itemSet.add(it));
                     });
-                    badge.textContent = `滑块:第${sVal}~${eVal}位 | 多段(${segs.length}段)共${itemSet.size}${u}`;
+                    badge.textContent = `滑块:${orient}第${sVal}~${eVal}位 | 多段(${segs.length}段)共${itemSet.size}${u}`;
                 } else {
-                    badge.textContent = `第 ${sVal} ~ ${eVal} 位 (共${count}${u})`;
+                    badge.textContent = `${orient}第 ${sVal} ~ ${eVal} 位 (共${count}${u})`;
                 }
             }
         }
@@ -6301,7 +6537,7 @@
             const N = pageSizeVal === 'all' ? state.historyData.length : parseInt(pageSizeVal);
             const absIdx = data.total - 1;
             const windowData = state.historyData.slice(Math.max(0, absIdx - N), absIdx);
-            const numStr = data.winNum.toString().padStart(2, '0');
+            const numStr = data.winNum != null ? data.winNum.toString().padStart(2, '0') : '--';
 
             let modeSpecificHtml = '';
             const currentMode = state.currentMode;
