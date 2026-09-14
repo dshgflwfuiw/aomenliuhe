@@ -36,6 +36,8 @@
             rangeSegments: {
                 omissionRange: [],
                 omissionZodiacRange: [],
+                pingOmissionRange: [],
+                pingOmissionZodiacRange: [],
                 hotNumberRange: [],
                 allHotNumberRange: [],
                 hotZodiacRange: [],
@@ -65,7 +67,10 @@
                 waves: [],
                 coldTop5: false,
                 manualNumbers: [],
-                excludedSingles: []
+                excludedSingles: [],
+                morphs: [],
+                heNumbers: [],
+                heTails: []
             },
             showSignals: true,
             loadedYears: new Set(),
@@ -74,6 +79,8 @@
             isDragging: false,
             lastMouse: { x: 0, y: 0 },
             hoverIndex: -1,
+            tableHighlightItem: null,
+            latestDataRecord: null,
             lastTapTime: null,
             tooltipTimeout: null,
             lastTouchDist: 0,
@@ -91,6 +98,20 @@
                 resizeCanvas();
                 draw();
             });
+
+            // 恢复持久化偏好 (年份与模式)
+            try {
+                const savedYear = localStorage.getItem('aomen_selected_year');
+                if (savedYear && document.getElementById('yearSel')) {
+                    document.getElementById('yearSel').value = savedYear;
+                }
+                const savedMode = localStorage.getItem('aomen_selected_mode');
+                if (savedMode && savedMode !== 'sum_trend' && savedMode !== 'span_trend' && document.getElementById('trendModeSel')) {
+                    state.currentMode = savedMode;
+                    document.getElementById('trendModeSel').value = savedMode;
+                }
+            } catch (e) {}
+
             initEvents();
             initCardCollapse();
             initFilterCalculatorListeners();
@@ -107,8 +128,33 @@
             buildOverlayOptions();
             initUserStrategies();
             initAllDualSliders();
+
+            // 恢复推荐配置
+            loadRecConfig();
+
+            // 初始化10期倍投计算器
+            calculateBetPlan();
+
+            // 监听年份切换以自动持久化
+            const yearSelEl = document.getElementById('yearSel');
+            if (yearSelEl) {
+                yearSelEl.addEventListener('change', (e) => {
+                    try { localStorage.setItem('aomen_selected_year', e.target.value); } catch (err) {}
+                });
+            }
+
             fetchData();
         });
+
+        // ==================== 高性能分帧防抖重绘引擎 ====================
+        let drawRafId = null;
+        function requestDraw() {
+            if (drawRafId) return;
+            drawRafId = requestAnimationFrame(() => {
+                drawRafId = null;
+                draw();
+            });
+        }
 
         function resizeCanvas() {
             const container = state.canvas.parentElement;
@@ -146,7 +192,7 @@
                     state.viewState.y += dy;
                     state.lastMouse.x = e.clientX;
                     state.lastMouse.y = e.clientY;
-                    draw();
+                    requestDraw();
                     return;
                 }
 
@@ -162,7 +208,7 @@
 
                 if (idx !== state.hoverIndex) {
                     state.hoverIndex = idx;
-                    draw();
+                    requestDraw();
                     updateInfoPanel(state.visibleData[idx]);
                     
                     if (state.visibleData[idx]) {
@@ -197,12 +243,18 @@
                 
                 state.viewState.x = mouseX - (mouseX - state.viewState.x) * (state.viewState.scale / oldScale);
                 
-                draw();
+                requestDraw();
             });
 
             canvas.addEventListener('mouseleave', () => {
                 state.hoverIndex = -1;
-                draw();
+                requestDraw();
+                hideKlineTooltip();
+                if (state.latestDataRecord) {
+                    updateInfoPanel(state.latestDataRecord, false);
+                } else if (state.visibleData && state.visibleData.length > 0) {
+                    updateInfoPanel(state.visibleData[state.visibleData.length - 1], false);
+                }
             });
 
             canvas.addEventListener('touchstart', (e) => {
@@ -218,7 +270,10 @@
                     const touchX = e.touches[0].clientX - rect.left - state.viewState.x;
                     let idx = Math.round((touchX - startX) / spacing);
                     state.hoverIndex = Math.max(0, Math.min(idx, state.visibleData.length - 1));
-                    draw();
+                    requestDraw();
+                    if (state.visibleData[state.hoverIndex]) {
+                        updateInfoPanel(state.visibleData[state.hoverIndex]);
+                    }
                 } else if (e.touches.length === 2) {
                     state.isDragging = false;
                     state.lastTouchDist = Math.hypot(
@@ -236,7 +291,7 @@
                     state.viewState.y += dy;
                     state.lastMouse.x = e.touches[0].clientX;
                     state.lastMouse.y = e.touches[0].clientY;
-                    draw();
+                    requestDraw();
                 } else if (e.touches.length === 2) {
                     e.preventDefault();
                     const dist = Math.hypot(
@@ -253,7 +308,7 @@
                         const centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
                         state.viewState.x = centerX - (centerX - state.viewState.x) * (state.viewState.scale / oldScale);
                         
-                        draw();
+                        requestDraw();
                     }
                     state.lastTouchDist = dist;
                 }
@@ -262,14 +317,85 @@
             canvas.addEventListener('touchend', () => {
                 state.isDragging = false;
                 state.lastTouchDist = 0;
+                setTimeout(() => {
+                    if (!state.isDragging && state.hoverIndex >= 0) {
+                        state.hoverIndex = -1;
+                        requestDraw();
+                        hideKlineTooltip();
+                        if (state.latestDataRecord) {
+                            updateInfoPanel(state.latestDataRecord, false);
+                        } else if (state.visibleData && state.visibleData.length > 0) {
+                            updateInfoPanel(state.visibleData[state.visibleData.length - 1], false);
+                        }
+                    }
+                }, 3000);
             });
+        }
+
+        let toastTimer = null;
+        function showToast(msg, duration = 2200) {
+            const el = document.getElementById('appToast');
+            if (!el) return;
+            el.innerHTML = msg;
+            el.classList.add('show');
+            if (toastTimer) clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => {
+                el.classList.remove('show');
+            }, duration);
+        }
+
+        function switchSidebarCategory(category) {
+            state.activeSidebarCategory = category;
+            try {
+                localStorage.setItem('aomen_sidebar_category', category);
+            } catch (e) {}
+
+            const pills = document.querySelectorAll('.sidebar-cat-pill');
+            pills.forEach(p => {
+                const fn = p.getAttribute('onclick') || '';
+                p.classList.toggle('active', fn.includes(`'${category}'`));
+            });
+
+            const cards = document.querySelectorAll('.sidebar-card');
+            let firstVisibleCard = null;
+            cards.forEach(card => {
+                const isColdCard = card.id === 'coldCard';
+                if (isColdCard && state.currentMode !== 'cold_custom') {
+                    card.style.display = 'none';
+                    return;
+                }
+
+                const cat = card.getAttribute('data-category') || '';
+                const catList = cat.split(',').map(s => s.trim());
+                if (category === 'all' || catList.includes(category)) {
+                    card.style.display = '';
+                    if (!firstVisibleCard) firstVisibleCard = card;
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+
+            if (firstVisibleCard && category !== 'all') {
+                firstVisibleCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
         }
 
         function initCardCollapse() {
             const cards = document.querySelectorAll('.sidebar-card');
-            cards.forEach(card => {
+            let savedCollapse = {};
+            try {
+                savedCollapse = JSON.parse(localStorage.getItem('aomen_cards_collapsed') || '{}');
+            } catch (e) {}
+
+            cards.forEach((card, idx) => {
                 const header = card.querySelector('h3');
                 if (!header) return;
+
+                const cardKey = card.id || ('card_' + idx);
+                if (savedCollapse[cardKey]) {
+                    card.classList.add('collapsed');
+                }
+
                 if (header.querySelector('.card-toggle-arrow')) return;
 
                 const arrow = document.createElement('span');
@@ -286,8 +412,21 @@
                 header.addEventListener('click', (e) => {
                     if (e.target && ['INPUT', 'SELECT', 'BUTTON', 'LABEL'].includes(e.target.tagName)) return;
                     card.classList.toggle('collapsed');
+                    try {
+                        const curr = JSON.parse(localStorage.getItem('aomen_cards_collapsed') || '{}');
+                        curr[cardKey] = card.classList.contains('collapsed');
+                        localStorage.setItem('aomen_cards_collapsed', JSON.stringify(curr));
+                    } catch (err) {}
                 });
             });
+
+            // 恢复上次选中的分类
+            try {
+                const savedCat = localStorage.getItem('aomen_sidebar_category');
+                if (savedCat) {
+                    switchSidebarCategory(savedCat);
+                }
+            } catch (e) {}
         }
 
         // ==================== 数据获取 ====================
@@ -301,10 +440,25 @@
                 showLoading(false);
                 return true;
             } catch (err) {
-                console.error('Fetch error, loading fallback mock data:', err);
-                // 自动拉起备份数据，防止主界面白屏
-                loadMockData();
-                showLoading(false);
+                console.error('Fetch error:', err);
+                // 检查本地是否有历史缓存
+                const cacheKey = `lottery_data_${year}`;
+                const cached = localStorage.getItem(cacheKey);
+                if (cached) {
+                    try {
+                        const parsed = JSON.parse(cached);
+                        const result = parsed.data || parsed;
+                        if (Array.isArray(result) && result.length > 0) {
+                            showToast(`⚠️ 网络不畅，已载入 ${year} 年本地缓存数据`, 3000);
+                            processData(result);
+                            showLoading(false);
+                            return true;
+                        }
+                    } catch (e) {}
+                }
+
+                // 若首次使用无任何缓存，展示重试与使用离线演示数据操作面板
+                showLoading(true, true, `数据请求失败: ${err.message || '网络连接超时'}。您可以重试或载入演示数据继续体验。`);
                 return false;
             }
         }
@@ -359,7 +513,20 @@
             }
 
             clearTimeout(timeoutId);
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            if (!response || !response.ok) {
+                // 网络失败时，尝试降级读取本地已有的任何缓存版本，保障离线可用性
+                if (cached) {
+                    try {
+                        const parsed = JSON.parse(cached);
+                        const result = parsed.data || parsed;
+                        if (Array.isArray(result) && result.length > 0) {
+                            showToast(`⚠️ 网络连接受限，已载入 ${year} 年本地离线数据`, 2800);
+                            return result;
+                        }
+                    } catch (e) {}
+                }
+                throw new Error(`HTTP ${response ? response.status : 'Network Failed'}`);
+            }
             const data = await response.json();
 
             if (data.data && Array.isArray(data.data) && data.data.length > 0) {
@@ -649,10 +816,14 @@
                         );
                         const rollingOptionSets = getColdOptionNumberSets({
                             ...rollingSets,
+                            base49: (cold.setTypes && cold.setTypes.includes('base49')),
                             inputNumbers: cold.selectedNumbers,
                             inputTerms: cold.inputTerms,
                             selectZodiacs: cold.selectedZodiacs,
-                            selectedWaves: cold.selectedWaves
+                            selectedWaves: cold.selectedWaves,
+                            selectedMorphs: cold.selectedMorphs,
+                            selectedHeNumbers: cold.selectedHeNumbers,
+                            selectedHeTails: cold.selectedHeTails
                         });
                         const smode = cold.setMode || cold.filterCalcMode || 'all';
                         const killsToUse = cold.excludeKills || state.excludeKills;
@@ -679,10 +850,14 @@
                         );
                         const currentOptionSets = getColdOptionNumberSets({
                             ...currentSets,
+                            base49: (cold.setTypes && cold.setTypes.includes('base49')),
                             inputNumbers: cold.selectedNumbers,
                             inputTerms: cold.inputTerms,
                             selectZodiacs: cold.selectedZodiacs,
-                            selectedWaves: cold.selectedWaves
+                            selectedWaves: cold.selectedWaves,
+                            selectedMorphs: cold.selectedMorphs,
+                            selectedHeNumbers: cold.selectedHeNumbers,
+                            selectedHeTails: cold.selectedHeTails
                         });
                         const { finalNumbers: curNums } = applySetModeAndExcludeKills(
                             currentOptionSets,
@@ -694,6 +869,9 @@
                         if (cold.inputTerms) coldHitSetsForPoint.inputNumbers = formatInputTerms(cold.inputTerms);
                         if (cold.selectedZodiacs && cold.selectedZodiacs.length) coldHitSetsForPoint.selectZodiacs = cold.selectedZodiacs;
                         if (cold.selectedWaves && cold.selectedWaves.length) coldHitSetsForPoint.selectedWaves = cold.selectedWaves;
+                        if (cold.selectedMorphs && cold.selectedMorphs.length) coldHitSetsForPoint.selectedMorphs = cold.selectedMorphs;
+                        if (cold.selectedHeNumbers && cold.selectedHeNumbers.length) coldHitSetsForPoint.selectedHeNumbers = cold.selectedHeNumbers;
+                        if (cold.selectedHeTails && cold.selectedHeTails.length) coldHitSetsForPoint.selectedHeTails = cold.selectedHeTails;
                         if (nums.length >= 1) {
                             followTargetForPoint = nums.map(n => parseInt(n, 10)).join('、');
                             step = nums.includes(winNum.toString().padStart(2, '0')) ? 1 : -1;
@@ -927,11 +1105,20 @@
                     });
                 }
 
+                const pointTotalSum = cList.reduce((acc, cur) => acc + parseInt(cur, 10), 0);
+                const sortedNormal = cList.slice(0, 6).map(n => parseInt(n, 10)).sort((a, b) => a - b);
+                const pointNormalSpan = sortedNormal.length > 0 ? (sortedNormal[sortedNormal.length - 1] - sortedNormal[0]) : 0;
+                const prevSpecialNum = idx > 0 ? parseInt(list[idx - 1].openCode.split(',')[6], 10) : winNum;
+                const pointSpecialAmp = Math.abs(winNum - prevSpecialNum);
+
                 const historyPoint = {
                     expect: item.expect,
+                    period: item.expect,
                     time: item.openTime,
                     win: winZ,
                     winNum: winNum,
+                    special: winNum.toString().padStart(2, '0'),
+                    numbers: cList.slice(0, 6),
                     step: step,
                     score: score,
                     ma5: ma5,
@@ -942,6 +1129,9 @@
                     tailSnapshot: { ...tailOmissions },
                     tailCounts: { ...tailCounts },
                     total: idx + 1,
+                    totalSum: pointTotalSum,
+                    normalSpan: pointNormalSpan,
+                    specialAmplitude: pointSpecialAmp,
                     colorScores: { ...colorScores },
                     colorOmissions: { ...colorOmissions },
                     colorMaxOmissions: { ...colorMaxOmissions },
@@ -1001,10 +1191,14 @@
                 if (cold.setKline) {
                     const latestOptionSets = getColdOptionNumberSets({
                         ...latestSets,
+                        base49: (cold.setTypes && cold.setTypes.includes('base49')),
                         inputNumbers: cold.selectedNumbers,
                         inputTerms: cold.inputTerms,
                         selectZodiacs: cold.selectedZodiacs,
-                        selectedWaves: cold.selectedWaves
+                        selectedWaves: cold.selectedWaves,
+                        selectedMorphs: cold.selectedMorphs,
+                        selectedHeNumbers: cold.selectedHeNumbers,
+                        selectedHeTails: cold.selectedHeTails
                     });
                     const setMode = cold.setMode || cold.filterCalcMode || 'all';
                     const killsToUse = cold.excludeKills || state.excludeKills;
@@ -1447,6 +1641,39 @@
                     ctx.fillText(String(label), 8, 16 + idx * 14);
                 });
             }
+
+            // 表格双向联动高亮展示：如果在表格中点击选中了生肖或尾数，在对应开出的期次上打上金色光环
+            if (state.tableHighlightItem && data.length) {
+                const hlName = state.tableHighlightItem;
+                const isTailSearch = hlName.endsWith('尾');
+                const targetVal = isTailSearch ? parseInt(hlName.replace('尾', ''), 10) : hlName;
+
+                ctx.save();
+                data.forEach(d => {
+                    if (d.px == null || d.py == null) return;
+                    let isHit = false;
+                    if (isTailSearch) {
+                        isHit = (d.tailWin === targetVal || (d.tailWin != null && d.tailWin + '尾' === hlName));
+                    } else {
+                        isHit = (d.win === targetVal || (d.pingXiao && d.pingXiao.includes(targetVal)));
+                    }
+
+                    if (isHit) {
+                        ctx.beginPath();
+                        ctx.arc(d.px, d.py, dotSize + 4.5, 0, Math.PI * 2);
+                        ctx.strokeStyle = '#ffd700';
+                        ctx.lineWidth = 2.2;
+                        ctx.stroke();
+
+                        ctx.beginPath();
+                        ctx.arc(d.px, d.py, dotSize + 1.5, 0, Math.PI * 2);
+                        ctx.fillStyle = 'rgba(255, 215, 0, 0.35)';
+                        ctx.fill();
+                    }
+                });
+                ctx.restore();
+            }
+
             ctx.globalAlpha = 1;
         }
         function drawColorModeFixed(ctx, data, width, height, spacing, startX) {
@@ -1515,6 +1742,36 @@
                 ctx.fillStyle = themeText(0.6);
                 ctx.fillText(`本期红${cnt.red} 蓝${cnt.blue} 绿${cnt.green}`, width - 58, 68);
             }
+
+            if (state.tableHighlightItem && data.length) {
+                const hlName = state.tableHighlightItem;
+                const isTailSearch = hlName.endsWith('尾');
+                const targetVal = isTailSearch ? parseInt(hlName.replace('尾', ''), 10) : hlName;
+
+                ctx.save();
+                data.forEach((d, i) => {
+                    let isHit = false;
+                    if (isTailSearch) {
+                        isHit = (d.tailWin === targetVal || (d.tailWin != null && d.tailWin + '尾' === hlName));
+                    } else {
+                        isHit = (d.win === targetVal || (d.pingXiao && d.pingXiao.includes(targetVal)));
+                    }
+
+                    if (isHit) {
+                        const x = startX + i * spacing;
+                        ctx.beginPath();
+                        ctx.setLineDash([2, 2]);
+                        ctx.strokeStyle = 'rgba(255, 215, 0, 0.4)';
+                        ctx.lineWidth = 1;
+                        ctx.moveTo(x, 20);
+                        ctx.lineTo(x, height - 30);
+                        ctx.stroke();
+                        ctx.setLineDash([]);
+                    }
+                });
+                ctx.restore();
+            }
+
             ctx.textAlign = 'center';
         }
 
@@ -1597,84 +1854,16 @@
         }
 
         // ==================== UI更新 ====================
-        function updateInfoPanel(d) {
+        function updateInfoPanel(d, isLatest = false) {
             if (!d) return;
             state.lastRenderedData = d;
-            document.getElementById('dispExpect').textContent = d.expect;
-            document.getElementById('topExpect').textContent = d.expect;
-
-            let ballsHtml = '';
-
-            d.codes.forEach((c, i) => {
-                ballsHtml += `<span class="ball ${c.wave}">${c.num}</span>${i === 5 ? ' <span style="color:var(--text-secondary);margin:0 4px;">+</span> ' : ''}`;
-            });
-
-            ballsHtml += ` <span style="margin-left:10px;color:var(--warn);font-weight:600;">${d.win}</span>`;
-
-            if (d.pingXiao) {
-                const pingXiaoList = d.pingXiao.split(' ');
-                let zodiacHtml = '';
-
-                d.codes.forEach((c, i) => {
-                    const z = pingXiaoList[i] || '';
-                    zodiacHtml += `<span style="
-                        display: inline-block;
-                        min-width: 20px;
-                        font-size: 11px;
-                        font-weight: 600;
-                        color: ${c.wave === 'red' ? '#ff1744' : c.wave === 'blue' ? '#448aff' : '#00e676'};
-                        margin: 0 2px;
-                    ">${z}</span>${i === 5 ? ' ' : ''}`;
-                });
-
-                ballsHtml += `<div style="margin-top: 6px; font-size: 11px; color: var(--text-secondary); letter-spacing: 2px;">平肖: ${zodiacHtml}</div>`;
+            if (isLatest) {
+                state.latestDataRecord = d;
             }
+            const topExpectEl = document.getElementById('topExpect');
+            if (topExpectEl) topExpectEl.textContent = d.expect;
 
-            if (state.currentMode === 'color' && d.colorScores) {
-                ballsHtml += ` <span style="margin-left:8px;font-size:11px;color:var(--text-secondary);">红:</span>`;
-                ballsHtml += `<span style="color:#ff1744;font-weight:700;margin-left:2px;">${d.colorScores.red > 0 ? '+' : ''}${d.colorScores.red.toFixed(1)}</span>`;
-                ballsHtml += ` <span style="margin-left:6px;font-size:11px;color:var(--text-secondary);">蓝:</span>`;
-                ballsHtml += `<span style="color:#448aff;font-weight:700;margin-left:2px;">${d.colorScores.blue > 0 ? '+' : ''}${d.colorScores.blue.toFixed(1)}</span>`;
-                ballsHtml += ` <span style="margin-left:6px;font-size:11px;color:var(--text-secondary);">绿:</span>`;
-                ballsHtml += `<span style="color:#00e676;font-weight:700;margin-left:2px;">${d.colorScores.green > 0 ? '+' : ''}${d.colorScores.green.toFixed(1)}</span>`;
-            } else {
-                ballsHtml += ` <span style="margin-left:8px;font-size:11px;color:var(--text-secondary);">指数:</span>`;
-                ballsHtml += `<span style="color:${d.displayScore >= 0 ? 'var(--up)' : 'var(--down)'};font-weight:700;margin-left:4px;">${d.displayScore > 0 ? '+' : ''}${d.displayScore}</span>`;
-            }
-
-            if (state.currentMode === 'cold_custom' && typeof d.coldMatches !== 'undefined') {
-                ballsHtml += `<div style="margin-top:6px;font-size:11px;color:var(--warn);">条件命中: ${d.coldMatches}/${state.coldSelection?.types.length || 0}</div>`;
-            }
-            if (state.currentMode === 'cold_custom' && state.coldSelection && state.coldSelection.setKline && d.followZodiac) {
-                const setLabel = SET_MODE_LABELS[state.coldSelection.setMode] || '所有号码';
-                ballsHtml += `<div style="margin-top:6px;font-size:11px;color:var(--accent);">${setLabel}: ${d.followZodiac}</div>`;
-            }
-
-            if (state.currentMode === 'pingxiao_follow' && d.followZodiac) {
-                const hitText = state.followMode === 'missnum'
-                    ? (d.followHit ? '生肖全中 +1' : '生肖未全中 -1')
-                    : (d.followHit ? '全中 +1' : '未全中 -1');
-                ballsHtml += `<div style="margin-top:6px;font-size:11px;color:var(--warn);">${getFollowLabel()} ${d.followZodiac}: ${hitText}</div>`;
-            }
-            if (state.currentMode === 'special_zodiac_follow') {
-                const hitText = d.followZodiac
-                    ? (d.followHit ? '特肖命中 +1' : '特肖未中 -1')
-                    : '首期无参考 0';
-                ballsHtml += `<div style="margin-top:6px;font-size:11px;color:var(--warn);">上期7号生肖 ${d.followZodiac || '-'}: ${hitText}</div>`;
-            }
-            if (state.currentMode === 'pingtail_follow' && d.followZodiac) {
-                const tLabel = state.tailMode === 'multi' ? '连尾' : (state.tailMode === 'missrank' ? '跟名次' : '跟尾');
-                const hitText = d.followHit ? '全中 +1' : '未全中 -1';
-                ballsHtml += `<div style="margin-top:6px;font-size:11px;color:var(--warn);">${tLabel} ${d.followZodiac}: ${hitText}</div>`;
-            }
-            if (state.currentMode === 'pingnum_absent' && d.followZodiac) {
-                const hitText = d.followHit ? '全不出 +1' : '有出 -1';
-                ballsHtml += `<div style="margin-top:6px;font-size:11px;color:var(--warn);">不出号 ${d.followZodiac}: ${hitText}</div>`;
-            }
-
-            document.getElementById('dispBalls').innerHTML = ballsHtml;
-                        let topHtml = '';
-
+            let topHtml = '';
             const topZodiacs = d.pingXiao ? d.pingXiao.split(' ') : [];
             topZodiacs.push(d.win || '');
 
@@ -1686,8 +1875,44 @@
                     `</span>${i === 5 ? ' <span class="top-plus">+</span> ' : ''}`;
             });
 
-            document.getElementById('topBarCenter').innerHTML = topHtml;
+            const topCenterEl = document.getElementById('topBarCenter');
+            if (topCenterEl) topCenterEl.innerHTML = topHtml;
             renderTable(d);
+        }
+
+        function handleTableRowClick(name) {
+            if (!name) return;
+            if (state.tableHighlightItem === name) {
+                clearTableHighlight();
+            } else {
+                state.tableHighlightItem = name;
+                updateTableHighlightBadge(name);
+                requestDraw();
+                if (state.lastRenderedData) {
+                    renderTable(state.lastRenderedData);
+                }
+            }
+        }
+
+        function clearTableHighlight() {
+            state.tableHighlightItem = null;
+            updateTableHighlightBadge(null);
+            requestDraw();
+            if (state.lastRenderedData) {
+                renderTable(state.lastRenderedData);
+            }
+        }
+
+        function updateTableHighlightBadge(name) {
+            const badge = document.getElementById('tableHighlightBadge');
+            const nameEl = document.getElementById('tableHighlightName');
+            if (!badge) return;
+            if (name) {
+                if (nameEl) nameEl.textContent = name;
+                badge.style.display = 'inline-flex';
+            } else {
+                badge.style.display = 'none';
+            }
         }
 
         function renderTable(currentData) {
@@ -1740,11 +1965,12 @@
                 const isHot = item.om <= 3;
                 const isCold = item.ratio >= 0.8;
                 const isWinMatch = winTarget && (item.name === winTarget || item.name === String(winTarget));
+                const isUserSelected = state.tableHighlightItem && (item.name === state.tableHighlightItem || item.name === String(state.tableHighlightItem));
                 const trend = isHot ? '↗ 热' : isCold ? '↘ 冷' : '→ 稳';
                 const trendColor = isHot ? 'var(--up)' : isCold ? 'var(--down)' : 'var(--text-secondary)';
 
                 return `
-            <tr class="${isHot ? 'hot' : isCold ? 'cold' : ''} ${isWinMatch ? 'table-row-crosshair-active' : ''}" data-name="${item.name}">
+            <tr class="${isHot ? 'hot' : isCold ? 'cold' : ''} ${isWinMatch ? 'table-row-crosshair-active' : ''} ${isUserSelected ? 'table-row-user-selected' : ''}" data-name="${item.name}" onclick="handleTableRowClick('${item.name}')" title="点击高亮在K线图上标注该生肖/尾数" style="cursor:pointer;">
                 <td><b style="color:var(--accent);">${i + 1}</b></td>
                 <td><b style="font-size:14px;">${item.name}</b></td>
                 <td style="color:${item.om === 0 ? 'var(--up)' : item.om > 15 ? 'var(--down)' : 'inherit'};font-weight:600;font-size:14px;">
@@ -1833,12 +2059,189 @@
             track: 'special', // 'special' or 'normal'
             weightCold: 50,   // 0=cold, 100=hot
             weightMorph: 60,  // 0-100
-            spanCount: 12,    // 6-18
+            spanCount: 20,    // 8-30 (最少20码推荐)
             shrink: false
         };
 
+        function saveRecConfig() {
+            try {
+                localStorage.setItem('aomen_rec_config', JSON.stringify(recConfig));
+            } catch (e) {}
+        }
+
+        function loadRecConfig() {
+            try {
+                const saved = localStorage.getItem('aomen_rec_config');
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    if (parsed && typeof parsed === 'object') {
+                        if (typeof parsed.weightCold === 'number') recConfig.weightCold = parsed.weightCold;
+                        if (typeof parsed.weightMorph === 'number') recConfig.weightMorph = parsed.weightMorph;
+                        if (typeof parsed.spanCount === 'number') {
+                            recConfig.spanCount = Math.max(20, parsed.spanCount);
+                        }
+                        if (typeof parsed.shrink === 'boolean') recConfig.shrink = parsed.shrink;
+                        if (parsed.track) recConfig.track = parsed.track;
+                    }
+                }
+            } catch (e) {}
+
+            if (recConfig.spanCount < 20) recConfig.spanCount = 20;
+            if (document.getElementById('recWeightCold')) document.getElementById('recWeightCold').value = recConfig.weightCold;
+            if (document.getElementById('recWeightMorph')) document.getElementById('recWeightMorph').value = recConfig.weightMorph;
+            if (document.getElementById('recSpanCount')) document.getElementById('recSpanCount').value = recConfig.spanCount;
+            if (document.getElementById('recSpanCountVal')) document.getElementById('recSpanCountVal').textContent = `${recConfig.spanCount}码`;
+            if (document.getElementById('recShrinkToggle')) document.getElementById('recShrinkToggle').checked = recConfig.shrink;
+            if (document.getElementById('recTrackSpecial') && document.getElementById('recTrackNormal')) {
+                document.getElementById('recTrackSpecial').classList.toggle('active', recConfig.track === 'special');
+                document.getElementById('recTrackNormal').classList.toggle('active', recConfig.track === 'normal');
+            }
+        }
+
+        function applyRecPreset(type) {
+            document.querySelectorAll('.rec-preset-btn').forEach(btn => btn.classList.remove('active'));
+            if (window.event && window.event.currentTarget) {
+                window.event.currentTarget.classList.add('active');
+            }
+
+            if (type === 'cold') {
+                recConfig.weightCold = 20; // ❄️ 极冷超跌 (80%冷偏)
+                recConfig.weightMorph = 35;
+                recConfig.spanCount = 20;
+                recConfig.shrink = true;
+                showToast('已应用预设：❄️ 极冷超跌反弹 (20码精选)');
+            } else if (type === 'hot') {
+                recConfig.weightCold = 80; // 🔥 顺势高频 (80%热偏)
+                recConfig.weightMorph = 65;
+                recConfig.spanCount = 20;
+                recConfig.shrink = true;
+                showToast('已应用预设：🔥 顺势高频连开 (20码精选)');
+            } else if (type === 'morph') {
+                recConfig.weightCold = 50; // 🎯 形态共振 (均衡)
+                recConfig.weightMorph = 90;
+                recConfig.spanCount = 20;
+                recConfig.shrink = true;
+                showToast('已应用预设：🎯 形态共振精选 (20码精选)');
+            } else if (type === 'solid') {
+                recConfig.weightCold = 50; // 🛡️ 稳健大底 (无缩水)
+                recConfig.weightMorph = 50;
+                recConfig.spanCount = 24;
+                recConfig.shrink = false;
+                showToast('已应用预设：🛡️ 稳健防守大底 (24码大底)');
+            } else if (type === 'sum_span') {
+                recConfig.weightCold = 50; // ⚖️ 和值跨度均值回归
+                recConfig.weightMorph = 75;
+                recConfig.spanCount = 20;
+                recConfig.shrink = true;
+                const stratSelect = document.getElementById('recommendStrategy');
+                if (stratSelect) stratSelect.value = 'sum_span';
+                showToast('已应用预设：📐 和值跨度·均值回归精选 (20码精选)');
+            }
+
+            if (document.getElementById('recWeightCold')) document.getElementById('recWeightCold').value = recConfig.weightCold;
+            if (document.getElementById('recWeightMorph')) document.getElementById('recWeightMorph').value = recConfig.weightMorph;
+            if (document.getElementById('recSpanCount')) document.getElementById('recSpanCount').value = recConfig.spanCount;
+            if (document.getElementById('recShrinkToggle')) document.getElementById('recShrinkToggle').checked = recConfig.shrink;
+
+            onRecWeightChange();
+        }
+
+        function exportRecommendationPlan() {
+            if (!state.currentRecommendations || !state.historyData || !state.historyData.length) {
+                showToast('⚠️ 暂无推荐结果，请先生成推荐');
+                return;
+            }
+
+            const last = state.historyData[state.historyData.length - 1];
+            const period = last ? (last.period || last.id || '') : '';
+            const { strategy, recommendations, track } = state.currentRecommendations;
+
+            let lines = [];
+            lines.push(`【六合趋势 Pro · 智能量化推荐单】`);
+            lines.push(`参考期数: 第 ${period} 期后 (预测下一期)`);
+            lines.push(`策略模式: ${track === 'special' ? '🎯 特码智能推荐' : '🎰 平特肖尾推荐'}`);
+
+            if (track === 'normal') {
+                if (recommendations.topFlatZodiacs) {
+                    lines.push(`★ 推荐平肖: ${recommendations.topFlatZodiacs.map(z => z.zodiac + '(' + z.rate + '%)').join(' ')}`);
+                }
+                if (recommendations.topFlatTails) {
+                    lines.push(`★ 推荐尾数: ${recommendations.topFlatTails.map(t => t.tail + '尾').join(' ')}`);
+                }
+                if (recommendations.topFlatNums) {
+                    lines.push(`★ 正码精选 (${recommendations.topFlatNums.length}码):`);
+                    lines.push(recommendations.topFlatNums.map(n => `${n.number}(${n.zodiac})`).join(' '));
+                }
+            } else if (strategy === 'multifactor' && recommendations.topNumbers) {
+                const nums = recommendations.topNumbers;
+                const colorName = { red: '红', blue: '蓝', green: '绿' };
+                lines.push(`★ 核心算法: 多因子量化共振模型`);
+                lines.push(`★ 精选特码 (${nums.length}码):`);
+                const numStrs = nums.map(n => `${n.number}(${n.zodiac}·${colorName[n.color] || ''})`);
+                for (let i = 0; i < numStrs.length; i += 4) {
+                    lines.push('   ' + numStrs.slice(i, i + 4).join('  '));
+                }
+                if (recommendations.topZodiacs) {
+                    lines.push(`★ 共振生肖: ${recommendations.topZodiacs.map(z => z.zodiac).join('、')}`);
+                }
+                if (recConfig.shrink) {
+                    lines.push(`★ 缩水状态: 已启用智能同尾/同肖/冷态瘦身`);
+                }
+            } else if (strategy === 'dan_base_kill' && recommendations.goldDan) {
+                lines.push(`★ 核心算法: 胆码·大底·智能杀码`);
+                lines.push(`★ 黄金金胆: ${recommendations.goldDan.map(n => n.number + '(' + n.zodiac + ')').join(' ')}`);
+                lines.push(`★ 辅助银胆: ${recommendations.silverDan.map(n => n.number + '(' + n.zodiac + ')').join(' ')}`);
+                lines.push(`★ 精选大底 (${recommendations.baseNumbers.length}码): ${recommendations.baseNumbers.map(n => n.number).join(' ')}`);
+                lines.push(`★ 避险杀码: ${recommendations.killedNumbers.map(n => n.number).join(' ')}`);
+            } else if (Array.isArray(recommendations)) {
+                lines.push(`★ 推荐号码 (${recommendations.length}码):`);
+                lines.push(recommendations.map(r => typeof r === 'object' ? r.number : r).join(' '));
+            }
+
+            const hit5 = getLookbackRecords(5, strategy, track);
+            if (hit5 && hit5.count) {
+                lines.push(`★ 5期历史回看: 命中率 ${hit5.winRate}% (${hit5.hitTotal}/${hit5.count})`);
+                const miniSummary = hit5.records.slice(0, 5).map(r => `${String(r.issue).slice(-3)}期(开${r.special}${r.isHit ? '🎯中' : '❌'})`).join(' ');
+                lines.push(`   逐期战绩: ${miniSummary}`);
+            }
+
+            const now = new Date();
+            const timeStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+            lines.push(`生成时间: ${timeStr}`);
+            lines.push(`(注: 量化模型基于统计与走势规律，仅供分析参考)`);
+
+            const textToCopy = lines.join('\n');
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(textToCopy).then(() => {
+                    showToast('📋 推荐方案已成功复制到剪贴板！');
+                }).catch(() => {
+                    fallbackCopy(textToCopy);
+                });
+            } else {
+                fallbackCopy(textToCopy);
+            }
+        }
+
+        function fallbackCopy(text) {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.left = '-9999px';
+            document.body.appendChild(ta);
+            ta.select();
+            try {
+                document.execCommand('copy');
+                showToast('📋 推荐方案已成功复制到剪贴板！');
+            } catch (e) {
+                showToast('⚠️ 复制失败，请手动截屏保存');
+            }
+            document.body.removeChild(ta);
+        }
+
         function switchRecTrack(track) {
             recConfig.track = track;
+            saveRecConfig();
             document.getElementById('recTrackSpecial')?.classList.toggle('active', track === 'special');
             document.getElementById('recTrackNormal')?.classList.toggle('active', track === 'normal');
             generateRecommendations();
@@ -1856,8 +2259,9 @@
         function onRecWeightChange() {
             recConfig.weightCold = parseInt(document.getElementById('recWeightCold')?.value || '50', 10);
             recConfig.weightMorph = parseInt(document.getElementById('recWeightMorph')?.value || '60', 10);
-            recConfig.spanCount = parseInt(document.getElementById('recSpanCount')?.value || '12', 10);
+            recConfig.spanCount = parseInt(document.getElementById('recSpanCount')?.value || '20', 10);
             recConfig.shrink = !!document.getElementById('recShrinkToggle')?.checked;
+            saveRecConfig();
 
             const coldValEl = document.getElementById('recWeightColdVal');
             if (coldValEl) {
@@ -1888,7 +2292,7 @@
         function resetRecWeights() {
             if (document.getElementById('recWeightCold')) document.getElementById('recWeightCold').value = 50;
             if (document.getElementById('recWeightMorph')) document.getElementById('recWeightMorph').value = 60;
-            if (document.getElementById('recSpanCount')) document.getElementById('recSpanCount').value = 12;
+            if (document.getElementById('recSpanCount')) document.getElementById('recSpanCount').value = 20;
             if (document.getElementById('recShrinkToggle')) document.getElementById('recShrinkToggle').checked = false;
             onRecWeightChange();
         }
@@ -1911,7 +2315,7 @@
                 recConfig.weightMorph = parseInt(document.getElementById('recWeightMorph').value || '60', 10);
             }
             if (document.getElementById('recSpanCount')) {
-                recConfig.spanCount = parseInt(document.getElementById('recSpanCount').value || '12', 10);
+                recConfig.spanCount = parseInt(document.getElementById('recSpanCount').value || '20', 10);
             }
             if (document.getElementById('recShrinkToggle')) {
                 recConfig.shrink = !!document.getElementById('recShrinkToggle').checked;
@@ -1931,9 +2335,17 @@
             if (recConfig.track === 'normal') {
                 recommendations = getNormalTrackRecommendations(last, state.historyData);
                 renderRecommendations(container, recommendations, 'normal_track');
+                renderRecHistory5Inline('normal_track', 'normal');
+                const hit5 = getLookbackRecords(5, 'normal_track', 'normal');
                 const hitEl = document.getElementById('recommendHitRate');
                 if (hitEl) {
-                    hitEl.innerHTML = `平特双轨模式：已根据正码1~6落球共振生成平特肖与精选尾数`;
+                    hitEl.innerHTML = hit5.count
+                        ? `📜 平特近5期命中: <b style="color:${hit5.winRate >= 50 ? 'var(--up)' : 'var(--warn)'};">${hit5.hitTotal}/${hit5.count}</b>（${hit5.winRate}%） <span style="opacity:0.4;margin:0 4px;">|</span> 正码1~6落球共振`
+                        : `平特双轨模式：已根据正码1~6落球共振生成平特肖与精选尾数`;
+                }
+                const modal = document.getElementById('recHistoryModal');
+                if (modal && modal.style.display !== 'none') {
+                    renderRecHistoryModal();
                 }
                 return;
             }
@@ -1941,6 +2353,9 @@
             switch (strategy) {
                 case 'multifactor':
                     recommendations = getMultiFactorRecommendations(last, state.historyData);
+                    break;
+                case 'sum_span':
+                    recommendations = getSumSpanRecommendations(last, state.historyData);
                     break;
                 case 'dan_base_kill':
                     recommendations = getDanBaseKillRecommendations(last, state.historyData);
@@ -1970,12 +2385,25 @@
 
             renderRecommendations(container, recommendations, strategy);
 
+            // 渲染近5期历史回看验证面板（当前策略实时联动）
+            renderRecHistory5Inline(strategy, 'special');
+
             const hitStats = computeRecommendationStats(strategy, 10);
+            const hit5 = getLookbackRecords(5, strategy, 'special');
             const hitEl = document.getElementById('recommendHitRate');
             if (hitEl) {
-                hitEl.innerHTML = hitStats.total
-                    ? `最近10期推荐命中：<b style="color:${hitStats.rate >= 50 ? 'var(--up)' : 'var(--down)'};">${hitStats.hit}/${hitStats.total}</b>（${hitStats.rate.toFixed(0)}%）`
-                    : '最近10期推荐命中：数据就绪';
+                const hit5Html = hit5.count
+                    ? `📜 近5期命中: <b style="color:${hit5.winRate >= 50 ? 'var(--up)' : 'var(--warn)'};">${hit5.hitTotal}/${hit5.count}</b>（${hit5.winRate}%）`
+                    : '';
+                const hit10Html = hitStats.total
+                    ? `最近10期命中：<b style="color:${hitStats.rate >= 50 ? 'var(--up)' : 'var(--down)'};">${hitStats.hit}/${hitStats.total}</b>（${hitStats.rate.toFixed(0)}%）`
+                    : '数据就绪';
+                hitEl.innerHTML = hit5Html ? `${hit5Html} <span style="opacity:0.4;margin:0 4px;">|</span> ${hit10Html}` : hit10Html;
+            }
+
+            const modal = document.getElementById('recHistoryModal');
+            if (modal && modal.style.display !== 'none') {
+                renderRecHistoryModal();
             }
         }
 
@@ -2086,10 +2514,27 @@
                 });
             }
 
+            // 4) 和值走势均值偏态预警
+            const lastSum = last.totalSum || (last.codes ? last.codes.reduce((a, b) => a + parseInt(b.num, 10), 0) : 0);
+            if (lastSum >= 200) {
+                alerts.push({ type: 'sum', text: `📐 上期7码和值达 <b>${lastSum}</b> (高于理论中轴+${lastSum - 175})，高位超买，防小号区间 (01-24) 均值回归` });
+            } else if (lastSum > 0 && lastSum <= 150) {
+                alerts.push({ type: 'sum', text: `📐 上期7码和值仅 <b>${lastSum}</b> (低于理论中轴-${175 - lastSum})，深度超跌，看大号区间 (25-49) 强力反弹` });
+            }
+
+            // 5) 跨度走势异动预警
+            const allBalls = last.codes ? last.codes.map(c => parseInt(c.num, 10)).sort((a, b) => a - b) : [];
+            const lastSpan = allBalls.length > 0 ? (allBalls[allBalls.length - 1] - allBalls[0]) : 0;
+            if (lastSpan >= 46) {
+                alerts.push({ type: 'span', text: `📏 上期开奖跨度达 <b>${lastSpan}</b> 极值拉满，首尾离散已见顶，防本期两端小幅向内收缩` });
+            } else if (lastSpan > 0 && lastSpan <= 34) {
+                alerts.push({ type: 'span', text: `📏 上期开奖跨度仅 <b>${lastSpan}</b> 极端聚拢，关注首尾两端号码 (01-08与43-49) 扩散拉伸` });
+            }
+
             if (alerts.length === 0) {
                 alertWrap.innerHTML = '';
             } else {
-                alertWrap.innerHTML = alerts.slice(0, 2).map(a => `
+                alertWrap.innerHTML = alerts.slice(0, 3).map(a => `
                     <div class="rec-alert-item">
                         <span>⚠️</span>
                         <div>${a.text}</div>
@@ -2115,8 +2560,8 @@
             let evenCount = 0;
             let extremeColdCount = 0;
 
-            const maxPerTail = target <= 8 ? 1 : 2;
-            const maxPerZodiac = target <= 10 ? 1 : 2;
+            const maxPerTail = target <= 8 ? 1 : target <= 14 ? 2 : 3;
+            const maxPerZodiac = target <= 10 ? 1 : target <= 16 ? 2 : 3;
             const maxColor = Math.ceil(target * 0.55);
             const maxExtremeCold = Math.max(1, Math.floor(target * 0.25));
 
@@ -2331,7 +2776,7 @@
 
             scoredNumbers.sort((a, b) => b.score - a.score);
 
-            const displayCount = recConfig.spanCount || 12;
+            const displayCount = recConfig.spanCount || 20;
             let topNumbers = [];
             let shrinkCount = 0;
             let shrinkInfo = '';
@@ -2374,7 +2819,7 @@
 
             const goldDan = all.slice(0, 2);
             const silverDan = all.slice(2, 5);
-            const baseCount = recConfig.spanCount || 12;
+            const baseCount = recConfig.spanCount || 20;
             const baseNumbers = mf.topNumbers;
 
             const killCandidates = all.slice(-12).filter(item => item.f30 === 0 && item.currentOm < 35).slice(0, 8);
@@ -2389,6 +2834,173 @@
                 topZodiacs: mf.topZodiacs,
                 shrinkCount: mf.shrinkCount,
                 shrinkInfo: mf.shrinkInfo
+            };
+        }
+
+        // ==================== 2.5 和值跨度·均值回归精选模型 ====================
+        function getSumSpanRecommendations(last, historyData) {
+            const mf = getMultiFactorRecommendations(last, historyData);
+            const all = mf.allScored;
+
+            // 1. 提取最新一期 7 码数据与和值、跨度
+            const lastCodes = (last.codes || []).map(c => parseInt(c.num, 10)).filter(n => !isNaN(n));
+            const lastSum = last.totalSum || (lastCodes.length ? lastCodes.reduce((a, b) => a + b, 0) : 175);
+            const sortedBalls = lastCodes.slice().sort((a, b) => a - b);
+            const lastSpan = sortedBalls.length > 0 ? (sortedBalls[sortedBalls.length - 1] - sortedBalls[0]) : (last.normalSpan || 40);
+
+            // 2. 统计近 10 期和值与跨度均值
+            const recent10 = historyData.slice(-10);
+            const sumHistory = recent10.map(d => {
+                if (d.totalSum) return d.totalSum;
+                if (d.codes && d.codes.length) return d.codes.reduce((a, b) => a + parseInt(b.num, 10), 0);
+                return 175;
+            });
+            const avgSum10 = Math.round(sumHistory.reduce((a, b) => a + b, 0) / (sumHistory.length || 1));
+
+            const spanHistory = recent10.map(d => {
+                const b = (d.codes || []).map(c => parseInt(c.num, 10)).sort((a, b) => a - b);
+                return b.length > 0 ? b[b.length - 1] - b[0] : (d.normalSpan || 40);
+            });
+            const avgSpan10 = Math.round(spanHistory.reduce((a, b) => a + b, 0) / (spanHistory.length || 1));
+
+            // 3. 和值均值回归状态判断 (理论中轴 175)
+            let sumStatus = 'mid'; // 'high', 'low', 'mid'
+            let sumDesc = '中轴黄金平衡区';
+            let suggestDirection = '大小均衡配置';
+            let suggestRatio = '4小3大 或 3小4大';
+            let sumAdvice = '和值在理论中轴 (175) 附近窄幅波动，大小号码分布均匀';
+
+            if (lastSum >= 195) {
+                sumStatus = 'high';
+                sumDesc = '高位超买回调区';
+                suggestDirection = '偏向小号 (01-24)';
+                suggestRatio = '5小2大 或 4小3大';
+                sumAdvice = `上期和值 ${lastSum} 偏高 (+${lastSum - 175})，大号透支，均值回归强烈倾向小号区间 (01-24)`;
+            } else if (lastSum <= 155) {
+                sumStatus = 'low';
+                sumDesc = '低位超跌反弹区';
+                suggestDirection = '偏向大号 (25-49)';
+                suggestRatio = '5大2小 或 4大3小';
+                sumAdvice = `上期和值仅 ${lastSum} 偏低 (-${175 - lastSum})，小号扎堆，均值回归看多大号区间 (25-49) 强力反弹`;
+            }
+
+            // 4. 跨度离散度与首尾守门定位
+            let spanStatus = 'normal'; // 'wide', 'narrow', 'normal'
+            let spanDesc = '黄金常态跨度';
+            let spanAdvice = '标准首尾两极拉伸，头号在 01-10，尾号在 40-49';
+
+            if (lastSpan >= 46) {
+                spanStatus = 'wide';
+                spanDesc = '极值拉满·防收缩';
+                spanAdvice = `上期跨度达 ${lastSpan} 极限扩散，首尾号码极度发散，防本期两端跨度小幅向内收缩`;
+            } else if (lastSpan <= 35) {
+                spanStatus = 'narrow';
+                spanDesc = '紧凑扎堆·防扩散';
+                spanAdvice = `上期跨度仅 ${lastSpan} 号码过度聚拢，防本期两端极速外扩，重点抓首号(01-08)与尾号(43-49)`;
+            }
+
+            // 5. 对 49 码进行和值与跨度专属重构打分
+            const ssScored = all.map(item => {
+                const num = parseInt(item.number, 10);
+                let score = item.score;
+                let tag = item.tag;
+                let role = 'mid'; // 'head', 'tail', 'mid'
+
+                // (A) 和值倾向修正
+                if (sumStatus === 'high') {
+                    if (num <= 24) {
+                        score += 26;
+                        if (num <= 12) score += 6;
+                        tag = '和值回调·小';
+                    } else if (num >= 40) {
+                        score -= 16;
+                    }
+                } else if (sumStatus === 'low') {
+                    if (num >= 25) {
+                        score += 26;
+                        if (num >= 38) score += 6;
+                        tag = '和值反弹·大';
+                    } else if (num <= 10) {
+                        score -= 16;
+                    }
+                } else {
+                    if (num >= 18 && num <= 32) {
+                        score += 18;
+                        tag = '中枢平衡';
+                    }
+                }
+
+                // (B) 跨度首尾区间角色定位
+                if (num >= 1 && num <= 10) {
+                    role = 'head';
+                    score += 12;
+                    if (spanStatus === 'narrow' && num <= 7) score += 8;
+                    if (item.currentOm <= 8 || item.f30 >= 2) tag = '跨度首号';
+                } else if (num >= 40 && num <= 49) {
+                    role = 'tail';
+                    score += 12;
+                    if (spanStatus === 'narrow' && num >= 43) score += 8;
+                    if (item.currentOm <= 8 || item.f30 >= 2) tag = '跨度尾号';
+                } else if (num >= 18 && num <= 32) {
+                    role = 'mid';
+                    if (tag === '均线平衡' || tag === '中枢平衡') tag = '中轴共振';
+                }
+
+                return {
+                    ...item,
+                    score,
+                    tag,
+                    role,
+                    isSmall: num <= 24
+                };
+            });
+
+            ssScored.sort((a, b) => b.score - a.score);
+
+            // 筛选跨度首号守门 (01-10) 与 尾号守门 (40-49)
+            const headDan = ssScored.filter(n => n.role === 'head').slice(0, 2);
+            const tailDan = ssScored.filter(n => n.role === 'tail').slice(0, 2);
+            const midDan = ssScored.filter(n => n.role === 'mid').slice(0, 3);
+
+            // 推荐精选号码 (支持缩水)
+            const displayCount = recConfig.spanCount || 20;
+            let topNumbers = [];
+            let shrinkCount = 0;
+            let shrinkInfo = '';
+
+            if (recConfig.shrink) {
+                const shrinkRes = applyShrinkMatrix(ssScored, displayCount);
+                topNumbers = shrinkRes.result;
+                shrinkCount = shrinkRes.shrinkCount;
+                shrinkInfo = shrinkRes.details.length > 0 ? shrinkRes.details.join('、') : '优化同尾与生肖过度集中';
+            } else {
+                topNumbers = ssScored.slice(0, displayCount);
+            }
+
+            return {
+                type: 'sum_span',
+                topNumbers,
+                headDan,
+                tailDan,
+                midDan,
+                topZodiacs: mf.topZodiacs,
+                metrics: {
+                    lastSum,
+                    avgSum10,
+                    sumStatus,
+                    sumDesc,
+                    suggestDirection,
+                    suggestRatio,
+                    sumAdvice,
+                    lastSpan,
+                    avgSpan10,
+                    spanStatus,
+                    spanDesc,
+                    spanAdvice
+                },
+                shrinkApplied: recConfig.shrink,
+                shrinkCount,
+                shrinkInfo
             };
         }
 
@@ -2450,7 +3062,7 @@
             }
             topFlatNums.sort((a, b) => b.flatScore - a.flatScore);
 
-            const displayCount = recConfig.spanCount || 10;
+            const displayCount = recConfig.spanCount || 20;
             return {
                 type: 'normal_track',
                 topFlatZodiacs,
@@ -2506,12 +3118,382 @@
             };
         }
 
-        // ==================== 1. 历史逐期复盘模态窗 ====================
-        function openRecHistoryModal() {
+        // ==================== 1. 历史逐期复盘与5期回看核心逻辑 ====================
+        const STRATEGY_NAME_MAP = {
+            'multifactor': '多因子量化共振',
+            'sum_span': '和值跨度·均值回归',
+            'dan_base_kill': '胆码·大底·杀码',
+            'auto_opt': 'AI 历史自动寻优',
+            'omission': '极值遗漏回补',
+            'balance': '周期均线回归',
+            'hot': '顺势热码追热',
+            'color': '波色共振',
+            'size': '大小分界',
+            'normal_track': '平特肖尾双轨'
+        };
+
+        function getLookbackRecords(reviewCount = 5, customStrat = null, customTrack = null) {
+            const data = state.historyData;
+            if (!data || data.length < 2) return { records: [], hitTotal: 0, count: 0, winRate: 0, activeStrat: 'multifactor', activeTrack: 'special' };
+
+            const count = Math.min(reviewCount, data.length - 1);
+            let activeTrack = customTrack !== null ? customTrack : (recConfig.track || 'special');
+            let activeStrat = customStrat || document.getElementById('recommendStrategy')?.value || 'multifactor';
+
+            if (customStrat === 'normal_track' || activeStrat === 'normal_track') {
+                activeTrack = 'normal';
+                activeStrat = 'normal_track';
+            }
+
+            const records = [];
+            let hitTotal = 0;
+
+            for (let i = data.length - count; i < data.length; i++) {
+                const cur = data[i];
+                const prevSubset = data.slice(0, i);
+                const prevLast = prevSubset[prevSubset.length - 1];
+
+                const winNum = parseInt(cur.special, 10).toString().padStart(2, '0');
+                const winZodiac = cur.win;
+                const winColor = cur.currentColor;
+                const normalBalls = (cur.numbers || []).filter(Boolean);
+
+                let resultType = '未中';
+                let hitRole = '';
+                let isHit = false;
+                let topNumbers = [];
+                let top10Text = '';
+
+                if (activeTrack === 'normal') {
+                    const rec = getNormalTrackRecommendations(prevLast, prevSubset);
+                    const allBalls = [...normalBalls, cur.special].filter(Boolean);
+                    const openZodiacs = allBalls.map(b => getZodiac(parseInt(b, 10)));
+                    const openTails = allBalls.map(b => `${parseInt(b, 10) % 10}尾`);
+
+                    const flatNums = (rec.topFlatNums || []).map(n => n.number);
+                    const flatZodiacs = (rec.topFlatZodiacs || []).map(z => z.zodiac);
+                    const flatTails = (rec.topFlatTails || []).map(t => t.tail);
+
+                    topNumbers = flatNums;
+
+                    // 检查平特命中情况
+                    const hitNums = normalBalls.filter(b => flatNums.slice(0, 10).includes(b));
+                    const hitZ = flatZodiacs.slice(0, 3).filter(z => openZodiacs.includes(z));
+                    const hitT = flatTails.slice(0, 2).filter(t => openTails.includes(t));
+
+                    if (hitNums.length > 0 || hitZ.length > 0) {
+                        isHit = true;
+                        hitTotal++;
+                    }
+
+                    if (hitNums.length > 0 && hitZ.length > 0) {
+                        resultType = `🎯 中码[${hitNums.join(',')}] 肖[${hitZ.join(',')}]`;
+                        hitRole = 'gold';
+                    } else if (hitNums.length > 0) {
+                        resultType = `🎯 命中平码[${hitNums.join(',')}]`;
+                        hitRole = 'gold';
+                    } else if (hitZ.length > 0) {
+                        resultType = `🎯 命中平特肖[${hitZ.join(',')}]`;
+                        hitRole = 'silver';
+                    } else if (hitT.length > 0) {
+                        resultType = `🎯 命中平特尾[${hitT.join(',')}]`;
+                        hitRole = 'base';
+                    } else {
+                        resultType = '未中';
+                    }
+
+                    top10Text = `肖:${flatZodiacs.slice(0, 3).join('')} 尾:${flatTails.slice(0, 2).join('')} 码:${flatNums.slice(0, 5).join(',')}`;
+                } else if (activeStrat === 'sum_span') {
+                    const rec = getSumSpanRecommendations(prevLast, prevSubset);
+                    topNumbers = (rec.topNumbers || []).map(n => n.number);
+                    const gold = (rec.headDan || []).map(n => n.number);
+                    const silver = (rec.tailDan || []).map(n => n.number);
+                    const hitIdx = topNumbers.indexOf(winNum);
+
+                    if (gold.includes(winNum)) {
+                        resultType = '🥇 命中金胆/守门';
+                        hitRole = 'gold';
+                        isHit = true;
+                    } else if (silver.includes(winNum)) {
+                        resultType = '🥈 命中银胆/次守';
+                        hitRole = 'silver';
+                        isHit = true;
+                    } else if (hitIdx >= 0) {
+                        resultType = `🎯 命中精选(第${hitIdx + 1}位)`;
+                        hitRole = 'base';
+                        isHit = true;
+                    }
+                    if (isHit) hitTotal++;
+                    top10Text = topNumbers.slice(0, 6).join(' ');
+                } else if (activeStrat === 'dan_base_kill') {
+                    const rec = getDanBaseKillRecommendations(prevLast, prevSubset);
+                    topNumbers = (rec.baseNumbers || rec.topNumbers || []).map(n => n.number);
+                    const gold = (rec.goldDan || []).map(n => n.number);
+                    const silver = (rec.silverDan || []).map(n => n.number);
+                    const kill = (rec.killNumbers || []).map(n => n.number);
+                    const hitIdx = topNumbers.indexOf(winNum);
+
+                    if (gold.includes(winNum)) {
+                        resultType = '🥇 命中金胆';
+                        hitRole = 'gold';
+                        isHit = true;
+                    } else if (silver.includes(winNum)) {
+                        resultType = '🥈 命中银胆';
+                        hitRole = 'silver';
+                        isHit = true;
+                    } else if (hitIdx >= 0) {
+                        resultType = `🎯 命中大底(第${hitIdx + 1}位)`;
+                        hitRole = 'base';
+                        isHit = true;
+                    } else if (kill.includes(winNum)) {
+                        resultType = '⚠️ 误杀特码';
+                        hitRole = 'kill_fail';
+                    } else {
+                        resultType = '未中(避杀成功)';
+                    }
+                    if (isHit) hitTotal++;
+                    top10Text = topNumbers.slice(0, 6).join(' ');
+                } else if (activeStrat === 'auto_opt') {
+                    const rec = getAutoOptimizedStrategy(prevLast, prevSubset);
+                    const best = rec.best;
+                    const terms = parseInputTerms(best.text);
+                    isHit = terms.numbers.includes(winNum) || terms.zodiacs.includes(winZodiac) || terms.waves.includes(winColor);
+                    if (isHit) hitTotal++;
+                    topNumbers = rec.topNumbers ? rec.topNumbers.map(n => n.number) : terms.numbers;
+                    hitRole = isHit ? 'gold' : '';
+                    resultType = isHit ? `🎯 命中(${best.name.slice(0, 5)})` : '未中';
+                    top10Text = `${best.name}: ${best.text}`;
+                } else if (activeStrat === 'omission') {
+                    const rec = getOmissionBasedRecommendations(prevLast.snapshot || {}, prevLast.colorMaxOmissions || {}, state.globalMaxOm || {}, prevLast.currentColor);
+                    const topZ = rec.map(x => x.zodiac);
+                    const hitIdx = topZ.indexOf(winZodiac);
+                    isHit = hitIdx >= 0;
+                    if (isHit) hitTotal++;
+                    if (hitIdx === 0) {
+                        resultType = '🥇 命中首选极值肖';
+                        hitRole = 'gold';
+                    } else if (hitIdx < 3) {
+                        resultType = `🥈 命中前3肖(${winZodiac})`;
+                        hitRole = 'silver';
+                    } else if (isHit) {
+                        resultType = `🎯 命中6肖(${winZodiac})`;
+                        hitRole = 'base';
+                    } else {
+                        resultType = '未中';
+                    }
+                    topZ.slice(0, 4).forEach(z => {
+                        for (let n = 1; n <= 49; n++) {
+                            if (getZodiac(n) === z) topNumbers.push(n.toString().padStart(2, '0'));
+                        }
+                    });
+                    top10Text = `推荐6肖: ${topZ.join(' ')}`;
+                } else if (activeStrat === 'balance') {
+                    const rec = getBalanceRecommendations(prevLast.snapshot || {}, prevLast.colorOmissions || {}, prevLast.sizeOmissions || {}, prevLast.counts || {}, prevSubset.length);
+                    const topZ = rec.map(x => x.zodiac);
+                    const hitIdx = topZ.indexOf(winZodiac);
+                    isHit = hitIdx >= 0;
+                    if (isHit) hitTotal++;
+                    if (hitIdx === 0) {
+                        resultType = '🥇 命中首推均线肖';
+                        hitRole = 'gold';
+                    } else if (hitIdx < 3) {
+                        resultType = `🥈 命中前3肖(${winZodiac})`;
+                        hitRole = 'silver';
+                    } else if (isHit) {
+                        resultType = `🎯 命中回归肖(${winZodiac})`;
+                        hitRole = 'base';
+                    } else {
+                        resultType = '未中';
+                    }
+                    topZ.slice(0, 4).forEach(z => {
+                        for (let n = 1; n <= 49; n++) {
+                            if (getZodiac(n) === z) topNumbers.push(n.toString().padStart(2, '0'));
+                        }
+                    });
+                    top10Text = `均线肖: ${topZ.join(' ')}`;
+                } else if (activeStrat === 'hot') {
+                    const rec = getHotRecommendations(prevLast.snapshot || {}, prevLast.counts || {}, prevSubset.length);
+                    const topZ = rec.map(x => x.zodiac);
+                    const hitIdx = topZ.indexOf(winZodiac);
+                    isHit = hitIdx >= 0;
+                    if (isHit) hitTotal++;
+                    if (hitIdx === 0) {
+                        resultType = '🥇 命中极热头肖';
+                        hitRole = 'gold';
+                    } else if (hitIdx < 3) {
+                        resultType = `🥈 命中高频前3肖(${winZodiac})`;
+                        hitRole = 'silver';
+                    } else if (isHit) {
+                        resultType = `🎯 命中热肖群(${winZodiac})`;
+                        hitRole = 'base';
+                    } else {
+                        resultType = '未中';
+                    }
+                    topZ.slice(0, 4).forEach(z => {
+                        for (let n = 1; n <= 49; n++) {
+                            if (getZodiac(n) === z) topNumbers.push(n.toString().padStart(2, '0'));
+                        }
+                    });
+                    top10Text = `顺热肖: ${topZ.join(' ')}`;
+                } else if (activeStrat === 'color') {
+                    const rec = getColorRecommendations(prevLast.colorOmissions || {}, prevLast.colorMaxOmissions || {});
+                    const topColor = rec[0];
+                    isHit = topColor && topColor.color === winColor;
+                    if (isHit) hitTotal++;
+                    hitRole = isHit ? 'gold' : '';
+                    resultType = isHit ? `🎯 命中${topColor.name}` : `未中 (首推${topColor ? topColor.name : ''})`;
+                    topNumbers = (CONFIG.colors[topColor ? topColor.color : 'red'] || []).slice(0, 10);
+                    top10Text = `首推波色: ${topColor ? topColor.name : ''}`;
+                } else if (activeStrat === 'size') {
+                    const rec = getSizeRecommendations(prevLast.sizeOmissions || {});
+                    const topSize = rec[0];
+                    const curSize = parseInt(cur.special, 10) >= 25 ? 'big' : 'small';
+                    isHit = topSize && topSize.type === curSize;
+                    if (isHit) hitTotal++;
+                    hitRole = isHit ? 'gold' : '';
+                    resultType = isHit ? `🎯 命中${topSize.name.slice(0, 2)}` : `未中 (推${topSize ? topSize.name.slice(0, 2) : ''})`;
+                    topNumbers = topSize && topSize.type === 'big' ? ['25','26','27','28','29','30'] : ['01','02','03','04','05','06'];
+                    top10Text = `推荐分界: ${topSize ? topSize.name : ''}`;
+                } else {
+                    // multifactor
+                    const rec = getMultiFactorRecommendations(prevLast, prevSubset);
+                    topNumbers = (rec.topNumbers || []).map(n => n.number);
+                    const gold = (rec.goldDan || (rec.topNumbers ? rec.topNumbers.slice(0, 2) : [])).map(n => n.number);
+                    const silver = (rec.silverDan || (rec.topNumbers ? rec.topNumbers.slice(2, 5) : [])).map(n => n.number);
+                    const hitIdx = topNumbers.indexOf(winNum);
+
+                    if (gold.includes(winNum)) {
+                        resultType = '🥇 命中金胆';
+                        hitRole = 'gold';
+                        isHit = true;
+                    } else if (silver.includes(winNum)) {
+                        resultType = '🥈 命中银胆';
+                        hitRole = 'silver';
+                        isHit = true;
+                    } else if (hitIdx >= 0) {
+                        resultType = `🎯 命中精选(第${hitIdx + 1}位)`;
+                        hitRole = 'base';
+                        isHit = true;
+                    }
+                    if (isHit) hitTotal++;
+                    top10Text = topNumbers.slice(0, 6).join(' ');
+                }
+
+                records.unshift({
+                    issue: cur.period || cur.expect || cur.id,
+                    special: winNum,
+                    zodiac: winZodiac,
+                    color: winColor,
+                    normalBalls,
+                    topNumbers,
+                    top6: topNumbers.slice(0, 6),
+                    top10Text,
+                    hitRole,
+                    resultType,
+                    isHit
+                });
+            }
+
+            const winRate = count ? Math.round((hitTotal / count) * 100) : 0;
+            const effectiveStrat = (activeTrack === 'normal') ? 'normal_track' : activeStrat;
+            return { records, hitTotal, count, winRate, activeStrat: effectiveStrat, activeTrack };
+        }
+
+        function renderRecHistory5Inline(strategy, track = 'special') {
+            const wrap = document.getElementById('recHistory5Wrap');
+            if (!wrap) return;
+
+            if (!state.historyData || state.historyData.length < 2) {
+                wrap.innerHTML = '';
+                return;
+            }
+
+            const { records, hitTotal, count, winRate, activeStrat } = getLookbackRecords(5, strategy, track);
+            if (!records.length) {
+                wrap.innerHTML = '';
+                return;
+            }
+
+            const hitBadgeColor = winRate >= 60 ? 'var(--up)' : winRate >= 40 ? 'var(--warn)' : 'var(--text-secondary)';
+            const stratLabel = STRATEGY_NAME_MAP[activeStrat] || '当前策略';
+
+            wrap.innerHTML = `
+                <div class="rec-section-box" style="background:rgba(255,215,0,0.02);border:1px solid rgba(255,215,0,0.25);border-radius:8px;padding:8px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:6px;flex-wrap:wrap;">
+                        <span style="font-size:11px;font-weight:700;color:#ffd700;display:flex;align-items:center;gap:4px;">
+                            <span>📜 近5期历史回看</span>
+                            <span style="font-size:10px;color:var(--text-secondary);font-weight:normal;">(${stratLabel})</span>
+                        </span>
+                        <div style="display:flex;align-items:center;gap:5px;">
+                            <span style="font-size:9.5px;padding:1px 6px;border-radius:4px;background:rgba(0,230,118,0.15);color:${hitBadgeColor};font-weight:700;">
+                                5期中 ${hitTotal} (${winRate}%)
+                            </span>
+                            <button type="button" class="rec-apply-btn" style="padding:1px 6px;font-size:9.5px;font-weight:normal;" onclick="openRecHistoryModal(5)">🔍 详情</button>
+                        </div>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:4px;">
+                        ${records.map(r => `
+                            <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(0,0,0,0.28);border:1px solid ${r.isHit ? 'rgba(0,230,118,0.25)' : 'rgba(255,255,255,0.05)'};border-radius:6px;padding:4px 6px;font-size:10px;gap:6px;">
+                                <div style="display:flex;align-items:center;gap:5px;flex-shrink:0;">
+                                    <span style="color:var(--text-secondary);font-size:9.5px;min-width:38px;">${String(r.issue).slice(-3)}期</span>
+                                    <span style="display:inline-block;width:19px;height:19px;line-height:19px;border-radius:50%;background:${r.color === 'red' ? '#ff1744' : r.color === 'blue' ? '#448aff' : '#00e676'};color:#fff;font-weight:700;font-size:9.5px;text-align:center;">${r.special}</span>
+                                    <span style="font-size:9.5px;color:var(--text-primary);">${r.zodiac}</span>
+                                </div>
+                                <div style="font-size:9px;color:var(--text-secondary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px;" title="当时推荐: ${r.top10Text}">
+                                    ${r.isHit ? `<span style="color:var(--accent);">命中: <b style="color:${r.hitRole === 'gold' ? '#ffd700' : 'var(--up)'};font-size:10px;">${r.resultType.replace('🎯 ','').replace('🥇 ','').replace('🥈 ','')}</b></span>` : `<span style="color:var(--text-secondary);">${r.top10Text}</span>`}
+                                </div>
+                                <div style="flex-shrink:0;">
+                                    <span style="display:inline-block;font-size:9px;padding:1px 5px;border-radius:3px;background:${r.isHit ? (r.hitRole === 'gold' ? 'rgba(255,215,0,0.18)' : 'rgba(0,230,118,0.18)') : 'rgba(255,255,255,0.05)'};color:${r.isHit ? (r.hitRole === 'gold' ? '#ffd700' : 'var(--up)') : 'var(--text-secondary)'};border:1px solid ${r.isHit ? 'currentColor' : 'transparent'};font-weight:700;white-space:nowrap;">
+                                        ${r.resultType}
+                                    </span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function setRecModalCount(count) {
+            state.recModalCount = count;
+            const t5 = document.getElementById('recModalTab5');
+            const t10 = document.getElementById('recModalTab10');
+            const t20 = document.getElementById('recModalTab20');
+            if (t5) t5.classList.toggle('active', count === 5);
+            if (t10) t10.classList.toggle('active', count === 10);
+            if (t20) t20.classList.toggle('active', count === 20);
+
+            const titleEl = document.getElementById('recModalTitle');
+            if (titleEl) titleEl.textContent = `📜 智能推荐·逐期复盘验证 (近${count}期)`;
+
+            renderRecHistoryModal(count);
+        }
+
+        function onRecModalStrategyChange(newStrat) {
+            if (newStrat === 'normal_track') {
+                recConfig.track = 'normal';
+                document.getElementById('recTrackSpecial')?.classList.remove('active');
+                document.getElementById('recTrackNormal')?.classList.add('active');
+            } else {
+                recConfig.track = 'special';
+                document.getElementById('recTrackSpecial')?.classList.add('active');
+                document.getElementById('recTrackNormal')?.classList.remove('active');
+                const stratSelect = document.getElementById('recommendStrategy');
+                if (stratSelect) stratSelect.value = newStrat;
+            }
+            saveRecConfig();
+            generateRecommendations();
+        }
+
+        function openRecHistoryModal(count = 5) {
             const modal = document.getElementById('recHistoryModal');
             if (!modal) return;
             modal.style.display = 'flex';
-            renderRecHistoryModal();
+            const selectEl = document.getElementById('recModalStrategySelect');
+            if (selectEl) {
+                selectEl.value = recConfig.track === 'normal' ? 'normal_track' : (document.getElementById('recommendStrategy')?.value || 'multifactor');
+            }
+            setRecModalCount(count);
         }
 
         function closeRecHistoryModal() {
@@ -2519,61 +3501,32 @@
             if (modal) modal.style.display = 'none';
         }
 
-        function renderRecHistoryModal() {
-            const data = state.historyData;
+        function renderRecHistoryModal(reviewCount = null, customStrat = null) {
+            const count = reviewCount || state.recModalCount || 5;
             const statsEl = document.getElementById('recModalStats');
             const sparkEl = document.getElementById('recModalSpark');
+            const tableEl = document.getElementById('recModalTable');
             const tbodyEl = document.getElementById('recModalTbody');
-            if (!data.length || !tbodyEl) return;
+            if (!state.historyData || !state.historyData.length || !tbodyEl) return;
 
-            const reviewCount = Math.min(20, data.length - 1);
-            const records = [];
-            let hitTotal = 0;
+            const selectEl = document.getElementById('recModalStrategySelect');
+            const targetStrat = customStrat || (selectEl ? selectEl.value : (recConfig.track === 'normal' ? 'normal_track' : (document.getElementById('recommendStrategy')?.value || 'multifactor')));
+            const targetTrack = targetStrat === 'normal_track' ? 'normal' : 'special';
 
-            for (let i = data.length - reviewCount; i < data.length; i++) {
-                const cur = data[i];
-                const prevSubset = data.slice(0, i);
-                const prevLast = prevSubset[prevSubset.length - 1];
-                const rec = getMultiFactorRecommendations(prevLast, prevSubset);
-                const top10 = rec.topNumbers.map(n => n.number);
-                const gold = rec.topNumbers.slice(0, 2).map(n => n.number);
-                const silver = rec.topNumbers.slice(2, 5).map(n => n.number);
-
-                const winNum = parseInt(cur.special, 10).toString().padStart(2, '0');
-                let resultType = '未中';
-                let isHit = false;
-
-                if (gold.includes(winNum)) {
-                    resultType = '🥇 命中金胆';
-                    isHit = true;
-                } else if (silver.includes(winNum)) {
-                    resultType = '🥈 命中银胆';
-                    isHit = true;
-                } else if (top10.includes(winNum)) {
-                    resultType = '🎯 命中大底';
-                    isHit = true;
-                }
-
-                if (isHit) hitTotal++;
-
-                records.unshift({
-                    issue: cur.period || cur.id,
-                    special: winNum,
-                    zodiac: cur.win,
-                    color: cur.currentColor,
-                    top10Text: top10.slice(0, 5).join(' '),
-                    resultType,
-                    isHit
-                });
+            if (selectEl && selectEl.value !== targetStrat) {
+                selectEl.value = targetStrat;
             }
 
-            const winRate = Math.round((hitTotal / reviewCount) * 100);
+            const { records, hitTotal, count: actualCount, winRate, activeStrat } = getLookbackRecords(count, targetStrat, targetTrack);
+            if (!records.length) return;
+
+            const stratDisplayName = STRATEGY_NAME_MAP[activeStrat] || '当前策略';
 
             if (statsEl) {
                 statsEl.innerHTML = `
-                    <div style="display:flex;justify-content:space-between;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.3);border-radius:8px;padding:8px 12px;font-size:11px;">
-                        <span>复盘样本: <b>近${reviewCount}期</b></span>
-                        <span>综合命中率: <b style="color:var(--up);font-size:13px;">${winRate}%</b> (${hitTotal}/${reviewCount})</span>
+                    <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.3);border-radius:8px;padding:8px 12px;font-size:11px;flex-wrap:wrap;gap:8px;">
+                        <span>复盘样本: <b>近${actualCount}期</b> (${stratDisplayName})</span>
+                        <span>综合命中率: <b style="color:var(--up);font-size:13px;">${winRate}%</b> (${hitTotal}/${actualCount})</span>
                         <span>盈利收益比: <b style="color:var(--accent);">+${Math.max(0, winRate * 3 - 100)}%</b></span>
                     </div>
                 `;
@@ -2582,26 +3535,69 @@
             if (sparkEl) {
                 sparkEl.innerHTML = records.slice().reverse().map(r => `
                     <div class="rec-spark-bar" title="${r.issue}期 开${r.special} (${r.resultType})">
-                        <div class="bar" style="height:${r.isHit ? '100%' : '20%'};background:${r.isHit ? (r.resultType.includes('金胆') ? '#ffd700' : 'var(--up)') : 'rgba(255,255,255,0.1)'};"></div>
+                        <div class="bar" style="height:${r.isHit ? '100%' : '20%'};background:${r.isHit ? (r.hitRole === 'gold' ? '#ffd700' : 'var(--up)') : 'rgba(255,255,255,0.1)'};"></div>
                     </div>
                 `).join('');
             }
 
-            tbodyEl.innerHTML = records.map(r => `
-                <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                    <td style="padding:6px 4px;color:var(--text-secondary);">${r.issue}</td>
-                    <td style="padding:6px 4px;">
+            if (tableEl) {
+                const theadEl = tableEl.querySelector('thead');
+                if (theadEl) {
+                    theadEl.innerHTML = `
+                        <tr style="color:var(--text-secondary);border-bottom:1px solid var(--border);text-align:left;">
+                            <th style="padding:6px 4px;">期号</th>
+                            <th style="padding:6px 4px;">${activeStrat === 'normal_track' ? '开奖落球 (平特+特码)' : '开出特码'}</th>
+                            <th style="padding:6px 4px;">当时推荐核心 (${stratDisplayName})</th>
+                            <th style="padding:6px 4px;text-align:center;">验证结果</th>
+                        </tr>
+                    `;
+                }
+            }
+
+            tbodyEl.innerHTML = records.map(r => {
+                let ballDisplay = '';
+                if (activeStrat === 'normal_track') {
+                    const normalBadges = (r.normalBalls || []).map(b => {
+                        const c = getColor(b);
+                        const bg = c === 'red' ? '#ff1744' : c === 'blue' ? '#448aff' : '#00e676';
+                        return `<span style="display:inline-block;padding:0 3px;border-radius:3px;background:${bg};color:#fff;font-size:9.5px;margin-right:2px;">${b}</span>`;
+                    }).join('');
+                    const spColor = r.color === 'red' ? '#ff1744' : r.color === 'blue' ? '#448aff' : '#00e676';
+                    ballDisplay = `
+                        <div style="font-size:9.5px;display:flex;align-items:center;flex-wrap:wrap;gap:2px;">
+                            ${normalBadges}
+                            <span style="display:inline-block;padding:0 4px;border-radius:3px;background:${spColor};color:#fff;font-weight:700;font-size:9.5px;">+${r.special}</span>
+                        </div>
+                    `;
+                } else {
+                    ballDisplay = `
                         <span style="display:inline-block;padding:1px 5px;border-radius:4px;background:${r.color === 'red' ? '#ff1744' : r.color === 'blue' ? '#448aff' : '#00e676'};color:#fff;font-weight:700;">${r.special}</span>
                         <span style="font-size:10px;margin-left:3px;color:var(--text-secondary);">${r.zodiac}</span>
-                    </td>
-                    <td style="padding:6px 4px;font-size:10px;color:var(--text-secondary);">${r.top10Text}...</td>
-                    <td style="padding:6px 4px;text-align:center;">
-                        <span style="font-size:10px;padding:2px 6px;border-radius:4px;background:${r.isHit ? (r.resultType.includes('金胆') ? 'rgba(255,215,0,0.2)' : 'rgba(0,230,118,0.2)') : 'rgba(255,255,255,0.05)'};color:${r.isHit ? (r.resultType.includes('金胆') ? '#ffd700' : 'var(--up)') : 'var(--text-secondary)'};border:1px solid ${r.isHit ? 'currentColor' : 'transparent'};">
-                            ${r.resultType}
-                        </span>
-                    </td>
-                </tr>
-            `).join('');
+                    `;
+                }
+
+                let recDetail = '';
+                if (activeStrat === 'normal_track') {
+                    recDetail = `<span style="color:var(--text-secondary);">${r.top10Text}</span>`;
+                } else if (r.topNumbers && r.topNumbers.length > 0) {
+                    recDetail = r.topNumbers.slice(0, 8).map(num => num === r.special ? `<b style="color:${r.hitRole === 'gold' ? '#ffd700' : 'var(--up)'};background:rgba(255,255,255,0.08);padding:1px 3px;border-radius:2px;border:1px solid currentColor;">${num}</b>` : num).join(' ') + '...';
+                } else {
+                    recDetail = `<span style="color:var(--text-secondary);">${r.top10Text}</span>`;
+                }
+
+                return `
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <td style="padding:6px 4px;color:var(--text-secondary);white-space:nowrap;">${String(r.issue).slice(-3)}期</td>
+                        <td style="padding:6px 4px;white-space:nowrap;">${ballDisplay}</td>
+                        <td style="padding:6px 4px;font-size:10px;color:var(--text-secondary);">${recDetail}</td>
+                        <td style="padding:6px 4px;text-align:center;white-space:nowrap;">
+                            <span style="font-size:10px;padding:2px 6px;border-radius:4px;background:${r.isHit ? (r.hitRole === 'gold' ? 'rgba(255,215,0,0.2)' : 'rgba(0,230,118,0.2)') : 'rgba(255,255,255,0.05)'};color:${r.isHit ? (r.hitRole === 'gold' ? '#ffd700' : 'var(--up)') : 'var(--text-secondary)'};border:1px solid ${r.isHit ? 'currentColor' : 'transparent'};">
+                                ${r.resultType}
+                            </span>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
         }
 
         // ==================== 3. 一键套用至特码自由K线 ====================
@@ -2642,6 +3638,7 @@
             const total = p.total || 1;
             switch (strategy) {
                 case 'multifactor':
+                case 'sum_span':
                 case 'dan_base_kill':
                 case 'auto_opt':
                 case 'omission': return getOmissionBasedRecommendations(snapshot, colorMaxOm, globalMaxOm, p.currentColor || 'red');
@@ -2762,6 +3759,7 @@
         }
 
         function renderRecommendations(container, recommendations, strategy) {
+            state.currentRecommendations = { strategy, recommendations, track: recConfig.track };
             if (!recommendations || (Array.isArray(recommendations) && recommendations.length === 0)) {
                 container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); font-size: 11px; padding: 10px;">暂无推荐</div>';
                 return;
@@ -2814,6 +3812,131 @@
                                 <div style="background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:6px;padding:3px 2px;text-align:center;">
                                     <div style="display:inline-block;width:20px;height:20px;line-height:20px;border-radius:50%;background:${item.color === 'red' ? '#ff1744' : item.color === 'blue' ? '#448aff' : '#00e676'};color:#fff;font-weight:700;font-size:10.5px;">${item.number}</div>
                                     <div style="font-size:8.5px;color:var(--text-secondary);margin-top:2px;">${item.zodiac} (${item.hits}次)</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+                container.innerHTML = html;
+                return;
+            }
+
+            // 0.5 和值跨度·均值回归精选界面
+            if (strategy === 'sum_span' && recommendations.topNumbers) {
+                const { topNumbers, headDan, tailDan, midDan, topZodiacs, metrics, shrinkCount, shrinkInfo } = recommendations;
+                const numListStr = topNumbers.map(n => n.number).join(',');
+                const guardStr = [...(headDan || []), ...(tailDan || [])].map(n => n.number).join(',');
+                const isShrinked = recConfig.shrink;
+
+                const sumDiff = metrics.lastSum - 175;
+                const sumDiffText = sumDiff > 0 ? `+${sumDiff}` : `${sumDiff}`;
+                const sumBadgeColor = metrics.sumStatus === 'high' ? 'var(--down)' : metrics.sumStatus === 'low' ? 'var(--up)' : 'var(--accent)';
+                const spanBadgeColor = metrics.spanStatus === 'wide' ? 'var(--warn)' : metrics.spanStatus === 'narrow' ? 'var(--up)' : 'var(--accent)';
+
+                let html = `
+                    <!-- 和值与跨度量化状态看板 -->
+                    <div class="rec-section-box" style="background:rgba(0,229,255,0.03);border:1px solid rgba(0,229,255,0.2);">
+                        <div style="font-size:10px;font-weight:700;color:var(--accent);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;">
+                            <span>📐 和值跨度·均值回归诊断台</span>
+                            <span style="font-size:9px;color:var(--text-secondary);">10期均值基准</span>
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+                            <!-- 和值分析卡 -->
+                            <div style="background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:6px;padding:6px;">
+                                <div style="display:flex;justify-content:space-between;align-items:center;">
+                                    <span style="font-size:10px;color:var(--text-secondary);">7码和值</span>
+                                    <span style="font-size:9px;padding:1px 4px;border-radius:3px;background:rgba(255,255,255,0.05);color:${sumBadgeColor};font-weight:700;">${metrics.sumDesc}</span>
+                                </div>
+                                <div style="font-size:14px;font-weight:800;color:var(--text-primary);margin:2px 0;">
+                                    ${metrics.lastSum} <span style="font-size:9.5px;color:${sumBadgeColor};font-weight:normal;">(${sumDiffText})</span>
+                                </div>
+                                <div style="font-size:8.5px;color:var(--text-secondary);line-height:1.3;">
+                                    10期均值: ${metrics.avgSum10} | 回归: <b style="color:${sumBadgeColor};">${metrics.suggestDirection}</b>
+                                </div>
+                            </div>
+                            <!-- 跨度分析卡 -->
+                            <div style="background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:6px;padding:6px;">
+                                <div style="display:flex;justify-content:space-between;align-items:center;">
+                                    <span style="font-size:10px;color:var(--text-secondary);">全码跨度</span>
+                                    <span style="font-size:9px;padding:1px 4px;border-radius:3px;background:rgba(255,255,255,0.05);color:${spanBadgeColor};font-weight:700;">${metrics.spanDesc}</span>
+                                </div>
+                                <div style="font-size:14px;font-weight:800;color:var(--text-primary);margin:2px 0;">
+                                    ${metrics.lastSpan} <span style="font-size:9.5px;color:var(--text-secondary);font-weight:normal;">(均值${metrics.avgSpan10})</span>
+                                </div>
+                                <div style="font-size:8.5px;color:var(--text-secondary);line-height:1.3;">
+                                    首尾跨距: <b style="color:${spanBadgeColor};">${metrics.spanStatus === 'wide' ? '防收缩' : metrics.spanStatus === 'narrow' ? '防扩散' : '黄金常态'}</b>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="font-size:8.5px;color:var(--warn);margin-top:6px;padding-top:4px;border-top:1px dashed rgba(255,255,255,0.08);line-height:1.4;">
+                            💡 <b>策略重心</b>：${metrics.sumAdvice}。建议大小配比：<b>${metrics.suggestRatio}</b>
+                        </div>
+                    </div>
+
+                    <!-- 跨度首尾守门码（首号 + 尾号） -->
+                    <div class="rec-section-box">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                            <span style="font-size:11px;font-weight:700;color:#ffd700;">🚪 跨度首尾守门码 (01-10首 / 40-49尾)</span>
+                            <button class="rec-apply-btn" onclick="applyRecommendToKLine('guard', '${guardStr}')">套用首尾</button>
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+                            <div style="background:rgba(255,215,0,0.06);border:1px solid rgba(255,215,0,0.25);border-radius:6px;padding:4px 6px;">
+                                <div style="font-size:9.5px;color:var(--text-secondary);margin-bottom:3px;">🚪 首号守门候选:</div>
+                                <div style="display:flex;gap:5px;align-items:center;">
+                                    ${(headDan || []).map(h => `
+                                        <div style="display:flex;align-items:center;gap:3px;">
+                                            <span style="display:inline-block;width:20px;height:20px;line-height:20px;border-radius:50%;background:${h.color === 'red' ? '#ff1744' : h.color === 'blue' ? '#448aff' : '#00e676'};color:#fff;font-weight:700;font-size:10px;text-align:center;">${h.number}</span>
+                                            <span style="font-size:9px;color:var(--text-primary);">${h.zodiac}</span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                            <div style="background:rgba(255,215,0,0.06);border:1px solid rgba(255,215,0,0.25);border-radius:6px;padding:4px 6px;">
+                                <div style="font-size:9.5px;color:var(--text-secondary);margin-bottom:3px;">🚪 尾号守门候选:</div>
+                                <div style="display:flex;gap:5px;align-items:center;">
+                                    ${(tailDan || []).map(t => `
+                                        <div style="display:flex;align-items:center;gap:3px;">
+                                            <span style="display:inline-block;width:20px;height:20px;line-height:20px;border-radius:50%;background:${t.color === 'red' ? '#ff1744' : t.color === 'blue' ? '#448aff' : '#00e676'};color:#fff;font-weight:700;font-size:10px;text-align:center;">${t.number}</span>
+                                            <span style="font-size:9px;color:var(--text-primary);">${t.zodiac}</span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 精选号码推荐群 -->
+                    <div class="rec-section-box">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                            <div style="display:flex;align-items:center;gap:4px;">
+                                <span style="font-size:11px;font-weight:700;color:var(--accent);">⭐ 均值回归·精选 ${topNumbers.length} 码</span>
+                                ${isShrinked ? `<span style="font-size:8.5px;padding:1px 4px;border-radius:3px;background:rgba(0,230,118,0.15);color:var(--up);border:1px solid rgba(0,230,118,0.3);" title="${shrinkInfo || '已自动进行同尾/同肖瘦身'}">已缩水${shrinkCount ? `(滤换${shrinkCount}码)` : ''}</span>` : ''}
+                            </div>
+                            <button class="rec-apply-btn" onclick="applyRecommendToKLine('multi', '${numListStr}')">📈 套用至K线</button>
+                        </div>
+                        <div style="display:grid;grid-template-columns:repeat(5, 1fr);gap:5px;">
+                            ${topNumbers.map(item => `
+                                <div style="background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:6px;padding:4px 2px;text-align:center;">
+                                    <div style="display:inline-block;width:22px;height:22px;line-height:22px;border-radius:50%;background:${item.color === 'red' ? '#ff1744' : item.color === 'blue' ? '#448aff' : '#00e676'};color:#fff;font-weight:700;font-size:11px;">${item.number}</div>
+                                    <div style="font-size:9px;color:var(--text-secondary);margin-top:2px;">${item.zodiac}</div>
+                                    <div class="rec-tag-badge" style="${item.role === 'head' || item.role === 'tail' ? 'background:rgba(255,215,0,0.15);color:#ffd700;border-color:rgba(255,215,0,0.3);' : ''}">${item.tag}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <!-- 共振生肖 -->
+                    <div class="rec-section-box" style="margin-bottom:0;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                            <span style="font-size:11px;font-weight:700;color:var(--warn);">🐾 均值共振优选生肖</span>
+                            <button class="rec-apply-btn" onclick="applyRecommendToKLine('zodiac', '${topZodiacs.map(z=>z.zodiac).join(',')}')">📈 套用生肖</button>
+                        </div>
+                        <div style="display:flex;gap:6px;">
+                            ${topZodiacs.map(z => `
+                                <div style="flex:1;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:6px;padding:5px 2px;text-align:center;">
+                                    <div style="font-size:13px;font-weight:700;color:var(--accent);">${z.zodiac}</div>
+                                    <div style="font-size:9px;color:var(--text-secondary);">遗漏:${z.currentOm}</div>
+                                    <div class="rec-tag-badge" style="background:rgba(255,171,0,0.12);color:var(--warn);border-color:rgba(255,171,0,0.3);">${z.tag}</div>
                                 </div>
                             `).join('')}
                         </div>
@@ -3091,6 +4214,13 @@
                     text += `🥈 银胆: ${dbk.silverDan.map(s => s.number).join(', ')}\n`;
                     text += `🚫 杀码: ${dbk.killedNumbers.map(k => k.number).join(', ')}\n`;
                 }
+            } else if (strategy === 'sum_span') {
+                const ss = getSumSpanRecommendations(last, state.historyData);
+                text += `📐 7码和值: ${ss.metrics.lastSum} (${ss.metrics.sumDesc}, 均值${ss.metrics.avgSum10}) -> 倾向: ${ss.metrics.suggestDirection}\n`;
+                text += `📏 全码跨度: ${ss.metrics.lastSpan} (${ss.metrics.spanDesc}, 均值${ss.metrics.avgSpan10}) -> 间距: ${ss.metrics.spanDesc}\n`;
+                text += `🚪 首号守门: ${ss.headDan.map(h => h.number).join(', ')} | 尾号守门: ${ss.tailDan.map(t => t.number).join(', ')}\n`;
+                text += `⭐ 均值精选: ${ss.topNumbers.map(n => n.number).join(', ')}\n`;
+                text += `🐾 共振生肖: ${ss.topZodiacs.map(z => z.zodiac).join(', ')}\n`;
             } else if (strategy === 'auto_opt') {
                 const opt = getAutoOptimizedStrategy(last, state.historyData);
                 text += `🏆 AI最优方案: ${opt.best.name} (${opt.best.text})\n`;
@@ -3198,6 +4328,44 @@
             if (n >= 31 && n <= 40) return '4区';
             if (n >= 41 && n <= 49) return '5区';
             return '1区';
+        }
+
+        function getNumHe(num) {
+            const n = typeof num === 'number' ? num : parseInt(num, 10);
+            return Math.floor(n / 10) + (n % 10);
+        }
+
+        function getNumHeTail(num) {
+            return getNumHe(num) % 10;
+        }
+
+        function getNumTail(num) {
+            const n = typeof num === 'number' ? num : parseInt(num, 10);
+            return n % 10;
+        }
+
+        function isHeDan(num) {
+            return getNumHe(num) % 2 !== 0;
+        }
+
+        function isHeShuang(num) {
+            return getNumHe(num) % 2 === 0;
+        }
+
+        function isHeDa(num) {
+            return getNumHe(num) >= 7;
+        }
+
+        function isHeXiao(num) {
+            return getNumHe(num) <= 6;
+        }
+
+        function isWeiDa(num) {
+            return getNumTail(num) >= 5;
+        }
+
+        function isWeiXiao(num) {
+            return getNumTail(num) <= 4;
         }
 
         function computeMaxRiseFall(data, endIndex) {
@@ -3393,7 +4561,7 @@
             const keys = CONFIG.zodiacMap[state.currentYear];
             const counts = calculateFrequencyCounts(keys, item => getAllDrawZodiacs(item), sourceData);
             return Object.entries(counts)
-                .sort((a, b) => b[1] - a[1] || keys.indexOf(a[0]) - keys.indexOf(b[0]))
+                .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
                 .slice(0, count)
                 .map(item => item[0]);
         }
@@ -3401,7 +4569,7 @@
             const keys = CONFIG.zodiacMap[state.currentYear];
             const counts = calculateFrequencyCounts(keys, item => getAllDrawZodiacs(item), sourceData);
             return Object.entries(counts)
-                .sort((a, b) => a[1] - b[1] || keys.indexOf(b[0]) - keys.indexOf(a[0]))
+                .sort((a, b) => a[1] - b[1] || b[0].localeCompare(a[0]))
                 .slice(0, count)
                 .map(item => item[0]);
         }
@@ -3439,7 +4607,7 @@
             const keys = CONFIG.zodiacMap[state.currentYear];
             const counts = calculateFrequencyCounts(keys, item => item.win, sourceData);
             return Object.entries(counts)
-                .sort((a, b) => b[1] - a[1] || keys.indexOf(a[0]) - keys.indexOf(b[0]))
+                .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
                 .slice(0, count)
                 .map(item => item[0]);
         }
@@ -3448,7 +4616,7 @@
             const keys = CONFIG.zodiacMap[state.currentYear];
             const counts = calculateFrequencyCounts(keys, item => item.win, sourceData);
             return Object.entries(counts)
-                .sort((a, b) => a[1] - b[1] || keys.indexOf(b[0]) - keys.indexOf(a[0]))
+                .sort((a, b) => a[1] - b[1] || b[0].localeCompare(a[0]))
                 .slice(0, count)
                 .map(item => item[0]);
         }
@@ -3517,10 +4685,28 @@
             return sorted.slice(s - 1, e);
         }
 
+        function getPingOmissionRangeNumbers(sourceData, startRank = 1, endRank = 10) {
+            const keys = Array.from({ length: 49 }, (_, i) => (i + 1).toString().padStart(2, '0'));
+            const counts = calculateOmissionCounts(keys, item => getAllDrawNumbers(item), sourceData);
+            const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(item => item[0]);
+            const s = Math.max(1, Math.min(49, Math.min(startRank, endRank)));
+            const e = Math.max(1, Math.min(49, Math.max(startRank, endRank)));
+            return sorted.slice(s - 1, e);
+        }
+
+        function getPingOmissionRangeZodiacs(sourceData, startRank = 1, endRank = 3) {
+            const keys = CONFIG.zodiacMap[state.currentYear];
+            const counts = calculateOmissionCounts(keys, item => getAllDrawZodiacs(item), sourceData);
+            const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(item => item[0]);
+            const s = Math.max(1, Math.min(12, Math.min(startRank, endRank)));
+            const e = Math.max(1, Math.min(12, Math.max(startRank, endRank)));
+            return sorted.slice(s - 1, e);
+        }
+
         function getColdOmissionRangeZodiacs(sourceData, startRank = 1, endRank = 3) {
             const keys = CONFIG.zodiacMap[state.currentYear];
             const counts = calculateOmissionCounts(keys, item => item.win, sourceData);
-            const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1] || keys.indexOf(a[0]) - keys.indexOf(b[0])).map(item => item[0]);
+            const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(item => item[0]);
             const s = Math.max(1, Math.min(12, Math.min(startRank, endRank)));
             const e = Math.max(1, Math.min(12, Math.max(startRank, endRank)));
             return sorted.slice(s - 1, e);
@@ -3547,7 +4733,7 @@
         function getHotZodiacRange(sourceData, startRank = 1, endRank = 3) {
             const keys = CONFIG.zodiacMap[state.currentYear];
             const counts = calculateFrequencyCounts(keys, item => getAllDrawZodiacs(item), sourceData);
-            const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1] || keys.indexOf(a[0]) - keys.indexOf(b[0])).map(item => item[0]);
+            const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(item => item[0]);
             const s = Math.max(1, Math.min(12, Math.min(startRank, endRank)));
             const e = Math.max(1, Math.min(12, Math.max(startRank, endRank)));
             return sorted.slice(s - 1, e);
@@ -3556,7 +4742,7 @@
         function getAllHotZodiacRange(sourceData, startRank = 1, endRank = 3) {
             const keys = CONFIG.zodiacMap[state.currentYear];
             const counts = calculateFrequencyCounts(keys, item => item.win, sourceData);
-            const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1] || keys.indexOf(a[0]) - keys.indexOf(b[0])).map(item => item[0]);
+            const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(item => item[0]);
             const s = Math.max(1, Math.min(12, Math.min(startRank, endRank)));
             const e = Math.max(1, Math.min(12, Math.max(startRank, endRank)));
             return sorted.slice(s - 1, e);
@@ -3582,8 +4768,22 @@
             if (cold.types.includes('selectZodiacs') && cold.selectedZodiacs && cold.selectedZodiacs.includes(winZ)) matches++;
             if (cold.types.includes('selectedWaves') && cold.selectedWaves && cold.selectedWaves.includes(color)) matches++;
             if (cold.types.includes('selectedRegions') && cold.selectedRegions && (cold.selectedRegions.includes(regionKey) || cold.selectedRegions.includes(regionShort))) matches++;
+            if (cold.types.includes('selectedMorphs') && cold.selectedMorphs && cold.selectedMorphs.length) {
+                const mDanShuang = cold.selectedMorphs.filter(m => m === 'heDan' || m === 'heShuang');
+                const mDaXiao = cold.selectedMorphs.filter(m => m === 'heDa' || m === 'heXiao');
+                const mWeiDaXiao = cold.selectedMorphs.filter(m => m === 'weiDa' || m === 'weiXiao');
+                let morphMatch = false;
+                if (mDanShuang.length && ((mDanShuang.includes('heDan') && isHeDan(winNum)) || (mDanShuang.includes('heShuang') && isHeShuang(winNum)))) morphMatch = true;
+                if (mDaXiao.length && ((mDaXiao.includes('heDa') && isHeDa(winNum)) || (mDaXiao.includes('heXiao') && isHeXiao(winNum)))) morphMatch = true;
+                if (mWeiDaXiao.length && ((mWeiDaXiao.includes('weiDa') && isWeiDa(winNum)) || (mWeiDaXiao.includes('weiXiao') && isWeiXiao(winNum)))) morphMatch = true;
+                if (morphMatch) matches++;
+            }
+            if (cold.types.includes('selectedHeNumbers') && cold.selectedHeNumbers && cold.selectedHeNumbers.includes(getNumHe(winNum))) matches++;
+            if (cold.types.includes('selectedHeTails') && cold.selectedHeTails && cold.selectedHeTails.includes(getNumHeTail(winNum))) matches++;
             if (cold.types.includes('omissionRange') && rollingColdSets.omissionRange && rollingColdSets.omissionRange.includes(numStr)) matches++;
             if (cold.types.includes('omissionZodiacRange') && rollingColdSets.omissionZodiacRange && rollingColdSets.omissionZodiacRange.includes(winZ)) matches++;
+            if (cold.types.includes('pingOmissionRange') && rollingColdSets.pingOmissionRange && rollingColdSets.pingOmissionRange.includes(numStr)) matches++;
+            if (cold.types.includes('pingOmissionZodiacRange') && rollingColdSets.pingOmissionZodiacRange && rollingColdSets.pingOmissionZodiacRange.includes(winZ)) matches++;
             if (cold.types.includes('inputNumbers')) {
                 const t = cold.inputTerms || { numbers: cold.selectedNumbers || [] };
                 if (
@@ -3594,8 +4794,21 @@
                     t.waves.includes(color) ||
                     t.segments.includes(Math.ceil(winNum / 7)) ||
                     (t.regions && t.regions.includes(regionShort)) ||
+                    (t.morphs && t.morphs.some(m => {
+                        if (m === 'heDan') return isHeDan(winNum);
+                        if (m === 'heShuang') return isHeShuang(winNum);
+                        if (m === 'heDa') return isHeDa(winNum);
+                        if (m === 'heXiao') return isHeXiao(winNum);
+                        if (m === 'weiDa') return isWeiDa(winNum);
+                        if (m === 'weiXiao') return isWeiXiao(winNum);
+                        return false;
+                    })) ||
+                    (t.heNumbers && t.heNumbers.includes(getNumHe(winNum))) ||
+                    (t.heTails && t.heTails.includes(getNumHeTail(winNum))) ||
                     (rollingColdSets.inputOmissionRangeNumbers && rollingColdSets.inputOmissionRangeNumbers.includes(numStr)) ||
                     (rollingColdSets.inputOmissionZodiacRangeZodiacs && rollingColdSets.inputOmissionZodiacRangeZodiacs.includes(winZ)) ||
+                    (rollingColdSets.inputPingOmissionRangeNumbers && rollingColdSets.inputPingOmissionRangeNumbers.includes(numStr)) ||
+                    (rollingColdSets.inputPingOmissionZodiacRangeZodiacs && rollingColdSets.inputPingOmissionZodiacRangeZodiacs.includes(winZ)) ||
                     (rollingColdSets.inputHotNumberRangeNumbers && rollingColdSets.inputHotNumberRangeNumbers.includes(numStr)) ||
                     (rollingColdSets.inputAllHotNumberRangeNumbers && rollingColdSets.inputAllHotNumberRangeNumbers.includes(numStr)) ||
                     (rollingColdSets.inputHotZodiacRangeZodiacs && rollingColdSets.inputHotZodiacRangeZodiacs.includes(winZ)) ||
@@ -3659,6 +4872,12 @@
             if (types.includes('omissionZodiacRange')) {
                 sets.omissionZodiacRange = resolveRangeItems('omissionZodiacRange', getColdOmissionRangeZodiacs, omissionSourceData);
             }
+            if (types.includes('pingOmissionRange')) {
+                sets.pingOmissionRange = resolveRangeItems('pingOmissionRange', getPingOmissionRangeNumbers, omissionSourceData);
+            }
+            if (types.includes('pingOmissionZodiacRange')) {
+                sets.pingOmissionZodiacRange = resolveRangeItems('pingOmissionZodiacRange', getPingOmissionRangeZodiacs, omissionSourceData);
+            }
             if (types.includes('hotNumberRange')) {
                 sets.hotNumberRange = resolveRangeItems('hotNumberRange', getHotNumberRange, hotColdSourceData);
             }
@@ -3676,6 +4895,18 @@
                     sets.inputOmissionRangeNumbers = [];
                     counts.inputTerms.omissionRanges.forEach(r => {
                         sets.inputOmissionRangeNumbers.push(...getColdOmissionRangeNumbers(omissionSourceData, r.start, r.end));
+                    });
+                }
+                if (counts.inputTerms.pingOmissionRanges) {
+                    sets.inputPingOmissionRangeNumbers = [];
+                    counts.inputTerms.pingOmissionRanges.forEach(r => {
+                        sets.inputPingOmissionRangeNumbers.push(...getPingOmissionRangeNumbers(omissionSourceData, r.start, r.end));
+                    });
+                }
+                if (counts.inputTerms.pingOmissionZodiacRanges) {
+                    sets.inputPingOmissionZodiacRangeZodiacs = [];
+                    counts.inputTerms.pingOmissionZodiacRanges.forEach(r => {
+                        sets.inputPingOmissionZodiacRangeZodiacs.push(...getPingOmissionRangeZodiacs(omissionSourceData, r.start, r.end));
                     });
                 }
                 if (counts.inputTerms.omissionZodiacRanges) {
@@ -3746,6 +4977,22 @@
             if (sets.selectZodiacs) sets.selectZodiacs.forEach(zodiac => addNumbersByFilter(num => getZodiac(parseInt(num, 10)) === zodiac));
             if (sets.selectedWaves) sets.selectedWaves.forEach(wave => addNumbersByFilter(num => getColor(num) === wave));
             if (sets.selectedRegions) sets.selectedRegions.forEach(reg => addNumbersByFilter(num => getRegionKey(parseInt(num, 10)) === reg || getRegionShortKey(parseInt(num, 10)) === reg));
+            if (sets.selectedMorphs) {
+                sets.selectedMorphs.forEach(m => {
+                    if (m === 'heDan') addNumbersByFilter(num => isHeDan(num));
+                    if (m === 'heShuang') addNumbersByFilter(num => isHeShuang(num));
+                    if (m === 'heDa') addNumbersByFilter(num => isHeDa(num));
+                    if (m === 'heXiao') addNumbersByFilter(num => isHeXiao(num));
+                    if (m === 'weiDa') addNumbersByFilter(num => isWeiDa(num));
+                    if (m === 'weiXiao') addNumbersByFilter(num => isWeiXiao(num));
+                });
+            }
+            if (sets.selectedHeNumbers) {
+                sets.selectedHeNumbers.forEach(h => addNumbersByFilter(num => getNumHe(num) === h));
+            }
+            if (sets.selectedHeTails) {
+                sets.selectedHeTails.forEach(ht => addNumbersByFilter(num => getNumHeTail(num) === ht));
+            }
 
             if (sets.wave) sets.wave.forEach(wave => addNumbersByFilter(num => getColor(num) === wave));
             if (sets.halfwave) sets.halfwave.forEach(half => addNumbersByFilter(num => getHalfWaveKey(num) === half));
@@ -3757,6 +5004,8 @@
             if (sets.region) sets.region.forEach(key => addNumbersByFilter(num => getRegionKey(parseInt(num, 10)) === key));
             if (sets.omissionRange) sets.omissionRange.forEach(addNumber);
             if (sets.omissionZodiacRange) sets.omissionZodiacRange.forEach(zodiac => addNumbersByFilter(num => getZodiac(parseInt(num, 10)) === zodiac));
+            if (sets.pingOmissionRange) sets.pingOmissionRange.forEach(addNumber);
+            if (sets.pingOmissionZodiacRange) sets.pingOmissionZodiacRange.forEach(zodiac => addNumbersByFilter(num => getZodiac(parseInt(num, 10)) === zodiac));
             if (sets.inputTerms) {
                 const it = sets.inputTerms;
                 it.numbers.forEach(addNumber);
@@ -3766,8 +5015,20 @@
                 it.waves.forEach(w => addNumbersByFilter(num => getColor(num) === w));
                 it.segments.forEach(s => addNumbersByFilter(num => Math.ceil(parseInt(num, 10) / 7) === s));
                 if (it.regions) it.regions.forEach(r => addNumbersByFilter(num => getRegionShortKey(parseInt(num, 10)) === r));
+                if (it.morphs) it.morphs.forEach(m => {
+                    if (m === 'heDan') addNumbersByFilter(num => isHeDan(num));
+                    if (m === 'heShuang') addNumbersByFilter(num => isHeShuang(num));
+                    if (m === 'heDa') addNumbersByFilter(num => isHeDa(num));
+                    if (m === 'heXiao') addNumbersByFilter(num => isHeXiao(num));
+                    if (m === 'weiDa') addNumbersByFilter(num => isWeiDa(num));
+                    if (m === 'weiXiao') addNumbersByFilter(num => isWeiXiao(num));
+                });
+                if (it.heNumbers) it.heNumbers.forEach(h => addNumbersByFilter(num => getNumHe(num) === h));
+                if (it.heTails) it.heTails.forEach(ht => addNumbersByFilter(num => getNumHeTail(num) === ht));
                 if (sets.inputOmissionRangeNumbers) sets.inputOmissionRangeNumbers.forEach(addNumber);
                 if (sets.inputOmissionZodiacRangeZodiacs) sets.inputOmissionZodiacRangeZodiacs.forEach(zodiac => addNumbersByFilter(num => getZodiac(parseInt(num, 10)) === zodiac));
+                if (sets.inputPingOmissionRangeNumbers) sets.inputPingOmissionRangeNumbers.forEach(addNumber);
+                if (sets.inputPingOmissionZodiacRangeZodiacs) sets.inputPingOmissionZodiacRangeZodiacs.forEach(zodiac => addNumbersByFilter(num => getZodiac(parseInt(num, 10)) === zodiac));
                 if (sets.inputHotNumberRangeNumbers) sets.inputHotNumberRangeNumbers.forEach(addNumber);
                 if (sets.inputAllHotNumberRangeNumbers) sets.inputAllHotNumberRangeNumbers.forEach(addNumber);
                 if (sets.inputHotZodiacRangeZodiacs) sets.inputHotZodiacRangeZodiacs.forEach(zodiac => addNumbersByFilter(num => getZodiac(parseInt(num, 10)) === zodiac));
@@ -3792,7 +5053,7 @@
             }
 
             // Show inline selection results next to each checked option (skip zodiac types - self-explanatory)
-            const skipTypes = ['zodiacs', 'hotZodiacs', 'coldZodiacs', 'allHotZodiacs', 'allColdZodiacs', 'hotZodiacRange', 'allHotZodiacRange', 'selectZodiacs'];
+            const skipTypes = ['zodiacs', 'hotZodiacs', 'coldZodiacs', 'allHotZodiacs', 'allColdZodiacs', 'hotZodiacRange', 'allHotZodiacRange', 'selectZodiacs', 'selectedWaves', 'selectedMorphs', 'selectedHeNumbers', 'selectedHeTails'];
             const displayValueMap = { red: '红波', blue: '蓝波', green: '绿波', jia: '家肖', ye: '野肖' };
             document.querySelectorAll('.cold-inline-result').forEach(el => el.remove());
             Object.keys(sets).forEach(type => {
@@ -3820,8 +5081,8 @@
             });
         }
 
-        function parseInputTerms(text) {
-            const terms = { numbers: [], zodiacs: [], tails: [], heads: [], waves: [], segments: [], regions: [], omissionRanges: [], omissionZodiacRanges: [], hotNumberRanges: [], allHotNumberRanges: [], hotZodiacRanges: [], allHotZodiacRanges: [] };
+                function parseInputTerms(text) {
+            const terms = { numbers: [], zodiacs: [], tails: [], heads: [], waves: [], segments: [], regions: [], omissionRanges: [], omissionZodiacRanges: [], pingOmissionRanges: [], pingOmissionZodiacRanges: [], hotNumberRanges: [], allHotNumberRanges: [], hotZodiacRanges: [], allHotZodiacRanges: [], morphs: [], heNumbers: [], heTails: [] };
             if (!text) return terms;
             const zodiacNames = new Set(['鼠', '牛', '虎', '兔', '龙', '蛇', '马', '羊', '猴', '鸡', '狗', '猪']);
             const waveMap = { '红': 'red', '蓝': 'blue', '绿': 'green', '红波': 'red', '蓝波': 'blue', '绿波': 'green' };
@@ -3841,6 +5102,30 @@
                     const r = regionMap[token];
                     if (!terms.regions.includes(r)) terms.regions.push(r);
                     return;
+                }
+                if (token === '合单' || token === '单合') { if (!terms.morphs.includes('heDan')) terms.morphs.push('heDan'); return; }
+                if (token === '合双' || token === '双合') { if (!terms.morphs.includes('heShuang')) terms.morphs.push('heShuang'); return; }
+                if (token === '合大' || token === '大合') { if (!terms.morphs.includes('heDa')) terms.morphs.push('heDa'); return; }
+                if (token === '合小' || token === '小合') { if (!terms.morphs.includes('heXiao')) terms.morphs.push('heXiao'); return; }
+                if (token === '尾大' || token === '大尾') { if (!terms.morphs.includes('weiDa')) terms.morphs.push('weiDa'); return; }
+                if (token === '尾小' || token === '小尾') { if (!terms.morphs.includes('weiXiao')) terms.morphs.push('weiXiao'); return; }
+                if (token.includes('合尾')) {
+                    const htMatch = token.match(/^(?:合尾)?(\d{1,2})$/) || token.match(/^(\d{1,2})合尾$/) || token.match(/^合尾(\d{1,2})$/);
+                    if (htMatch) {
+                        const ht = parseInt(htMatch[1], 10) % 10;
+                        if (!terms.heTails.includes(ht)) terms.heTails.push(ht);
+                        return;
+                    }
+                }
+                if (token.includes('合') && !token.includes('合尾')) {
+                    const hMatch = token.match(/^(?:合)?(\d{1,2})$/) || token.match(/^(\d{1,2})合$/) || token.match(/^合(\d{1,2})$/);
+                    if (hMatch) {
+                        const h = parseInt(hMatch[1], 10);
+                        if (h >= 1 && h <= 13) {
+                            if (!terms.heNumbers.includes(h)) terms.heNumbers.push(h);
+                            return;
+                        }
+                    }
                 }
                 let mHotZ = token.match(/^(?:平特热肖|平热肖|平特肖|平肖)(\d{1,2})[-~到至](\d{1,2})(?:位|肖)?$/);
                 if (mHotZ) {
@@ -3872,14 +5157,28 @@
                     terms.allHotNumberRanges.push({ start: Math.min(s, e), end: Math.max(s, e) });
                     return;
                 }
-                let mZRange = token.match(/^(?:遗漏肖|遗漏生肖|遗漏生肖区|遗漏肖段)(\d{1,2})[-~到至](\d{1,2})(?:位|肖)?$/);
+                let mZRange = token.match(/^(?:遗漏肖|遗漏生肖|遗漏生肖区|遗漏肖段|特码遗漏肖)(\d{1,2})[-~到至](\d{1,2})(?:位|肖)?$/);
                 if (mZRange) {
                     const s = Math.max(1, Math.min(12, parseInt(mZRange[1], 10)));
                     const e = Math.max(1, Math.min(12, parseInt(mZRange[2], 10)));
                     terms.omissionZodiacRanges.push({ start: Math.min(s, e), end: Math.max(s, e) });
                     return;
                 }
-                let mRange = token.match(/^(?:遗漏|遗漏区|遗漏区域|遗漏段)?(\d{1,2})[-~到至](\d{1,2})(?:位|号)?$/);
+                let mPingZRange = token.match(/^(?:平特遗漏肖|平特生肖遗漏|平特遗漏生肖|平特漏肖|平遗漏肖|平漏肖)(\d{1,2})[-~到至](\d{1,2})(?:位|肖)?$/);
+                if (mPingZRange) {
+                    const s = Math.max(1, Math.min(12, parseInt(mPingZRange[1], 10)));
+                    const e = Math.max(1, Math.min(12, parseInt(mPingZRange[2], 10)));
+                    terms.pingOmissionZodiacRanges.push({ start: Math.min(s, e), end: Math.max(s, e) });
+                    return;
+                }
+                let mPingRange = token.match(/^(?:平特遗漏|平特遗漏区|平特遗漏码|平特漏|平遗漏|平漏)(\d{1,2})[-~到至](\d{1,2})(?:位|号)?$/);
+                if (mPingRange) {
+                    const s = Math.max(1, Math.min(49, parseInt(mPingRange[1], 10)));
+                    const e = Math.max(1, Math.min(49, parseInt(mPingRange[2], 10)));
+                    terms.pingOmissionRanges.push({ start: Math.min(s, e), end: Math.max(s, e) });
+                    return;
+                }
+                let mRange = token.match(/^(?:遗漏|遗漏区|遗漏区域|遗漏段|特码遗漏|特码遗漏码)?(\d{1,2})[-~到至](\d{1,2})(?:位|号)?$/);
                 if (mRange) {
                     const s = Math.max(1, Math.min(49, parseInt(mRange[1], 10)));
                     const e = Math.max(1, Math.min(49, parseInt(mRange[2], 10)));
@@ -3930,8 +5229,16 @@
             if (t.waves && t.waves.length) parts.push(...t.waves.map(w => waveNames[w]));
             if (t.segments && t.segments.length) parts.push(...t.segments.map(s => s + '段'));
             if (t.regions && t.regions.length) parts.push(...t.regions.map(r => regionNames[r] || r));
-            if (t.omissionRanges && t.omissionRanges.length) parts.push(...t.omissionRanges.map(r => `遗漏${r.start}-${r.end}`));
-            if (t.omissionZodiacRanges && t.omissionZodiacRanges.length) parts.push(...t.omissionZodiacRanges.map(r => `遗漏肖${r.start}-${r.end}`));
+            if (t.morphs && t.morphs.length) {
+                const morphNames = { heDan: '合单', heShuang: '合双', heDa: '合大', heXiao: '合小', weiDa: '尾大', weiXiao: '尾小' };
+                parts.push(...t.morphs.map(m => morphNames[m] || m));
+            }
+            if (t.heNumbers && t.heNumbers.length) parts.push(...t.heNumbers.map(h => h + '合'));
+            if (t.heTails && t.heTails.length) parts.push(...t.heTails.map(ht => ht + '合尾'));
+            if (t.omissionRanges && t.omissionRanges.length) parts.push(...t.omissionRanges.map(r => `特码遗漏${r.start}-${r.end}`));
+            if (t.omissionZodiacRanges && t.omissionZodiacRanges.length) parts.push(...t.omissionZodiacRanges.map(r => `特码漏肖${r.start}-${r.end}`));
+            if (t.pingOmissionRanges && t.pingOmissionRanges.length) parts.push(...t.pingOmissionRanges.map(r => `平特遗漏${r.start}-${r.end}`));
+            if (t.pingOmissionZodiacRanges && t.pingOmissionZodiacRanges.length) parts.push(...t.pingOmissionZodiacRanges.map(r => `平特漏肖${r.start}-${r.end}`));
             if (t.hotNumberRanges && t.hotNumberRanges.length) parts.push(...t.hotNumberRanges.map(r => `平特热码${r.start}-${r.end}`));
             if (t.allHotNumberRanges && t.allHotNumberRanges.length) parts.push(...t.allHotNumberRanges.map(r => `特码热码${r.start}-${r.end}`));
             if (t.hotZodiacRanges && t.hotZodiacRanges.length) parts.push(...t.hotZodiacRanges.map(r => `平特热肖${r.start}-${r.end}`));
@@ -3940,13 +5247,13 @@
         }
 
         function calculateColdSelectionDetail() {
-            const types = ['numbers', 'zodiacs', 'hotNumbers', 'coldNumbers', 'hotZodiacs', 'coldZodiacs', 'allHotNumbers', 'allColdNumbers', 'allHotZodiacs', 'allColdZodiacs', 'hotNumberRange', 'allHotNumberRange', 'hotZodiacRange', 'allHotZodiacRange', 'wave', 'halfwave', 'jiaYe', 'head', 'tail', 'wuxing', 'halfHead', 'region', 'omissionRange', 'omissionZodiacRange']
+            const types = ['numbers', 'zodiacs', 'hotNumbers', 'coldNumbers', 'hotZodiacs', 'coldZodiacs', 'allHotNumbers', 'allColdNumbers', 'allHotZodiacs', 'allColdZodiacs', 'hotNumberRange', 'allHotNumberRange', 'hotZodiacRange', 'allHotZodiacRange', 'wave', 'halfwave', 'jiaYe', 'head', 'tail', 'wuxing', 'halfHead', 'region', 'omissionRange', 'omissionZodiacRange', 'pingOmissionRange', 'pingOmissionZodiacRange']
                 .filter(type => document.getElementById(`coldOption_${type}`)?.checked);
             
             const inputText = document.getElementById('coldOption_inputNumbers')?.value.trim() || '';
             const inputTerms = parseInputTerms(inputText);
             const selectedNumbers = inputTerms.numbers || [];
-            const hasInput = selectedNumbers.length || (inputTerms.zodiacs && inputTerms.zodiacs.length) || (inputTerms.tails && inputTerms.tails.length) || (inputTerms.heads && inputTerms.heads.length) || (inputTerms.waves && inputTerms.waves.length) || (inputTerms.segments && inputTerms.segments.length) || (inputTerms.regions && inputTerms.regions.length) || (inputTerms.omissionRanges && inputTerms.omissionRanges.length) || (inputTerms.omissionZodiacRanges && inputTerms.omissionZodiacRanges.length) || (inputTerms.hotNumberRanges && inputTerms.hotNumberRanges.length) || (inputTerms.allHotNumberRanges && inputTerms.allHotNumberRanges.length) || (inputTerms.hotZodiacRanges && inputTerms.hotZodiacRanges.length) || (inputTerms.allHotZodiacRanges && inputTerms.allHotZodiacRanges.length);
+            const hasInput = selectedNumbers.length || (inputTerms.zodiacs && inputTerms.zodiacs.length) || (inputTerms.tails && inputTerms.tails.length) || (inputTerms.heads && inputTerms.heads.length) || (inputTerms.waves && inputTerms.waves.length) || (inputTerms.segments && inputTerms.segments.length) || (inputTerms.regions && inputTerms.regions.length) || (inputTerms.omissionRanges && inputTerms.omissionRanges.length) || (inputTerms.omissionZodiacRanges && inputTerms.omissionZodiacRanges.length) || (inputTerms.pingOmissionRanges && inputTerms.pingOmissionRanges.length) || (inputTerms.pingOmissionZodiacRanges && inputTerms.pingOmissionZodiacRanges.length) || (inputTerms.hotNumberRanges && inputTerms.hotNumberRanges.length) || (inputTerms.allHotNumberRanges && inputTerms.allHotNumberRanges.length) || (inputTerms.hotZodiacRanges && inputTerms.hotZodiacRanges.length) || (inputTerms.allHotZodiacRanges && inputTerms.allHotZodiacRanges.length) || (inputTerms.morphs && inputTerms.morphs.length) || (inputTerms.heNumbers && inputTerms.heNumbers.length) || (inputTerms.heTails && inputTerms.heTails.length);
             if (hasInput) types.push('inputNumbers');
             const selectedZodiacs = (CONFIG.zodiacMap[state.currentYear] || [])
                 .filter(z => document.getElementById(`zodiacOption_${z}`)?.checked);
@@ -3954,19 +5261,46 @@
             const selectedWaves = ['red', 'blue', 'green'].filter(w => document.getElementById('waveOption_' + w)?.checked);
             if (selectedWaves.length) types.push('selectedWaves');
 
+            const MORPH_KEYS = ['heDan', 'heShuang', 'heDa', 'heXiao', 'weiDa', 'weiXiao'];
+            const selectedMorphs = MORPH_KEYS.filter(m => document.getElementById(`morphOption_${m}`)?.checked);
+            if (selectedMorphs.length) types.push('selectedMorphs');
+
+            const selectedHeNumbers = Array.from({ length: 13 }, (_, i) => i + 1)
+                .filter(h => document.getElementById(`heOption_${h}`)?.checked);
+            if (selectedHeNumbers.length) types.push('selectedHeNumbers');
+
+            const selectedHeTails = Array.from({ length: 10 }, (_, i) => i)
+                .filter(ht => document.getElementById(`heTailOption_${ht}`)?.checked);
+            if (selectedHeTails.length) types.push('selectedHeTails');
+
+            const hasKills = state.excludeKills && (
+                (state.excludeKills.zodiacs && state.excludeKills.zodiacs.length) ||
+                (state.excludeKills.tails && state.excludeKills.tails.length) ||
+                (state.excludeKills.waves && state.excludeKills.waves.length) ||
+                state.excludeKills.coldTop5 ||
+                (state.excludeKills.excludedSingles && state.excludeKills.excludedSingles.length)
+            );
+
             if (!types.length) {
-                return {
-                    types: [],
-                    optionSets: [],
-                    candidateNumbers: [],
-                    finalNumbers: [],
-                    excludedNumbers: [],
-                    counts: {},
-                    selectedZodiacs: [],
-                    selectedWaves: [],
-                    selectedNumbers: [],
-                    inputTerms: {}
-                };
+                if (hasKills) {
+                    types.push('base49');
+                } else {
+                    return {
+                        types: [],
+                        optionSets: [],
+                        candidateNumbers: [],
+                        finalNumbers: [],
+                        excludedNumbers: [],
+                        counts: {},
+                        selectedZodiacs: [],
+                        selectedWaves: [],
+                        selectedMorphs: [],
+                        selectedHeNumbers: [],
+                        selectedHeTails: [],
+                        selectedNumbers: [],
+                        inputTerms: {}
+                    };
+                }
             }
 
             const coldSourceData = getSelectedColdSourceData();
@@ -3994,6 +5328,12 @@
                 omissionZodiacRangeStart: parseInt(document.getElementById('coldOption_omissionZodiacRange_start')?.value || '1', 10),
                 omissionZodiacRangeEnd: parseInt(document.getElementById('coldOption_omissionZodiacRange_end')?.value || '3', 10),
                 omissionZodiacRangeSegments: (getRangeSegments('omissionZodiacRange').length > 0) ? getRangeSegments('omissionZodiacRange').map(s => ({ ...s })) : null,
+                pingOmissionRangeStart: parseInt(document.getElementById('coldOption_pingOmissionRange_start')?.value || '1', 10),
+                pingOmissionRangeEnd: parseInt(document.getElementById('coldOption_pingOmissionRange_end')?.value || '10', 10),
+                pingOmissionRangeSegments: (getRangeSegments('pingOmissionRange').length > 0) ? getRangeSegments('pingOmissionRange').map(s => ({ ...s })) : null,
+                pingOmissionZodiacRangeStart: parseInt(document.getElementById('coldOption_pingOmissionZodiacRange_start')?.value || '1', 10),
+                pingOmissionZodiacRangeEnd: parseInt(document.getElementById('coldOption_pingOmissionZodiacRange_end')?.value || '3', 10),
+                pingOmissionZodiacRangeSegments: (getRangeSegments('pingOmissionZodiacRange').length > 0) ? getRangeSegments('pingOmissionZodiacRange').map(s => ({ ...s })) : null,
                 hotNumberRangeStart: parseInt(document.getElementById('coldOption_hotNumberRange_start')?.value || '1', 10),
                 hotNumberRangeEnd: parseInt(document.getElementById('coldOption_hotNumberRange_end')?.value || '10', 10),
                 hotNumberRangeSegments: (getRangeSegments('hotNumberRange').length > 0) ? getRangeSegments('hotNumberRange').map(s => ({ ...s })) : null,
@@ -4010,8 +5350,12 @@
             };
 
             const sets = calculateColdSets(types, coldSourceData, counts, hotColdSourceData);
+            if (types.includes('base49')) sets.base49 = true;
             if (selectedZodiacs.length) sets.selectZodiacs = selectedZodiacs;
             if (selectedWaves.length) sets.selectedWaves = selectedWaves;
+            if (selectedMorphs.length) sets.selectedMorphs = selectedMorphs;
+            if (selectedHeNumbers.length) sets.selectedHeNumbers = selectedHeNumbers;
+            if (selectedHeTails.length) sets.selectedHeTails = selectedHeTails;
             if (selectedNumbers.length) sets.inputNumbers = selectedNumbers;
             if (hasInput) sets.inputTerms = inputTerms;
 
@@ -4033,6 +5377,9 @@
                 counts,
                 selectedZodiacs,
                 selectedWaves,
+                selectedMorphs,
+                selectedHeNumbers,
+                selectedHeTails,
                 selectedNumbers,
                 inputTerms
             };
@@ -4040,7 +5387,7 @@
 
         function generateColdKline() {
             const detail = calculateColdSelectionDetail();
-            const { types, finalNumbers, counts, selectedZodiacs, selectedWaves, selectedNumbers, inputTerms } = detail;
+            const { types, finalNumbers, counts, selectedZodiacs, selectedWaves, selectedMorphs, selectedHeNumbers, selectedHeTails, selectedNumbers, inputTerms } = detail;
             
             if (!types.length) return alert('请先选择至少一个特码综合K线选项');
             if (!finalNumbers.length) {
@@ -4062,6 +5409,9 @@
                 counts,
                 selectedZodiacs,
                 selectedWaves,
+                selectedMorphs,
+                selectedHeNumbers,
+                selectedHeTails,
                 selectedNumbers,
                 inputTerms
             };
@@ -4361,6 +5711,8 @@
             add(sets.selectedRegions, num => sets.selectedRegions.includes(getRegionKey(parseInt(num, 10))) || sets.selectedRegions.includes(getRegionShortKey(parseInt(num, 10))));
             add(sets.omissionRange, num => sets.omissionRange.includes(num));
             add(sets.omissionZodiacRange, num => sets.omissionZodiacRange.includes(getZodiac(parseInt(num, 10))));
+            add(sets.pingOmissionRange, num => sets.pingOmissionRange.includes(num));
+            add(sets.pingOmissionZodiacRange, num => sets.pingOmissionZodiacRange.includes(getZodiac(parseInt(num, 10))));
             add(sets.wave, num => sets.wave.includes(getColor(num)));
             add(sets.halfwave, num => sets.halfwave.includes(getHalfWaveKey(num)));
             add(sets.jiaYe, num => sets.jiaYe.includes(getJiaYe(getZodiac(parseInt(num, 10)))));
@@ -4369,8 +5721,31 @@
             add(sets.wuxing, num => sets.wuxing.includes(getSegmentKey(parseInt(num, 10))));
             add(sets.halfHead, num => sets.halfHead.includes(getHalfHeadKey(parseInt(num, 10))));
             add(sets.region, num => sets.region.includes(getRegionKey(parseInt(num, 10))));
+            if (sets.selectedMorphs && sets.selectedMorphs.length) {
+                const mDanShuang = sets.selectedMorphs.filter(m => m === 'heDan' || m === 'heShuang');
+                if (mDanShuang.length) {
+                    out.push(allNumbers.filter(n => (mDanShuang.includes('heDan') && isHeDan(n)) || (mDanShuang.includes('heShuang') && isHeShuang(n))));
+                }
+                const mDaXiao = sets.selectedMorphs.filter(m => m === 'heDa' || m === 'heXiao');
+                if (mDaXiao.length) {
+                    out.push(allNumbers.filter(n => (mDaXiao.includes('heDa') && isHeDa(n)) || (mDaXiao.includes('heXiao') && isHeXiao(n))));
+                }
+                const mWeiDaXiao = sets.selectedMorphs.filter(m => m === 'weiDa' || m === 'weiXiao');
+                if (mWeiDaXiao.length) {
+                    out.push(allNumbers.filter(n => (mWeiDaXiao.includes('weiDa') && isWeiDa(n)) || (mWeiDaXiao.includes('weiXiao') && isWeiXiao(n))));
+                }
+            }
+            if (sets.selectedHeNumbers && sets.selectedHeNumbers.length) {
+                out.push(allNumbers.filter(n => sets.selectedHeNumbers.includes(getNumHe(n))));
+            }
+            if (sets.selectedHeTails && sets.selectedHeTails.length) {
+                out.push(allNumbers.filter(n => sets.selectedHeTails.includes(getNumHeTail(n))));
+            }
+            if (sets.base49) out.push(allNumbers.slice());
             if (sets.inputNumbers && sets.inputNumbers.length) out.push(sets.inputNumbers.slice());
             if (sets.inputOmissionRangeNumbers && sets.inputOmissionRangeNumbers.length) out.push(sets.inputOmissionRangeNumbers.slice());
+            if (sets.inputPingOmissionRangeNumbers && sets.inputPingOmissionRangeNumbers.length) out.push(sets.inputPingOmissionRangeNumbers.slice());
+            if (sets.inputPingOmissionZodiacRangeZodiacs && sets.inputPingOmissionZodiacRangeZodiacs.length) out.push(allNumbers.filter(n => sets.inputPingOmissionZodiacRangeZodiacs.includes(getZodiac(parseInt(n, 10)))));
             if (sets.inputOmissionZodiacRangeZodiacs && sets.inputOmissionZodiacRangeZodiacs.length) out.push(allNumbers.filter(n => sets.inputOmissionZodiacRangeZodiacs.includes(getZodiac(parseInt(n, 10)))));
             if (sets.inputHotNumberRangeNumbers && sets.inputHotNumberRangeNumbers.length) out.push(sets.inputHotNumberRangeNumbers.slice());
             if (sets.inputAllHotNumberRangeNumbers && sets.inputAllHotNumberRangeNumbers.length) out.push(sets.inputAllHotNumberRangeNumbers.slice());
@@ -4385,6 +5760,20 @@
                 if (it.waves && it.waves.length) out.push(allNumbers.filter(n => it.waves.includes(getColor(n))));
                 if (it.segments && it.segments.length) out.push(allNumbers.filter(n => it.segments.includes(Math.ceil(parseInt(n, 10) / 7))));
                 if (it.regions && it.regions.length) out.push(allNumbers.filter(n => it.regions.includes(getRegionShortKey(parseInt(n, 10)))));
+                if (it.morphs && it.morphs.length) {
+                    const mDanShuang = it.morphs.filter(m => m === 'heDan' || m === 'heShuang');
+                    if (mDanShuang.length) out.push(allNumbers.filter(n => (mDanShuang.includes('heDan') && isHeDan(n)) || (mDanShuang.includes('heShuang') && isHeShuang(n))));
+                    const mDaXiao = it.morphs.filter(m => m === 'heDa' || m === 'heXiao');
+                    if (mDaXiao.length) out.push(allNumbers.filter(n => (mDaXiao.includes('heDa') && isHeDa(n)) || (mDaXiao.includes('heXiao') && isHeXiao(n))));
+                    const mWeiDaXiao = it.morphs.filter(m => m === 'weiDa' || m === 'weiXiao');
+                    if (mWeiDaXiao.length) out.push(allNumbers.filter(n => (mWeiDaXiao.includes('weiDa') && isWeiDa(n)) || (mWeiDaXiao.includes('weiXiao') && isWeiXiao(n))));
+                }
+                if (it.heNumbers && it.heNumbers.length) {
+                    out.push(allNumbers.filter(n => it.heNumbers.includes(getNumHe(n))));
+                }
+                if (it.heTails && it.heTails.length) {
+                    out.push(allNumbers.filter(n => it.heTails.includes(getNumHeTail(n))));
+                }
             }
             return out;
         }
@@ -4464,7 +5853,7 @@
         }
 
         function resetColdSelection() {
-            ['numbers', 'zodiacs', 'hotNumbers', 'coldNumbers', 'hotZodiacs', 'coldZodiacs', 'allHotNumbers', 'allColdNumbers', 'allHotZodiacs', 'allColdZodiacs', 'hotNumberRange', 'allHotNumberRange', 'hotZodiacRange', 'allHotZodiacRange', 'wave', 'halfwave', 'jiaYe', 'head', 'tail', 'wuxing', 'halfHead', 'region', 'omissionRange', 'omissionZodiacRange'].forEach(type => {
+            ['numbers', 'zodiacs', 'hotNumbers', 'coldNumbers', 'hotZodiacs', 'coldZodiacs', 'allHotNumbers', 'allColdNumbers', 'allHotZodiacs', 'allColdZodiacs', 'hotNumberRange', 'allHotNumberRange', 'hotZodiacRange', 'allHotZodiacRange', 'wave', 'halfwave', 'jiaYe', 'head', 'tail', 'wuxing', 'halfHead', 'region', 'omissionRange', 'omissionZodiacRange', 'pingOmissionRange', 'pingOmissionZodiacRange'].forEach(type => {
                 const el = document.getElementById(`coldOption_${type}`);
                 if (el) el.checked = false;
                 const countEl = document.getElementById(`coldOption_${type}_count`);
@@ -4475,6 +5864,8 @@
             const resetRanges = [
                 { start: 'coldOption_omissionRange_start', end: 'coldOption_omissionRange_end', sVal: '1', eVal: '10' },
                 { start: 'coldOption_omissionZodiacRange_start', end: 'coldOption_omissionZodiacRange_end', sVal: '1', eVal: '3' },
+                { start: 'coldOption_pingOmissionRange_start', end: 'coldOption_pingOmissionRange_end', sVal: '1', eVal: '10' },
+                { start: 'coldOption_pingOmissionZodiacRange_start', end: 'coldOption_pingOmissionZodiacRange_end', sVal: '1', eVal: '3' },
                 { start: 'coldOption_hotNumberRange_start', end: 'coldOption_hotNumberRange_end', sVal: '1', eVal: '10' },
                 { start: 'coldOption_allHotNumberRange_start', end: 'coldOption_allHotNumberRange_end', sVal: '1', eVal: '10' },
                 { start: 'coldOption_hotZodiacRange_start', end: 'coldOption_hotZodiacRange_end', sVal: '1', eVal: '3' },
@@ -4494,6 +5885,18 @@
                 const el = document.getElementById('waveOption_' + w);
                 if (el) el.checked = false;
             });
+            ['heDan', 'heShuang', 'heDa', 'heXiao', 'weiDa', 'weiXiao'].forEach(m => {
+                const el = document.getElementById(`morphOption_${m}`);
+                if (el) el.checked = false;
+            });
+            for (let i = 1; i <= 13; i++) {
+                const el = document.getElementById(`heOption_${i}`);
+                if (el) el.checked = false;
+            }
+            for (let i = 0; i <= 9; i++) {
+                const el = document.getElementById(`heTailOption_${i}`);
+                if (el) el.checked = false;
+            }
             document.getElementById('coldOption_inputNumbers').value = '';
             state.coldSelection = null;
             state.omissionRangeSegments = [];
@@ -4508,7 +5911,7 @@
             updateAllDualSliders();
         }
         function toggleColdSection(section, selectAll) {
-            const omissionIds = ['numbers', 'zodiacs', 'wave', 'halfwave', 'jiaYe', 'head', 'tail', 'wuxing', 'halfHead', 'omissionRange', 'omissionZodiacRange'];
+            const omissionIds = ['numbers', 'zodiacs', 'wave', 'halfwave', 'jiaYe', 'head', 'tail', 'wuxing', 'halfHead', 'omissionRange', 'omissionZodiacRange', 'pingOmissionRange', 'pingOmissionZodiacRange'];
             const waveIds = ['red', 'blue', 'green'];
             const hotcoldIds = ['hotNumbers', 'coldNumbers', 'hotZodiacs', 'coldZodiacs', 'allHotNumbers', 'allColdNumbers', 'allHotZodiacs', 'allColdZodiacs', 'hotNumberRange', 'allHotNumberRange', 'hotZodiacRange', 'allHotZodiacRange'];
             if (section === 'wave') {
@@ -4522,6 +5925,21 @@
                     const el = document.getElementById('zodiacOption_' + z);
                     if (el) el.checked = selectAll;
                 });
+            } else if (section === 'morph') {
+                ['heDan', 'heShuang', 'heDa', 'heXiao', 'weiDa', 'weiXiao'].forEach(m => {
+                    const el = document.getElementById('morphOption_' + m);
+                    if (el) el.checked = selectAll;
+                });
+            } else if (section === 'he') {
+                for (let i = 1; i <= 13; i++) {
+                    const el = document.getElementById('heOption_' + i);
+                    if (el) el.checked = selectAll;
+                }
+            } else if (section === 'heTail') {
+                for (let i = 0; i <= 9; i++) {
+                    const el = document.getElementById('heTailOption_' + i);
+                    if (el) el.checked = selectAll;
+                }
             } else {
                 const ids = section === 'omission' ? omissionIds : hotcoldIds;
                 ids.forEach(type => {
@@ -4532,6 +5950,8 @@
                     if (section === 'omission') {
                         clearRangeSegments('omissionRange');
                         clearRangeSegments('omissionZodiacRange');
+                        clearRangeSegments('pingOmissionRange');
+                        clearRangeSegments('pingOmissionZodiacRange');
                     } else if (section === 'hotcold') {
                         clearRangeSegments('hotNumberRange');
                         clearRangeSegments('allHotNumberRange');
@@ -4550,6 +5970,8 @@
         const DUAL_RANGE_CONFIGS = {
             omissionRange: { max: 49, unit: '码', leftLabel: '多', rightLabel: '少' },
             omissionZodiacRange: { max: 12, unit: '肖', leftLabel: '多', rightLabel: '少' },
+            pingOmissionRange: { max: 49, unit: '码', leftLabel: '多', rightLabel: '少' },
+            pingOmissionZodiacRange: { max: 12, unit: '肖', leftLabel: '多', rightLabel: '少' },
             hotNumberRange: { max: 49, unit: '码', leftLabel: '热', rightLabel: '冷' },
             allHotNumberRange: { max: 49, unit: '码', leftLabel: '热', rightLabel: '冷' },
             hotZodiacRange: { max: 12, unit: '肖', leftLabel: '热', rightLabel: '冷' },
@@ -4838,8 +6260,10 @@
         }
 
         const RANGE_TYPE_NAMES = {
-            omissionRange: '遗漏码',
+            omissionRange: '特码遗漏',
             omissionZodiacRange: '遗漏肖',
+            pingOmissionRange: '平特遗漏',
+            pingOmissionZodiacRange: '平特遗漏肖',
             hotNumberRange: '平特热码',
             allHotNumberRange: '特码热码',
             hotZodiacRange: '平特热肖',
@@ -4851,6 +6275,8 @@
                 state.rangeSegments = {
                     omissionRange: [],
                     omissionZodiacRange: [],
+                    pingOmissionRange: [],
+                    pingOmissionZodiacRange: [],
                     hotNumberRange: [],
                     allHotNumberRange: [],
                     hotZodiacRange: [],
@@ -4873,6 +6299,10 @@
                 return getColdOmissionRangeNumbers(omSrc, start, end);
             } else if (rangeType === 'omissionZodiacRange') {
                 return getColdOmissionRangeZodiacs(omSrc, start, end);
+            } else if (rangeType === 'pingOmissionRange') {
+                return getPingOmissionRangeNumbers(omSrc, start, end);
+            } else if (rangeType === 'pingOmissionZodiacRange') {
+                return getPingOmissionRangeZodiacs(omSrc, start, end);
             } else if (rangeType === 'hotNumberRange') {
                 return getHotNumberRange(hcSrc, start, end);
             } else if (rangeType === 'allHotNumberRange') {
@@ -4984,7 +6414,7 @@
         }
 
         function renderAllRangeSegments() {
-            ['omissionRange', 'omissionZodiacRange', 'hotNumberRange', 'allHotNumberRange', 'hotZodiacRange', 'allHotZodiacRange'].forEach(rk => {
+            ['omissionRange', 'omissionZodiacRange', 'pingOmissionRange', 'pingOmissionZodiacRange', 'hotNumberRange', 'allHotNumberRange', 'hotZodiacRange', 'allHotZodiacRange'].forEach(rk => {
                 renderRangeSegments(rk);
             });
         }
@@ -5056,6 +6486,8 @@
                 rangeSegments: {
                     omissionRange: getRangeSegments('omissionRange').map(s => ({ ...s })),
                     omissionZodiacRange: getRangeSegments('omissionZodiacRange').map(s => ({ ...s })),
+                    pingOmissionRange: getRangeSegments('pingOmissionRange').map(s => ({ ...s })),
+                    pingOmissionZodiacRange: getRangeSegments('pingOmissionZodiacRange').map(s => ({ ...s })),
                     hotNumberRange: getRangeSegments('hotNumberRange').map(s => ({ ...s })),
                     allHotNumberRange: getRangeSegments('allHotNumberRange').map(s => ({ ...s })),
                     hotZodiacRange: getRangeSegments('hotZodiacRange').map(s => ({ ...s })),
@@ -5070,7 +6502,7 @@
                 excludeKills: JSON.parse(JSON.stringify(state.excludeKills || {}))
             };
             
-            const types = ['numbers', 'zodiacs', 'hotNumbers', 'coldNumbers', 'hotZodiacs', 'coldZodiacs', 'allHotNumbers', 'allColdNumbers', 'allHotZodiacs', 'allColdZodiacs', 'hotNumberRange', 'allHotNumberRange', 'hotZodiacRange', 'allHotZodiacRange', 'wave', 'halfwave', 'jiaYe', 'head', 'tail', 'wuxing', 'halfHead', 'region', 'omissionRange', 'omissionZodiacRange'];
+            const types = ['numbers', 'zodiacs', 'hotNumbers', 'coldNumbers', 'hotZodiacs', 'coldZodiacs', 'allHotNumbers', 'allColdNumbers', 'allHotZodiacs', 'allColdZodiacs', 'hotNumberRange', 'allHotNumberRange', 'hotZodiacRange', 'allHotZodiacRange', 'wave', 'halfwave', 'jiaYe', 'head', 'tail', 'wuxing', 'halfHead', 'region', 'omissionRange', 'omissionZodiacRange', 'pingOmissionRange', 'pingOmissionZodiacRange'];
             types.forEach(t => {
                 const cb = document.getElementById(`coldOption_${t}`);
                 if (cb && cb.checked) config.checkedOptions[t] = true;
@@ -5078,7 +6510,7 @@
                 if (count) config.selectCounts[t] = count.value;
             });
 
-            const rangeKeys = ['omissionRange', 'omissionZodiacRange', 'hotNumberRange', 'allHotNumberRange', 'hotZodiacRange', 'allHotZodiacRange'];
+            const rangeKeys = ['omissionRange', 'omissionZodiacRange', 'pingOmissionRange', 'pingOmissionZodiacRange', 'hotNumberRange', 'allHotNumberRange', 'hotZodiacRange', 'allHotZodiacRange'];
             rangeKeys.forEach(rk => {
                 config.ranges[rk] = {
                     start: document.getElementById(`coldOption_${rk}_start`)?.value || '1',
@@ -5094,6 +6526,19 @@
             ['red', 'blue', 'green'].forEach(w => {
                 if (document.getElementById('waveOption_' + w)?.checked) config.waves.push(w);
             });
+
+            config.morphs = [];
+            ['heDan', 'heShuang', 'heDa', 'heXiao', 'weiDa', 'weiXiao'].forEach(m => {
+                if (document.getElementById(`morphOption_${m}`)?.checked) config.morphs.push(m);
+            });
+            config.heNumbers = [];
+            for (let i = 1; i <= 13; i++) {
+                if (document.getElementById(`heOption_${i}`)?.checked) config.heNumbers.push(i);
+            }
+            config.heTails = [];
+            for (let i = 0; i <= 9; i++) {
+                if (document.getElementById(`heTailOption_${i}`)?.checked) config.heTails.push(i);
+            }
 
             const strategies = getUserStrategies();
             strategies[trimmedName] = config;
@@ -5159,6 +6604,24 @@
             if (config.waves && Array.isArray(config.waves)) {
                 config.waves.forEach(w => {
                     const el = document.getElementById('waveOption_' + w);
+                    if (el) el.checked = true;
+                });
+            }
+            if (config.morphs && Array.isArray(config.morphs)) {
+                config.morphs.forEach(m => {
+                    const el = document.getElementById(`morphOption_${m}`);
+                    if (el) el.checked = true;
+                });
+            }
+            if (config.heNumbers && Array.isArray(config.heNumbers)) {
+                config.heNumbers.forEach(h => {
+                    const el = document.getElementById(`heOption_${h}`);
+                    if (el) el.checked = true;
+                });
+            }
+            if (config.heTails && Array.isArray(config.heTails)) {
+                config.heTails.forEach(ht => {
+                    const el = document.getElementById(`heTailOption_${ht}`);
                     if (el) el.checked = true;
                 });
             }
@@ -5371,7 +6834,8 @@
 
             draw();
             if (state.visibleData.length > 0) {
-                updateInfoPanel(state.visibleData[state.visibleData.length - 1]);
+                const latestVisible = state.visibleData[state.visibleData.length - 1];
+                updateInfoPanel(latestVisible, true);
                 syncChartHeader();
             }
         }
@@ -5456,6 +6920,9 @@
 
         function switchTrendMode(mode) {
             state.currentMode = mode;
+            try {
+                localStorage.setItem('aomen_selected_mode', mode);
+            } catch (e) {}
             const labels = {
                 zodiac: '特肖模式',
                 oddeven: '单双模式',
@@ -5481,7 +6948,11 @@
             const numAbsentWrap = document.getElementById('followNumAbsentWrap');
             if (numAbsentWrap) numAbsentWrap.style.display = mode === 'pingnum_absent' ? 'block' : 'none';
             const coldCard = document.getElementById('coldCard');
-            if (coldCard) coldCard.style.display = mode === 'cold_custom' ? 'block' : 'none';
+            if (coldCard) {
+                const currentCat = state.activeSidebarCategory || 'all';
+                const showInCat = (currentCat === 'all' || currentCat === 'stats');
+                coldCard.style.display = (mode === 'cold_custom' && showInCat) ? 'block' : 'none';
+            }
             if (mode === 'pingxiao_follow') {
                 const posWrap = document.getElementById('followPosWrap');
                 const zodWrap = document.getElementById('followZodiacWrap');
@@ -6049,11 +7520,17 @@
             if (state.overlay.coldSets.length >= 3) {
                 return alert('最多叠加3条特码综合K线');
             }
+            const types = state.coldSelection.setKline
+                ? [...(state.coldSelection.setTypes || [])]
+                : [...state.coldSelection.types];
             const set = {
-                types: [...state.coldSelection.types],
+                types,
                 counts: { ...(state.coldSelection.counts || {}) },
                 selectedZodiacs: [...(state.coldSelection.selectedZodiacs || [])],
                 selectedWaves: [...(state.coldSelection.selectedWaves || [])],
+                selectedMorphs: [...(state.coldSelection.selectedMorphs || [])],
+                selectedHeNumbers: [...(state.coldSelection.selectedHeNumbers || [])],
+                selectedHeTails: [...(state.coldSelection.selectedHeTails || [])],
                 inputTerms: state.coldSelection.inputTerms ? JSON.parse(JSON.stringify(state.coldSelection.inputTerms)) : null,
                 selectedNumbers: [...(state.coldSelection.selectedNumbers || [])]
             };
@@ -6316,6 +7793,534 @@
             `;
         }
 
+        // ==================== 10期倍投追号计算器 ====================
+        let currentBetPlanData = null;
+
+        function onBetCalcInputChange() {
+            const numCount = parseInt(document.getElementById('betCalcNumCount')?.value, 10) || 0;
+            const odds = parseFloat(document.getElementById('betCalcOdds')?.value) || 0;
+            const profit = parseFloat(document.getElementById('betCalcProfit')?.value) || 0;
+            const mode = document.getElementById('betCalcMode')?.value || 'accum';
+            const isAccum = (mode === 'accum');
+
+            const numTag = document.getElementById('betCalcNumTag');
+            if (numTag) numTag.textContent = numCount > 0 ? `${numCount} 个号` : '--';
+
+            const oddsTag = document.getElementById('betCalcOddsTag');
+            if (oddsTag) oddsTag.textContent = odds > 0 ? `${odds} 倍` : '--';
+
+            const profitTag = document.getElementById('betCalcProfitTag');
+            if (profitTag) {
+                if (profit > 0) {
+                    profitTag.textContent = isAccum ? `每期累加 +${profit} 元` : `固定 +${profit} 元/期`;
+                } else {
+                    profitTag.textContent = '--';
+                }
+            }
+
+            updateBetCalcTagActiveStates(numCount, odds, profit);
+        }
+
+        function updateBetCalcTagActiveStates(numCount, odds, profit) {
+            // 更新号码快捷按钮 active 状态
+            document.querySelectorAll('#betCalcCard .bet-calc-form-group:nth-of-type(1) .bet-calc-tag-btn').forEach(btn => {
+                const text = btn.textContent || '';
+                const match = text.match(/^(\d+)码/);
+                if (match && parseInt(match[1], 10) === numCount) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+            // 更新赔率快捷按钮 active 状态
+            document.querySelectorAll('#betCalcCard .bet-calc-form-group:nth-of-type(2) .bet-calc-tag-btn').forEach(btn => {
+                const val = parseFloat(btn.textContent || '');
+                if (!isNaN(val) && Math.abs(val - odds) < 0.01) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+            // 更新期望盈利快捷按钮 active 状态
+            document.querySelectorAll('#betCalcCard .bet-calc-form-group:nth-of-type(3) .bet-calc-tag-btn').forEach(btn => {
+                const val = parseFloat(btn.textContent || '');
+                if (!isNaN(val) && Math.abs(val - profit) < 0.1) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+        }
+
+        function setBetCalcNum(num) {
+            const input = document.getElementById('betCalcNumCount');
+            if (input) {
+                input.value = num;
+                onBetCalcInputChange();
+                calculateBetPlan();
+            }
+        }
+
+        function setBetCalcOdds(odds) {
+            const input = document.getElementById('betCalcOdds');
+            if (input) {
+                input.value = odds;
+                onBetCalcInputChange();
+                calculateBetPlan();
+            }
+        }
+
+        function setBetCalcProfit(profit) {
+            const input = document.getElementById('betCalcProfit');
+            if (input) {
+                input.value = profit;
+                onBetCalcInputChange();
+                calculateBetPlan();
+            }
+        }
+
+        function syncCurrentSelectedCount() {
+            try {
+                let count = 0;
+                if (typeof calculateColdSelectionDetail === 'function') {
+                    const detail = calculateColdSelectionDetail();
+                    if (detail && detail.finalNumbers && detail.finalNumbers.length > 0) {
+                        count = detail.finalNumbers.length;
+                    }
+                }
+                if (count > 0) {
+                    setBetCalcNum(count);
+                    showToast(`🎯 已同步当前特码选出的 ${count} 个号码！`);
+                } else {
+                    showToast(`⚠️ 当前尚未选出精选号码，请先在特码K线中配置选号因子`);
+                }
+            } catch (e) {
+                showToast(`⚠️ 同步选号失败: ${e.message}`);
+            }
+        }
+
+        function resetBetCalc() {
+            const numInput = document.getElementById('betCalcNumCount');
+            const oddsInput = document.getElementById('betCalcOdds');
+            const profitInput = document.getElementById('betCalcProfit');
+            const modeSel = document.getElementById('betCalcMode');
+            const roundSel = document.getElementById('betCalcRound');
+
+            if (numInput) numInput.value = 10;
+            if (oddsInput) oddsInput.value = 47;
+            if (profitInput) profitInput.value = 100;
+            if (modeSel) modeSel.value = 'accum';
+            if (roundSel) roundSel.value = 'ceil';
+
+            onBetCalcInputChange();
+            calculateBetPlan();
+            showToast('🔄 计算器已重置为默认值（累加模式）');
+        }
+
+        function calculateBetPlan() {
+            const resultWrap = document.getElementById('betCalcResultWrap');
+            if (!resultWrap) return;
+
+            const numCount = parseInt(document.getElementById('betCalcNumCount')?.value, 10);
+            const odds = parseFloat(document.getElementById('betCalcOdds')?.value);
+            const targetProfit = parseFloat(document.getElementById('betCalcProfit')?.value);
+            const mode = document.getElementById('betCalcMode')?.value || 'accum';
+            const roundMode = document.getElementById('betCalcRound')?.value || 'ceil';
+
+            onBetCalcInputChange();
+
+            // 参数合法性验证
+            if (isNaN(numCount) || numCount < 1 || numCount > 48) {
+                resultWrap.innerHTML = `
+                    <div class="bet-calc-error-box">
+                        ⚠️ 请输入有效的投注号码个数（1 ~ 48 个号码）
+                    </div>
+                `;
+                currentBetPlanData = null;
+                return;
+            }
+
+            if (isNaN(odds) || odds <= 0) {
+                resultWrap.innerHTML = `
+                    <div class="bet-calc-error-box">
+                        ⚠️ 请输入有效的开奖赔率（必须大于 0，如 48.5）
+                    </div>
+                `;
+                currentBetPlanData = null;
+                return;
+            }
+
+            if (isNaN(targetProfit) || targetProfit <= 0) {
+                resultWrap.innerHTML = `
+                    <div class="bet-calc-error-box">
+                        ⚠️ 请输入期望每期盈利金额（必须大于 0，如 100）
+                    </div>
+                `;
+                currentBetPlanData = null;
+                return;
+            }
+
+            // 核心数学可行性验证：赔率必须大于单注号码数
+            if (odds <= numCount) {
+                resultWrap.innerHTML = `
+                    <div class="bet-calc-error-box">
+                        <strong>❌ 无法实现盈利计划</strong><br>
+                        开奖赔率 (<strong>${odds}</strong>) 必须大于投注号码个数 (<strong>${numCount}</strong>)！<br>
+                        <span style="font-size:10px;color:var(--text-secondary);display:block;margin-top:3px;">
+                            当赔率 ≤ 号码数时，单注中奖奖金无法覆盖当期单码总投注成本，任何倍投方式均必定亏损。请减少投注号码数或提高赔率。
+                        </span>
+                    </div>
+                `;
+                currentBetPlanData = null;
+                return;
+            }
+
+            const periods = 10;
+            const isAccum = (mode === 'accum');
+            const isCeil = (roundMode !== 'decimal');
+            let cumulativeInvest = 0;
+            const plan = [];
+
+            for (let k = 1; k <= periods; k++) {
+                // 累加净利模式：第k期中奖净利润要求达到 k × targetProfit
+                const target = isAccum ? (targetProfit * k) : targetProfit;
+                // 核心不等式: perBet * (odds - numCount) >= cumulativeInvest + target
+                const exactBet = (cumulativeInvest + target) / (odds - numCount);
+                let perBet = isCeil ? Math.ceil(exactBet) : Math.round(exactBet * 100) / 100;
+                if (isCeil && perBet < 1) perBet = 1;
+                if (!isCeil && perBet < 0.01) perBet = 0.01;
+
+                const currentCost = Math.round(perBet * numCount * 100) / 100;
+                cumulativeInvest = Math.round((cumulativeInvest + currentCost) * 100) / 100;
+                const winPrize = Math.round(perBet * odds * 100) / 100;
+                const netProfit = Math.round((winPrize - cumulativeInvest) * 100) / 100;
+                const roi = cumulativeInvest > 0 ? Math.round((netProfit / cumulativeInvest) * 1000) / 10 : 0;
+
+                plan.push({
+                    period: k,
+                    perBet,
+                    currentCost,
+                    cumulativeInvest,
+                    winPrize,
+                    netProfit,
+                    roi,
+                    target
+                });
+            }
+
+            currentBetPlanData = {
+                numCount,
+                odds,
+                targetProfit,
+                mode,
+                roundMode,
+                periods,
+                plan,
+                totalInvest: cumulativeInvest,
+                startBet: plan[0].perBet,
+                startCost: plan[0].currentCost,
+                peakBet: plan[periods - 1].perBet,
+                peakCost: plan[periods - 1].currentCost,
+                minProfit: Math.min(...plan.map(p => p.netProfit)),
+                maxProfit: Math.max(...plan.map(p => p.netProfit)),
+                avgProfit: Math.round((plan.reduce((acc, cur) => acc + cur.netProfit, 0) / periods) * 10) / 10
+            };
+
+            // 渲染卡片内展示
+            renderBetCalcCardResult(currentBetPlanData, resultWrap);
+
+            // 如果全景弹窗处于打开状态，同步更新弹窗视图
+            const modal = document.getElementById('betCalcModal');
+            if (modal && modal.style.display !== 'none') {
+                renderBetCalcModalContent(currentBetPlanData);
+            }
+        }
+
+        function renderBetCalcCardResult(data, container) {
+            const { numCount, odds, targetProfit, mode, plan, totalInvest, startBet, startCost, peakCost, periods } = data;
+            const isAccum = (mode === 'accum');
+            const modeName = isAccum ? '按期累加递增' : '固定净赢';
+
+            let html = `
+                <!-- 关键指标网格 -->
+                <div class="bet-calc-grid-stats">
+                    <div class="bet-calc-stat-item" style="border-color: rgba(0,212,255,0.3);">
+                        <span class="bet-calc-stat-title">10期总本金储备</span>
+                        <span class="bet-calc-stat-val" style="color:var(--accent);">¥ ${totalInvest.toLocaleString()}</span>
+                    </div>
+                    <div class="bet-calc-stat-item" style="border-color: rgba(0,230,118,0.3);">
+                        <span class="bet-calc-stat-title">第10期累加净利</span>
+                        <span class="bet-calc-stat-val" style="color:var(--up);">+¥ ${plan[periods - 1].netProfit.toLocaleString()}</span>
+                    </div>
+                    <div class="bet-calc-stat-item">
+                        <span class="bet-calc-stat-title">首期起步 (单码/总投)</span>
+                        <span class="bet-calc-stat-val">¥${startBet} / ¥${startCost}</span>
+                    </div>
+                    <div class="bet-calc-stat-item">
+                        <span class="bet-calc-stat-title">第10期单期总投</span>
+                        <span class="bet-calc-stat-val" style="color:#ffd600;">¥ ${peakCost.toLocaleString()}</span>
+                    </div>
+                </div>
+
+                <!-- 10期数据表格（清晰展示累加目标与中奖净利） -->
+                <div class="bet-calc-table-wrap">
+                    <table class="bet-calc-table">
+                        <thead>
+                            <tr>
+                                <th>期数</th>
+                                <th>每号(元)</th>
+                                <th>当期总投</th>
+                                <th>累计总投</th>
+                                <th>${isAccum ? '累加目标' : '期望目标'}</th>
+                                <th>中奖净利</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+
+            plan.forEach(row => {
+                html += `
+                    <tr>
+                        <td class="col-period">第${row.period}期</td>
+                        <td class="col-bet">${row.perBet}</td>
+                        <td class="col-cost">¥${row.currentCost}</td>
+                        <td style="color:var(--text-secondary);">¥${row.cumulativeInvest.toLocaleString()}</td>
+                        <td style="color:#81c784; font-size:11px;">¥${row.target.toLocaleString()}</td>
+                        <td class="col-profit">+¥${row.netProfit.toLocaleString()}</td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 策略与累加规则提示 -->
+                <div class="bet-calc-tip-box">
+                    💡 <strong>累加净利保障：</strong>${isAccum ? `每期净利严格按期累加递增（第1期≥${plan[0].target}元、第2期≥${plan[1].target}元...第10期≥${plan[periods - 1].target}元）。` : `每期保底净赚≥${targetProfit}元。`}
+                    任一期中奖均可<strong>全额覆盖之前所有期累计本金</strong>并落袋当前期的累加净利；<strong>中奖后务必立即重置为第1期重新起投</strong>！
+                    ${totalInvest > 20000 ? '<br><span style="color:#ff5252;">⚠️ 注意：后几期倍投金额较大，请根据个人资金储备理性执行。</span>' : ''}
+                </div>
+            `;
+
+            container.innerHTML = html;
+        }
+
+        function openBetCalcModal() {
+            if (!currentBetPlanData) {
+                calculateBetPlan();
+            }
+            if (!currentBetPlanData) return;
+
+            renderBetCalcModalContent(currentBetPlanData);
+            const modal = document.getElementById('betCalcModal');
+            if (modal) {
+                modal.style.display = 'flex';
+                document.body.style.overflow = 'hidden';
+            }
+        }
+
+        function closeBetCalcModal() {
+            const modal = document.getElementById('betCalcModal');
+            if (modal) {
+                modal.style.display = 'none';
+                document.body.style.overflow = '';
+            }
+        }
+
+        function renderBetCalcModalContent(data) {
+            const body = document.getElementById('betCalcModalBody');
+            if (!body) return;
+
+            const { numCount, odds, targetProfit, mode, roundMode, plan, totalInvest, minProfit, maxProfit, avgProfit, periods } = data;
+            const isAccum = (mode === 'accum');
+            const modeName = isAccum ? '按期累加递增 (第k期净赚 k×期望金额)' : '固定每期净利 (保底净赚期望金额)';
+            const roundName = roundMode === 'decimal' ? '保留2位小数' : '向上取整到整数元';
+
+            let html = `
+                <!-- 概览看板 -->
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px; margin-bottom:16px;">
+                    <div style="background:var(--side); border:1px solid var(--border); border-radius:8px; padding:10px;">
+                        <div style="font-size:11px; color:var(--text-secondary); margin-bottom:4px;">10期总资金储备</div>
+                        <div style="font-size:18px; font-weight:800; color:var(--accent);">¥ ${totalInvest.toLocaleString()}</div>
+                        <div style="font-size:10px; color:var(--text-secondary); margin-top:2px;">防断缆总本金</div>
+                    </div>
+                    <div style="background:var(--side); border:1px solid var(--border); border-radius:8px; padding:10px;">
+                        <div style="font-size:11px; color:var(--text-secondary); margin-bottom:4px;">中奖累加净利区间</div>
+                        <div style="font-size:18px; font-weight:800; color:var(--up);">¥${plan[0].netProfit} ~ ¥${plan[periods - 1].netProfit.toLocaleString()}</div>
+                        <div style="font-size:10px; color:var(--text-secondary); margin-top:2px;">期期累加增加收益</div>
+                    </div>
+                    <div style="background:var(--side); border:1px solid var(--border); border-radius:8px; padding:10px;">
+                        <div style="font-size:11px; color:var(--text-secondary); margin-bottom:4px;">投注策略配置</div>
+                        <div style="font-size:14px; font-weight:700; color:#e6edf3;">${numCount} 码 @ ${odds} 倍</div>
+                        <div style="font-size:10px; color:var(--accent); margin-top:2px;">${isAccum ? '按期累加' : '固定净利'}+${targetProfit}元/期</div>
+                    </div>
+                    <div style="background:var(--side); border:1px solid var(--border); border-radius:8px; padding:10px;">
+                        <div style="font-size:11px; color:var(--text-secondary); margin-bottom:4px;">取整规则</div>
+                        <div style="font-size:14px; font-weight:700; color:#e6edf3;">${roundName}</div>
+                        <div style="font-size:10px; color:var(--text-secondary); margin-top:2px;">首期起步 ${plan[0].perBet}元/号</div>
+                    </div>
+                </div>
+
+                <!-- 完整明细大表 -->
+                <div style="overflow-x:auto; border:1px solid var(--border); border-radius:8px; background:var(--side); margin-bottom:16px;">
+                    <table class="bet-calc-table" style="font-size:12px;">
+                        <thead>
+                            <tr style="background:rgba(255,255,255,0.03);">
+                                <th style="padding:10px 8px;">期数</th>
+                                <th style="padding:10px 8px;">每个号金额</th>
+                                <th style="padding:10px 8px;">当期总投入</th>
+                                <th style="padding:10px 8px;">累计总投入</th>
+                                <th style="padding:10px 8px;">中奖总金额</th>
+                                <th style="padding:10px 8px;">${isAccum ? '累加目标净利' : '期望目标净利'}</th>
+                                <th style="padding:10px 8px;">实际中奖净利润</th>
+                                <th style="padding:10px 8px;">投资回报率(ROI)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+
+            plan.forEach(row => {
+                html += `
+                    <tr>
+                        <td class="col-period" style="padding:8px; font-weight:700;">第 ${row.period} 期</td>
+                        <td class="col-bet" style="padding:8px; font-size:13px;">¥ ${row.perBet}</td>
+                        <td class="col-cost" style="padding:8px;">¥ ${row.currentCost.toLocaleString()}</td>
+                        <td style="padding:8px; color:#c9d1d9;">¥ ${row.cumulativeInvest.toLocaleString()}</td>
+                        <td style="padding:8px; color:var(--text-secondary);">¥ ${row.winPrize.toLocaleString()}</td>
+                        <td style="padding:8px; color:#81c784; font-weight:600;">¥ ${row.target.toLocaleString()}</td>
+                        <td class="col-profit" style="padding:8px; font-size:13px;">+¥ ${row.netProfit.toLocaleString()}</td>
+                        <td style="padding:8px;">
+                            <span style="display:inline-block; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:700; background:rgba(0,230,118,0.12); color:var(--up);">
+                                +${row.roi}%
+                            </span>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 各期资金与累加净利对比条 -->
+                <div style="background:var(--side); border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:12px;">
+                    <div style="font-size:12px; font-weight:700; color:var(--accent); margin-bottom:10px; display:flex; justify-content:space-between;">
+                        <span>📊 各期当期投入 vs 中奖累加净利润走势</span>
+                        <span style="font-size:11px; color:var(--text-secondary); font-weight:normal;">柱条为当期总投占比，绿色数值为扣除历史总投入后的累加净利</span>
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:6px;">
+            `;
+
+            const maxCost = plan[plan.length - 1].currentCost || 1;
+            plan.forEach(row => {
+                const pct = Math.max(3, Math.round((row.currentCost / maxCost) * 100));
+                html += `
+                    <div style="display:flex; align-items:center; gap:8px; font-size:11px;">
+                        <span style="width:48px; color:var(--text-secondary); flex-shrink:0;">第${row.period}期</span>
+                        <div style="flex:1; background:rgba(255,255,255,0.04); height:16px; border-radius:4px; overflow:hidden; position:relative;">
+                            <div style="width:${pct}%; height:100%; background:linear-gradient(90deg, var(--accent), #7c4dff); border-radius:4px; transition:width 0.3s;"></div>
+                        </div>
+                        <span style="width:75px; text-align:right; color:#ffd600; font-variant-numeric:tabular-nums; flex-shrink:0;">投 ¥${row.currentCost.toLocaleString()}</span>
+                        <span style="width:115px; text-align:right; color:var(--up); font-variant-numeric:tabular-nums; flex-shrink:0;">累加净赚 +¥${row.netProfit.toLocaleString()}</span>
+                    </div>
+                `;
+            });
+
+            html += `
+                    </div>
+                </div>
+
+                <!-- 说明总结 -->
+                <div style="font-size:11px; color:var(--text-secondary); line-height:1.6; background:rgba(0,212,255,0.04); border:1px solid rgba(0,212,255,0.2); border-radius:8px; padding:10px;">
+                    <strong>📌 累加盈利与风控准则：</strong><br>
+                    1. <strong>累加净利兑现：</strong>第 $k$ 期中奖时，净利润为 $[b_k \\times 赔率 - 累计所有期总投入]$，确保完全覆盖往期挂掉的所有本金，并净赚不少于 $k \\times 期望金额$ 的累加利润；<br>
+                    2. <strong>中奖立即重置：</strong>无论第几期中奖，锁定该期累加利润后，必须立即返回第1期重新起步；<br>
+                    3. <strong>严控本金储备：</strong>确保总备付资金不低于10期累计总投入（¥${totalInvest.toLocaleString()}元），杜绝半途中断。
+                </div>
+            `;
+
+            body.innerHTML = html;
+        }
+
+        function copyBetPlanText() {
+            if (!currentBetPlanData) {
+                calculateBetPlan();
+            }
+            if (!currentBetPlanData) return;
+
+            const { numCount, odds, targetProfit, mode, roundMode, plan, totalInvest } = currentBetPlanData;
+            const isAccum = (mode === 'accum');
+            const modeName = isAccum ? '按期累加递增净利润 (第k期净赚 k×期望金额)' : '固定每期净赢利润';
+            const roundName = roundMode === 'decimal' ? '保留2位小数' : '向上取整到整数元';
+
+            const lines = [
+                `【澳门六合彩 10期倍投追号盈利计划表】`,
+                `----------------------------------------------------`,
+                `投注号码个数：${numCount} 个号`,
+                `开奖特码赔率：${odds} 倍`,
+                `期望每期盈利：${targetProfit} 元 (${modeName})`,
+                `金额取整模式：${roundName}`,
+                `10期总资金储备需求：${totalInvest.toLocaleString()} 元`,
+                `----------------------------------------------------`,
+                `期数   | 单号金额 | 当期总额 | 累计总投 | 累加目标 | 实际中奖净利 | 盈利率`,
+            ];
+
+            plan.forEach(row => {
+                const p = `第${row.period < 10 ? '0' + row.period : row.period}期`;
+                const bet = `${row.perBet}元/号`.padEnd(8, ' ');
+                const cost = `${row.currentCost}元`.padEnd(8, ' ');
+                const cum = `${row.cumulativeInvest}元`.padEnd(8, ' ');
+                const target = `${row.target}元`.padEnd(8, ' ');
+                const profit = `+${row.netProfit}元`.padEnd(11, ' ');
+                const roi = `+${row.roi}%`;
+                lines.push(`${p} | ${bet} | ${cost} | ${cum} | ${target} | ${profit} | ${roi}`);
+            });
+
+            lines.push(`----------------------------------------------------`);
+            lines.push(`提示：任一期中奖均全额覆盖前期待补本金，并斩获该期累加递增纯利润；中奖后请务必重置回第1期重新起投。`);
+            lines.push(`生成时间：${new Date().toLocaleString()}`);
+
+            const text = lines.join('\n');
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => {
+                    showToast('📋 10期倍投累加计划已复制到剪贴板！');
+                }).catch(() => {
+                    prompt('请手动复制以下计划文本：', text);
+                });
+            } else {
+                prompt('请手动复制以下计划文本：', text);
+            }
+        }
+
+        function quickOpenBetCalc() {
+            // 打开侧边栏（若在移动端或收起）
+            const sb = document.getElementById('sidebar');
+            if (sb && sb.classList.contains('collapsed')) {
+                toggleSidebar();
+            } else if (sb && !sb.classList.contains('mobile-open') && window.matchMedia('(max-width: 767px)').matches) {
+                openSidebar();
+            }
+
+            // 切换到计算器
+            switchSidebarCategory('calc');
+
+            // 确保卡片展开
+            const card = document.getElementById('betCalcCard');
+            if (card) {
+                card.classList.remove('collapsed');
+                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+
+            // 聚焦号码输入框
+            setTimeout(() => {
+                const input = document.getElementById('betCalcNumCount');
+                if (input) input.focus();
+            }, 300);
+        }
+
         // ==================== 图例 + 近10期统计 ====================
         function updateChartLegend() {
             const el = document.getElementById('chartLegend');
@@ -6456,13 +8461,19 @@
                 allHotZodiacRange: '特码热肖区间',
                 selectedRegions: '选择区域',
                 selectedWaves: '选择波色',
+                selectedMorphs: '合数形态',
+                selectedHeNumbers: '合数选择',
+                selectedHeTails: '合尾选择',
                 inputNumbers: '输入条件',
                 commonNumbers: '共同号码',
                 setKline: '号码集',
                 setNumbers: '号码集'
             };
 
-            const displayValueMap = { red: '红波', blue: '蓝波', green: '绿波', jia: '家肖', ye: '野肖' };
+            const displayValueMap = {
+                red: '红波', blue: '蓝波', green: '绿波', jia: '家肖', ye: '野肖',
+                heDan: '合单', heShuang: '合双', heDa: '合大', heXiao: '合小', weiDa: '尾大', weiXiao: '尾小'
+            };
             const rows = types
                 .filter(type => Array.isArray(sets[type]) && sets[type].length)
                 .map(type => {
@@ -6485,7 +8496,15 @@
                     if (type === 'hotZodiacRange') label = `平特热肖（${values.length}肖）`;
                     if (type === 'allHotZodiacRange') label = `特码热肖（${values.length}肖）`;
                     if (type === 'region') label = `遗漏最多${values.length}区域`;
-                    const formattedValues = values.map(v => displayValueMap[v] || v);
+                    if (type === 'selectedMorphs') label = `合数形态（${values.length}项）`;
+                    if (type === 'selectedHeNumbers') label = `选择合数（${values.length}项）`;
+                    if (type === 'selectedHeTails') label = `选择合尾（${values.length}项）`;
+                    const formattedValues = values.map(v => {
+                        if (displayValueMap[v]) return displayValueMap[v];
+                        if (type === 'selectedHeNumbers') return v + '合';
+                        if (type === 'selectedHeTails') return v + '尾';
+                        return v;
+                    });
                     return `
                         <div style="display:flex; justify-content:space-between; gap:6px; margin-top:1px; font-size:10px;">
                             <span style="color:var(--text-secondary); flex-shrink:0;">${label}</span>
@@ -6832,8 +8851,43 @@
             if (tooltip) tooltip.style.display = 'none';
         }
 
-        function showLoading(show) {
-            document.getElementById('loading-overlay').style.display = show ? 'flex' : 'none';
+        function showLoading(show, isError = false, errorMsg = '') {
+            const overlay = document.getElementById('loading-overlay');
+            if (!overlay) return;
+            overlay.style.display = show ? 'flex' : 'none';
+            const progressEl = document.getElementById('loadingProgress');
+            const errorActions = document.getElementById('loadingErrorActions');
+            const spinner = overlay.querySelector('.spinner');
+
+            if (show) {
+                if (isError) {
+                    if (progressEl) {
+                        progressEl.textContent = errorMsg || '数据加载失败，请检查网络或切换演示数据';
+                        progressEl.style.color = 'var(--down, #ff5252)';
+                    }
+                    if (errorActions) errorActions.style.display = 'flex';
+                    if (spinner) spinner.style.display = 'none';
+                } else {
+                    if (progressEl) {
+                        progressEl.style.color = '';
+                    }
+                    if (errorActions) errorActions.style.display = 'none';
+                    if (spinner) spinner.style.display = 'block';
+                }
+            }
+        }
+
+        async function retryFetchData() {
+            showLoading(true, false);
+            const progressEl = document.getElementById('loadingProgress');
+            if (progressEl) progressEl.textContent = '正在重新加载数据...';
+            await fetchData();
+        }
+
+        function useFallbackMockData() {
+            showLoading(false);
+            loadMockData();
+            showToast('✓ 已为您切换为本地离线演示数据', 2500);
         }
 
         function initMobileFeatures() {
@@ -6891,7 +8945,11 @@
                     const { spacing, startX } = getChartSettings(state.visibleData.length, logicalWidth);
                     const touchX = clientX - rect.left - state.viewState.x;
                     let idx = Math.round((touchX - startX) / spacing);
+                    const prevIdx = state.hoverIndex;
                     state.hoverIndex = Math.max(0, Math.min(idx, state.visibleData.length - 1));
+                    if (prevIdx !== state.hoverIndex && typeof navigator !== 'undefined' && navigator.vibrate) {
+                        try { navigator.vibrate(6); } catch (vErr) {}
+                    }
 
                     draw();
                 } else if (e.touches.length === 2) {
