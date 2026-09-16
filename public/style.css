@@ -2984,21 +2984,23 @@
         .wuxing-grid-5col label:hover {
             border-color: rgba(255, 255, 255, 0.2);
         }
-        .morph-grid-6col, .he-grid-7col, .hetail-grid-5col, .head-grid-5col, .tail-grid-5col {
+        .morph-grid-6col, .he-grid-7col, .he-grid-5col, .hetail-grid-5col, .head-grid-5col, .tail-grid-5col {
             display: grid;
             gap: 3px;
             font-size: 11px;
+            width: 100%;
+            box-sizing: border-box;
         }
         .morph-grid-6col {
             grid-template-columns: repeat(6, 1fr);
         }
-        .he-grid-7col {
-            grid-template-columns: repeat(7, 1fr);
+        .he-grid-7col, .he-grid-5col {
+            grid-template-columns: repeat(5, 1fr);
         }
         .hetail-grid-5col, .head-grid-5col, .tail-grid-5col {
             grid-template-columns: repeat(5, 1fr);
         }
-        .morph-grid-6col label, .he-grid-7col label, .hetail-grid-5col label, .head-grid-5col label, .tail-grid-5col label {
+        .morph-grid-6col label, .he-grid-7col label, .he-grid-5col label, .hetail-grid-5col label, .head-grid-5col label, .tail-grid-5col label {
             display: flex;
             align-items: center;
             justify-content: center;
@@ -3011,8 +3013,20 @@
             transition: all 0.15s ease;
             font-size: 10.5px;
             white-space: nowrap;
+            box-sizing: border-box;
+            min-width: 0;
         }
-        .morph-grid-6col label:hover, .he-grid-7col label:hover, .hetail-grid-5col label:hover, .head-grid-5col label:hover, .tail-grid-5col label:hover {
+        .morph-grid-6col label input[type="checkbox"],
+        .he-grid-7col label input[type="checkbox"],
+        .he-grid-5col label input[type="checkbox"],
+        .hetail-grid-5col label input[type="checkbox"],
+        .head-grid-5col label input[type="checkbox"],
+        .tail-grid-5col label input[type="checkbox"] {
+            margin: 0;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        .morph-grid-6col label:hover, .he-grid-7col label:hover, .he-grid-5col label:hover, .hetail-grid-5col label:hover, .head-grid-5col label:hover, .tail-grid-5col label:hover {
             border-color: var(--accent);
             background: rgba(0, 212, 255, 0.06);
         }
@@ -3115,6 +3129,7 @@
         }
         body.light-theme .morph-grid-6col label,
         body.light-theme .he-grid-7col label,
+        body.light-theme .he-grid-5col label,
         body.light-theme .hetail-grid-5col label,
         body.light-theme .head-grid-5col label,
         body.light-theme .tail-grid-5col label {
@@ -3129,6 +3144,9 @@
 
         /* Mobile Touch & Layout Refinements */
         @media screen and (max-width: 767px) {
+            .morph-grid-6col {
+                grid-template-columns: repeat(3, 1fr);
+            }
             .quick-chip-btn {
                 padding: 4px 9px;
                 font-size: 11px;
