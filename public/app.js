@@ -834,7 +834,8 @@
                             selectedHeNumbers: cold.selectedHeNumbers,
                             selectedHeTails: cold.selectedHeTails,
                             selectedHeads: cold.selectedHeads,
-                            selectedTails: cold.selectedTails
+                            selectedTails: cold.selectedTails,
+                            selectedSegments: cold.selectedSegments
                         });
                         const smode = cold.setMode || cold.filterCalcMode || 'all';
                         const killsToUse = cold.excludeKills || state.excludeKills;
@@ -872,7 +873,8 @@
                             selectedHeNumbers: cold.selectedHeNumbers,
                             selectedHeTails: cold.selectedHeTails,
                             selectedHeads: cold.selectedHeads,
-                            selectedTails: cold.selectedTails
+                            selectedTails: cold.selectedTails,
+                            selectedSegments: cold.selectedSegments
                         });
                         const { finalNumbers: curNums } = applySetModeAndExcludeKills(
                             currentOptionSets,
@@ -890,8 +892,9 @@
                         if (cold.selectedHeNumbers && cold.selectedHeNumbers.length) coldHitSetsForPoint.selectedHeNumbers = cold.selectedHeNumbers;
                         if (cold.selectedHeTails && cold.selectedHeTails.length) coldHitSetsForPoint.selectedHeTails = cold.selectedHeTails;
                         if (cold.selectedHeheads && cold.selectedHeheads.length) coldHitSetsForPoint.selectedHeheads = cold.selectedHeheads;
-                        if (cold.selectedHeads && cold.selectedHeads.length) coldHitSetsForPoint.selectedHeads = cold.selectedHeads;
+                        if (cold.selectedHeads && cold.selectedHeads.length) coldHitSetsForPoint.selectedHeads = cold.selectedHeheads || cold.selectedHeads;
                         if (cold.selectedTails && cold.selectedTails.length) coldHitSetsForPoint.selectedTails = cold.selectedTails;
+                        if (cold.selectedSegments && cold.selectedSegments.length) coldHitSetsForPoint.selectedSegments = cold.selectedSegments;
                         if (nums.length >= 1) {
                             followTargetForPoint = nums.map(n => parseInt(n, 10)).join('、');
                             step = nums.includes(winNum.toString().padStart(2, '0')) ? 1 : -1;
@@ -1225,7 +1228,8 @@
                         selectedHeNumbers: cold.selectedHeNumbers,
                         selectedHeTails: cold.selectedHeTails,
                         selectedHeads: cold.selectedHeads,
-                        selectedTails: cold.selectedTails
+                        selectedTails: cold.selectedTails,
+                        selectedSegments: cold.selectedSegments
                     });
                     const setMode = cold.setMode || cold.filterCalcMode || 'all';
                     const killsToUse = cold.excludeKills || state.excludeKills;
@@ -4854,6 +4858,10 @@
                 const t = winNum % 10;
                 if (cold.selectedTails.includes(t) || cold.selectedTails.includes(String(t)) || cold.selectedTails.includes(`${t}尾`)) matches++;
             }
+            if (cold.types.includes('selectedSegments') && cold.selectedSegments && cold.selectedSegments.length) {
+                const s = Math.ceil(winNum / 7);
+                if (cold.selectedSegments.includes(s) || cold.selectedSegments.includes(String(s)) || cold.selectedSegments.includes(`${s}段`)) matches++;
+            }
             if (cold.types.includes('omissionRange') && rollingColdSets.omissionRange && rollingColdSets.omissionRange.includes(numStr)) matches++;
             if (cold.types.includes('omissionZodiacRange') && rollingColdSets.omissionZodiacRange && rollingColdSets.omissionZodiacRange.includes(winZ)) matches++;
             if (cold.types.includes('pingOmissionRange') && rollingColdSets.pingOmissionRange && rollingColdSets.pingOmissionRange.includes(numStr)) matches++;
@@ -5079,6 +5087,9 @@
             if (sets.selectedTails) {
                 sets.selectedTails.forEach(t => addNumbersByFilter(num => parseInt(num, 10) % 10 === parseInt(t, 10)));
             }
+            if (sets.selectedSegments) {
+                sets.selectedSegments.forEach(s => addNumbersByFilter(num => Math.ceil(parseInt(num, 10) / 7) === parseInt(s, 10)));
+            }
 
             if (sets.wave) sets.wave.forEach(wave => addNumbersByFilter(num => getColor(num) === wave));
             if (sets.halfwave) sets.halfwave.forEach(half => addNumbersByFilter(num => getHalfWaveKey(num) === half));
@@ -5142,7 +5153,7 @@
             }
 
             // Show inline selection results next to each checked option (skip zodiac types - self-explanatory)
-            const skipTypes = ['zodiacs', 'hotZodiacs', 'coldZodiacs', 'allHotZodiacs', 'allColdZodiacs', 'hotZodiacRange', 'allHotZodiacRange', 'selectZodiacs', 'selectedWaves', 'selectedWuxings', 'selectedWuxingDs', 'selectedMorphs', 'selectedHeNumbers', 'selectedHeTails', 'selectedHeheads', 'selectedHeads', 'selectedTails'];
+            const skipTypes = ['zodiacs', 'hotZodiacs', 'coldZodiacs', 'allHotZodiacs', 'allColdZodiacs', 'hotZodiacRange', 'allHotZodiacRange', 'selectZodiacs', 'selectedWaves', 'selectedWuxings', 'selectedWuxingDs', 'selectedMorphs', 'selectedHeNumbers', 'selectedHeTails', 'selectedHeheads', 'selectedHeheads', 'selectedHeads', 'selectedTails', 'selectedSegments'];
             const displayValueMap = { red: '红波', blue: '蓝波', green: '绿波', jia: '家肖', ye: '野肖' };
             document.querySelectorAll('.cold-inline-result').forEach(el => el.remove());
             Object.keys(sets).forEach(type => {
@@ -5404,6 +5415,10 @@
                 .filter(t => document.getElementById(`tailOption_${t}`)?.checked);
             if (selectedTails.length) types.push('selectedTails');
 
+            const selectedSegments = Array.from({ length: 7 }, (_, i) => i + 1)
+                .filter(s => document.getElementById(`segmentOption_${s}`)?.checked);
+            if (selectedSegments.length) types.push('selectedSegments');
+
             const hasKills = state.excludeKills && (
                 (state.excludeKills.zodiacs && state.excludeKills.zodiacs.length) ||
                 (state.excludeKills.tails && state.excludeKills.tails.length) ||
@@ -5430,8 +5445,10 @@
                         selectedMorphs: [],
                         selectedHeNumbers: [],
                         selectedHeTails: [],
+                        selectedHeheads: [],
                         selectedHeads: [],
                         selectedTails: [],
+                        selectedSegments: [],
                         selectedNumbers: [],
                         inputTerms: {}
                     };
@@ -5494,8 +5511,10 @@
             if (selectedMorphs.length) sets.selectedMorphs = selectedMorphs;
             if (selectedHeNumbers.length) sets.selectedHeNumbers = selectedHeNumbers;
             if (selectedHeTails.length) sets.selectedHeTails = selectedHeTails;
+            if (selectedHeads.length) sets.selectedHeheads = selectedHeads;
             if (selectedHeads.length) sets.selectedHeads = selectedHeads;
             if (selectedTails.length) sets.selectedTails = selectedTails;
+            if (selectedSegments.length) sets.selectedSegments = selectedSegments;
             if (selectedNumbers.length) sets.inputNumbers = selectedNumbers;
             if (hasInput) sets.inputTerms = inputTerms;
 
@@ -5522,8 +5541,10 @@
                 selectedMorphs,
                 selectedHeNumbers,
                 selectedHeTails,
+                selectedHeheads: selectedHeads,
                 selectedHeads,
                 selectedTails,
+                selectedSegments,
                 selectedNumbers,
                 inputTerms
             };
@@ -5531,7 +5552,7 @@
 
         function generateColdKline() {
             const detail = calculateColdSelectionDetail();
-            const { types, finalNumbers, counts, selectedZodiacs, selectedWaves, selectedWuxings, selectedWuxingDs, selectedMorphs, selectedHeNumbers, selectedHeTails, selectedHeads, selectedTails, selectedNumbers, inputTerms } = detail;
+            const { types, finalNumbers, counts, selectedZodiacs, selectedWaves, selectedWuxings, selectedWuxingDs, selectedMorphs, selectedHeNumbers, selectedHeTails, selectedHeads, selectedTails, selectedSegments, selectedNumbers, inputTerms } = detail;
             
             if (!types.length) {
                 if (typeof showToast === 'function') showToast('⚠️ 请先勾选至少一个特码综合K线选项', 3000);
@@ -5564,8 +5585,10 @@
                 selectedMorphs,
                 selectedHeNumbers,
                 selectedHeTails,
+                selectedHeheads: selectedHeads,
                 selectedHeads,
                 selectedTails,
+                selectedSegments,
                 selectedNumbers,
                 inputTerms
             };
@@ -5916,6 +5939,12 @@
                     return sets.selectedTails.includes(t) || sets.selectedTails.includes(String(t)) || sets.selectedTails.includes(`${t}尾`);
                 }));
             }
+            if (sets.selectedSegments && sets.selectedSegments.length) {
+                out.push(allNumbers.filter(n => {
+                    const s = Math.ceil(parseInt(n, 10) / 7);
+                    return sets.selectedSegments.includes(s) || sets.selectedSegments.includes(String(s)) || sets.selectedSegments.includes(`${s}段`);
+                }));
+            }
             if (sets.base49) out.push(allNumbers.slice());
             if (sets.inputNumbers && sets.inputNumbers.length) out.push(sets.inputNumbers.slice());
             if (sets.inputOmissionRangeNumbers && sets.inputOmissionRangeNumbers.length) out.push(sets.inputOmissionRangeNumbers.slice());
@@ -6091,6 +6120,10 @@
                 const el = document.getElementById(`tailOption_${i}`);
                 if (el) el.checked = false;
             }
+            for (let i = 1; i <= 7; i++) {
+                const el = document.getElementById(`segmentOption_${i}`);
+                if (el) el.checked = false;
+            }
             document.getElementById('coldOption_inputNumbers').value = '';
             state.coldSelection = null;
             state.omissionRangeSegments = [];
@@ -6168,6 +6201,11 @@
             } else if (section === 'tailSelect') {
                 for (let i = 0; i <= 9; i++) {
                     const el = document.getElementById('tailOption_' + i);
+                    if (el) el.checked = selectAll;
+                }
+            } else if (section === 'segmentSelect') {
+                for (let i = 1; i <= 7; i++) {
+                    const el = document.getElementById('segmentOption_' + i);
                     if (el) el.checked = selectAll;
                 }
             } else {
@@ -6793,6 +6831,10 @@
             for (let i = 0; i <= 9; i++) {
                 if (document.getElementById(`tailOption_${i}`)?.checked) config.tails.push(i);
             }
+            config.segments = [];
+            for (let i = 1; i <= 7; i++) {
+                if (document.getElementById(`segmentOption_${i}`)?.checked) config.segments.push(i);
+            }
 
             const strategies = getUserStrategies();
             strategies[trimmedName] = config;
@@ -6900,6 +6942,12 @@
             if (config.tails && Array.isArray(config.tails)) {
                 config.tails.forEach(t => {
                     const el = document.getElementById(`tailOption_${t}`);
+                    if (el) el.checked = true;
+                });
+            }
+            if (config.segments && Array.isArray(config.segments)) {
+                config.segments.forEach(s => {
+                    const el = document.getElementById(`segmentOption_${s}`);
                     if (el) el.checked = true;
                 });
             }
@@ -7811,8 +7859,10 @@
                 selectedMorphs: [...(state.coldSelection.selectedMorphs || [])],
                 selectedHeNumbers: [...(state.coldSelection.selectedHeNumbers || [])],
                 selectedHeTails: [...(state.coldSelection.selectedHeTails || [])],
+                selectedHeheads: [...((state.coldSelection.selectedHeheads || state.coldSelection.selectedHeads) || [])],
                 selectedHeads: [...(state.coldSelection.selectedHeads || [])],
                 selectedTails: [...(state.coldSelection.selectedTails || [])],
+                selectedSegments: [...(state.coldSelection.selectedSegments || [])],
                 inputTerms: state.coldSelection.inputTerms ? JSON.parse(JSON.stringify(state.coldSelection.inputTerms)) : null,
                 selectedNumbers: [...(state.coldSelection.selectedNumbers || [])]
             };
@@ -8751,6 +8801,7 @@
                 selectedHeTails: '合尾选择',
                 selectedHeads: '头数选择',
                 selectedTails: '尾数选择',
+                selectedSegments: '段数选择',
                 inputNumbers: '输入条件',
                 commonNumbers: '共同号码',
                 setKline: '号码集',
@@ -8791,12 +8842,14 @@
                     if (type === 'selectedHeTails') label = `选择合尾（${values.length}项）`;
                     if (type === 'selectedHeads') label = `选择头数（${values.length}项）`;
                     if (type === 'selectedTails') label = `选择尾数（${values.length}项）`;
+                    if (type === 'selectedSegments') label = `选择段数（${values.length}项）`;
                     const formattedValues = values.map(v => {
                         if (displayValueMap[v]) return displayValueMap[v];
                         if (type === 'selectedHeNumbers') return v + '合';
                         if (type === 'selectedHeTails') return v + '尾';
                         if (type === 'selectedHeads') return v + '头';
                         if (type === 'selectedTails') return v + '尾';
+                        if (type === 'selectedSegments') return v + '段';
                         if (type === 'selectedWuxings' || type === 'wuxingCold') return v + '行';
                         return v;
                     });

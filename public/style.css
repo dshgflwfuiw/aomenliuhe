@@ -71,6 +71,7 @@
         }
 
         .sidebar-card {
+            box-sizing: border-box;
             background: var(--card-bg);
             border: 1px solid var(--border);
             border-radius: 12px;
@@ -79,6 +80,23 @@
             position: relative;
             overflow: hidden;
             flex-shrink: 0;
+            width: 100%;
+            max-width: 100%;
+        }
+
+        .sidebar-card,
+        .sidebar-card * {
+            box-sizing: border-box;
+        }
+
+        .sidebar-card .cold-sticky-header,
+        .sidebar-card .filter-calc-card,
+        .sidebar-card .cold-preset-box,
+        .sidebar-card .cold-window-control-bar,
+        .sidebar-card .cold-subcard,
+        .sidebar-card .live-selection-box {
+            box-sizing: border-box;
+            max-width: 100%;
         }
 
         .sidebar-card::before {
@@ -259,12 +277,36 @@
             position: relative;
         }
 
+        #chartSection,
         .chart-section {
+            box-sizing: border-box;
             flex: 2;
             position: relative;
             overflow: hidden;
             background: radial-gradient(ellipse at top, #0d1117 0%, #000 100%);
             box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+            width: 100%;
+            max-width: 100%;
+        }
+
+        #chartSection,
+        #chartSection * {
+            box-sizing: border-box;
+        }
+
+        #chartSection .chart-header {
+            box-sizing: border-box;
+            max-width: 100%;
+            overflow-x: auto;
+            overflow-y: hidden;
+        }
+
+        #chartSection #dynamicHotColdInfo {
+            box-sizing: border-box;
+            max-width: 100%;
+            overflow-y: auto;
+            overflow-x: hidden;
+            max-height: 180px;
         }
 
         .chart-header {
@@ -2984,7 +3026,48 @@
         .wuxing-grid-5col label:hover {
             border-color: rgba(255, 255, 255, 0.2);
         }
-        .morph-grid-6col, .he-grid-7col, .he-grid-5col, .hetail-grid-5col, .head-grid-5col, .tail-grid-5col {
+        .wuxing-ds-grid-5col {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 3px;
+            font-size: 10.5px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .wuxing-ds-grid-5col label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 2.5px 2px;
+            border-radius: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            font-size: 10.5px;
+            white-space: nowrap;
+            box-sizing: border-box;
+            min-width: 0;
+            overflow: hidden;
+        }
+        .wuxing-ds-grid-5col label input[type="checkbox"] {
+            margin: 0;
+            cursor: pointer;
+            flex-shrink: 0;
+            width: 13px;
+            height: 13px;
+        }
+        .wuxing-ds-grid-5col label span {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: clip;
+        }
+        .wuxing-ds-grid-5col label:hover {
+            border-color: var(--accent);
+            background: rgba(0, 212, 255, 0.06);
+        }
+        .morph-grid-6col, .he-grid-7col, .he-grid-5col, .hetail-grid-5col, .head-grid-5col, .tail-grid-5col, .segment-grid-7col {
             display: grid;
             gap: 3px;
             font-size: 11px;
@@ -3000,7 +3083,15 @@
         .hetail-grid-5col, .head-grid-5col, .tail-grid-5col {
             grid-template-columns: repeat(5, 1fr);
         }
-        .morph-grid-6col label, .he-grid-7col label, .he-grid-5col label, .hetail-grid-5col label, .head-grid-5col label, .tail-grid-5col label {
+        .segment-grid-7col {
+            grid-template-columns: repeat(7, 1fr);
+        }
+        @media screen and (max-width: 480px) {
+            .segment-grid-7col {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+        .morph-grid-6col label, .he-grid-7col label, .he-grid-5col label, .hetail-grid-5col label, .head-grid-5col label, .tail-grid-5col label, .segment-grid-7col label {
             display: flex;
             align-items: center;
             justify-content: center;
@@ -3021,12 +3112,13 @@
         .he-grid-5col label input[type="checkbox"],
         .hetail-grid-5col label input[type="checkbox"],
         .head-grid-5col label input[type="checkbox"],
-        .tail-grid-5col label input[type="checkbox"] {
+        .tail-grid-5col label input[type="checkbox"],
+        .segment-grid-7col label input[type="checkbox"] {
             margin: 0;
             cursor: pointer;
             flex-shrink: 0;
         }
-        .morph-grid-6col label:hover, .he-grid-7col label:hover, .he-grid-5col label:hover, .hetail-grid-5col label:hover, .head-grid-5col label:hover, .tail-grid-5col label:hover {
+        .morph-grid-6col label:hover, .he-grid-7col label:hover, .he-grid-5col label:hover, .hetail-grid-5col label:hover, .head-grid-5col label:hover, .tail-grid-5col label:hover, .segment-grid-7col label:hover {
             border-color: var(--accent);
             background: rgba(0, 212, 255, 0.06);
         }
@@ -3123,7 +3215,8 @@
             border-color: #e2e8f0;
         }
         body.light-theme .wave-grid-3col label,
-        body.light-theme .wuxing-grid-5col label {
+        body.light-theme .wuxing-grid-5col label,
+        body.light-theme .wuxing-ds-grid-5col label {
             background: #f8fafc;
             border-color: #e2e8f0;
         }
@@ -3132,7 +3225,8 @@
         body.light-theme .he-grid-5col label,
         body.light-theme .hetail-grid-5col label,
         body.light-theme .head-grid-5col label,
-        body.light-theme .tail-grid-5col label {
+        body.light-theme .tail-grid-5col label,
+        body.light-theme .segment-grid-7col label {
             background: #f8fafc;
             border-color: #e2e8f0;
         }
@@ -3454,8 +3548,9 @@
             cursor: pointer;
         }
 
-        /* 历史复盘模态窗 */
+        /* 历史复盘与通用模态窗 */
         .rec-modal-overlay {
+            box-sizing: border-box;
             position: fixed;
             top: 0;
             left: 0;
@@ -3468,8 +3563,11 @@
             align-items: center;
             justify-content: center;
             padding: 16px;
+            overflow-y: auto;
+            overflow-x: hidden;
         }
         .rec-modal-content {
+            box-sizing: border-box;
             background: #121826;
             border: 1px solid var(--border);
             border-radius: 12px;
@@ -3480,6 +3578,45 @@
             flex-direction: column;
             box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8);
             overflow: hidden;
+        }
+
+        /* 10期倍投追号计算器全景模态窗 */
+        #betCalcModal {
+            box-sizing: border-box;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 16px;
+        }
+        #betCalcModal,
+        #betCalcModal * {
+            box-sizing: border-box;
+        }
+        #betCalcModal .rec-modal-content {
+            box-sizing: border-box;
+            width: 100%;
+            max-width: 760px;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        #betCalcModalBody {
+            box-sizing: border-box;
+            overflow-y: auto;
+            overflow-x: hidden;
+            flex: 1;
+            min-height: 0;
+            max-height: 100%;
+            width: 100%;
+            max-width: 100%;
+            padding: 16px;
+        }
+        #betCalcModalBody .bet-calc-table-wrap,
+        #betCalcModalBody div[style*="overflow-x:auto"] {
+            box-sizing: border-box;
+            max-width: 100%;
+            overflow-x: auto;
+            overflow-y: hidden;
         }
         .rec-spark-bar {
             flex: 1;

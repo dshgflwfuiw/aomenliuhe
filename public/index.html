@@ -931,7 +931,7 @@
                         <button type="button" onclick="toggleColdSection('wuxingDs', false)" style="font-size:9px;padding:2px 5px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--text-secondary);cursor:pointer;">清空</button>
                     </div>
                 </div>
-                <div class="wuxing-grid-5col" style="margin-bottom: 10px;">
+                <div class="wuxing-ds-grid-5col" style="margin-bottom: 10px;">
                     <label title="金行单数(05,13,27,35,43)"><input type="checkbox" id="wuxingDsOption_金单"> <span style="color:#fbc02d;font-weight:600;">金单</span></label>
                     <label title="木行单数(09,17,25,39,47)"><input type="checkbox" id="wuxingDsOption_木单"> <span style="color:#4caf50;font-weight:600;">木单</span></label>
                     <label title="水行单数(01,15,23,31,45)"><input type="checkbox" id="wuxingDsOption_水单"> <span style="color:#29b6f6;font-weight:600;">水单</span></label>
@@ -977,6 +977,23 @@
                     <label><input type="checkbox" id="tailOption_7"> 7尾</label>
                     <label><input type="checkbox" id="tailOption_8"> 8尾</label>
                     <label><input type="checkbox" id="tailOption_9"> 9尾</label>
+                </div>
+
+                <div class="cold-subcard-header">
+                    <span class="title-tag">🔢 段数选择 (1段 ~ 7段)</span>
+                    <div style="display: flex; gap: 4px;">
+                        <button type="button" onclick="toggleColdSection('segmentSelect', true)" style="font-size:9px;padding:2px 7px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--accent);cursor:pointer;">全选</button>
+                        <button type="button" onclick="toggleColdSection('segmentSelect', false)" style="font-size:9px;padding:2px 7px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--text-secondary);cursor:pointer;">清空</button>
+                    </div>
+                </div>
+                <div class="segment-grid-7col" style="margin-bottom: 10px;">
+                    <label title="1段(01-07)"><input type="checkbox" id="segmentOption_1"> 1段</label>
+                    <label title="2段(08-14)"><input type="checkbox" id="segmentOption_2"> 2段</label>
+                    <label title="3段(15-21)"><input type="checkbox" id="segmentOption_3"> 3段</label>
+                    <label title="4段(22-28)"><input type="checkbox" id="segmentOption_4"> 4段</label>
+                    <label title="5段(29-35)"><input type="checkbox" id="segmentOption_5"> 5段</label>
+                    <label title="6段(36-42)"><input type="checkbox" id="segmentOption_6"> 6段</label>
+                    <label title="7段(43-49)"><input type="checkbox" id="segmentOption_7"> 7段</label>
                 </div>
 
                 <div class="cold-subcard-header">
