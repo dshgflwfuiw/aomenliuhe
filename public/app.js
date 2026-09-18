@@ -121,6 +121,7 @@
 
             initEvents();
             initCardCollapse();
+            initColdSubcards();
             initFilterCalculatorListeners();
             updateFollowZodiacOptions();
             updateTailOptions();
@@ -394,13 +395,29 @@
                 savedCollapse = JSON.parse(localStorage.getItem('aomen_cards_collapsed') || '{}');
             } catch (e) {}
 
+            const defaultCollapsedIds = [
+                'omissionCard',
+                'realtimeCard',
+                'recommendCard',
+                'intervalCard',
+                'overlayCard',
+                'matrixCard',
+                'betCalcCard',
+                'backtestCard'
+            ];
+
             cards.forEach((card, idx) => {
                 const header = card.querySelector('h3');
                 if (!header) return;
 
                 const cardKey = card.id || ('card_' + idx);
-                if (savedCollapse[cardKey]) {
+                const isDefaultCollapsed = defaultCollapsedIds.includes(card.id) || card.classList.contains('collapsed');
+                const shouldCollapse = savedCollapse[cardKey] !== undefined ? savedCollapse[cardKey] : isDefaultCollapsed;
+
+                if (shouldCollapse) {
                     card.classList.add('collapsed');
+                } else {
+                    card.classList.remove('collapsed');
                 }
 
                 if (header.querySelector('.card-toggle-arrow')) return;
@@ -418,6 +435,7 @@
 
                 header.addEventListener('click', (e) => {
                     if (e.target && ['INPUT', 'SELECT', 'BUTTON', 'LABEL'].includes(e.target.tagName)) return;
+                    if (e.target.closest('button, select, input, label')) return;
                     card.classList.toggle('collapsed');
                     try {
                         const curr = JSON.parse(localStorage.getItem('aomen_cards_collapsed') || '{}');
@@ -5630,6 +5648,7 @@
 
             if (!candidateNumbers.length && !finalNumbers.length && !excludedNumbers.length) {
                 gridEl.innerHTML = '<span style="font-size: 11px; color: var(--text-secondary); padding: 8px 0;">勾选下方条件即时生成号码球明细...</span>';
+                if (typeof updateColdSubcardBadges === 'function') updateColdSubcardBadges();
                 return;
             }
 
@@ -5649,6 +5668,7 @@
                     </div>
                 `;
             }).join('');
+            if (typeof updateColdSubcardBadges === 'function') updateColdSubcardBadges();
         }
 
         function setFilterCalcMode(mode) {
@@ -6238,6 +6258,53 @@
             if (typeof updateLiveSelectionPreview === 'function') {
                 updateLiveSelectionPreview();
             }
+        }
+
+        // ==================== 遗漏选号因子 & 冷热选号因子 独立折叠控制 ====================
+        function toggleColdSubcard(subcardId) {
+            const el = document.getElementById(subcardId);
+            if (!el) return;
+            const isCollapsed = el.classList.toggle('collapsed');
+            try {
+                const curr = JSON.parse(localStorage.getItem('aomen_cold_subcards_collapsed') || '{}');
+                curr[subcardId] = isCollapsed;
+                localStorage.setItem('aomen_cold_subcards_collapsed', JSON.stringify(curr));
+            } catch (err) {}
+            updateColdSubcardBadges();
+        }
+
+        function updateColdSubcardBadges() {
+            ['subcard_omission', 'subcard_hotcold'].forEach(id => {
+                const el = document.getElementById(id);
+                const badge = document.getElementById('badge_' + id);
+                if (!el || !badge) return;
+                const checkedCount = el.querySelectorAll('input[type="checkbox"]:checked').length;
+                if (checkedCount > 0) {
+                    badge.textContent = `已选 ${checkedCount} 项`;
+                    badge.style.display = 'inline-block';
+                } else {
+                    badge.style.display = 'none';
+                }
+            });
+        }
+
+        function initColdSubcards() {
+            let saved = {};
+            try {
+                saved = JSON.parse(localStorage.getItem('aomen_cold_subcards_collapsed') || '{}');
+            } catch (e) {}
+
+            ['subcard_omission', 'subcard_hotcold'].forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                const shouldCollapse = saved[id] !== undefined ? saved[id] : true;
+                if (shouldCollapse) {
+                    el.classList.add('collapsed');
+                } else {
+                    el.classList.remove('collapsed');
+                }
+            });
+            updateColdSubcardBadges();
         }
 
         // ==================== 快捷区间 & 量化策略预设 & 滑动条交互 ====================
