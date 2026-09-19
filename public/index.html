@@ -1006,26 +1006,32 @@
                 </div>
                 <div>
                     <input type="text" id="coldOption_inputNumbers" placeholder="号码/肖/尾/头/波色/五行/五行单双/段/区/遗漏区间，如 01,05,马,3尾,2头,红波,金行,金单,一段,一区,遗漏1-10,遗漏肖1-3" style="width:100%;font-size:11px;padding:8px 10px;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:8px;color:var(--text-primary);outline:none;">
-                    <div style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.4;">支持号码01-49、生肖(马/蛇...)、N尾、N头、红/蓝/绿波、五行(金/木/水/火/土)、五行单双(金单/木双...)、一段~七段、一区~五区、遗漏1-10、遗漏肖1-3等，任意符号分隔，留空不启用</div>
+                    <div style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.4;">支持号码01-49、生肖(马/蛇...)、前肖/后肖/天肖/地肖、边数/中数、N尾、N头、红/蓝/绿波、五行(金/木/水/火/土)、五行单双(金单/木双...)、一段~七段、一区~五区、遗漏1-10、遗漏肖1-3等，任意符号分隔，留空不启用</div>
                 </div>
             </div>
 
             <!-- 模块四：特态、合数与合尾因子 (可扣选项) -->
             <div class="cold-subcard" id="morphHeSubcard">
                 <div class="cold-subcard-header">
-                    <span class="title-tag">📐 特态特征扣选 (合单双/合大小/尾大小)</span>
+                    <span class="title-tag">📐 特态特征扣选 (单双/大小/前后肖/天地肖/边中数)</span>
                     <div style="display: flex; gap: 4px;">
                         <button type="button" onclick="toggleColdSection('morph', true)" style="font-size:9px;padding:2px 7px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--accent);cursor:pointer;">全选</button>
                         <button type="button" onclick="toggleColdSection('morph', false)" style="font-size:9px;padding:2px 7px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--text-secondary);cursor:pointer;">清空</button>
                     </div>
                 </div>
                 <div class="morph-grid-6col" style="margin-bottom: 10px;">
-                    <label><input type="checkbox" id="morphOption_heDan"> 合单</label>
-                    <label><input type="checkbox" id="morphOption_heShuang"> 合双</label>
-                    <label><input type="checkbox" id="morphOption_heDa"> 合大</label>
-                    <label><input type="checkbox" id="morphOption_heXiao"> 合小</label>
-                    <label><input type="checkbox" id="morphOption_weiDa"> 尾大</label>
-                    <label><input type="checkbox" id="morphOption_weiXiao"> 尾小</label>
+                    <label title="合单: 两位数之和为单数"><input type="checkbox" id="morphOption_heDan"> 合单</label>
+                    <label title="合双: 两位数之和为双数"><input type="checkbox" id="morphOption_heShuang"> 合双</label>
+                    <label title="合大: 两位数之和>=7"><input type="checkbox" id="morphOption_heDa"> 合大</label>
+                    <label title="合小: 两位数之和<=6"><input type="checkbox" id="morphOption_heXiao"> 合小</label>
+                    <label title="尾大: 尾数5-9"><input type="checkbox" id="morphOption_weiDa"> 尾大</label>
+                    <label title="尾小: 尾数0-4"><input type="checkbox" id="morphOption_weiXiao"> 尾小</label>
+                    <label title="前肖: 鼠牛虎兔龙蛇"><input type="checkbox" id="morphOption_qianXiao"> 前肖</label>
+                    <label title="后肖: 马羊猴鸡狗猪"><input type="checkbox" id="morphOption_houXiao"> 后肖</label>
+                    <label title="天肖: 马猴牛兔龙猪"><input type="checkbox" id="morphOption_tianXiao"> 天肖</label>
+                    <label title="地肖: 鼠虎蛇羊鸡狗"><input type="checkbox" id="morphOption_diXiao"> 地肖</label>
+                    <label title="边数: 01-12, 38-49 (24码)"><input type="checkbox" id="morphOption_bianShu"> 边数</label>
+                    <label title="中数: 13-37 (25码)"><input type="checkbox" id="morphOption_zhongShu"> 中数</label>
                 </div>
 
                 <div class="cold-subcard-header">
@@ -1104,11 +1110,11 @@
 
         <div class="sidebar-card collapsed" id="recommendCard" data-category="recommend" style="border-color: var(--accent);">
             <h3 style="color: var(--warn);margin-bottom:8px;">
-                <span style="display:flex;align-items:center;gap:6px;">🎯 智能量化推荐</span>
+                <span style="display:flex;align-items:center;gap:6px;" title="智能量化推荐：支持最多可看100期历史逐期复盘验证">🎯 智能量化推荐</span>
                 <span class="rec-header-actions" style="display:inline-flex;gap:4px;align-items:center;">
                     <button type="button" class="rec-apply-btn" style="padding:2px 5px;font-weight:normal;" onclick="exportRecommendationPlan()">📋 导出单</button>
                     <button type="button" class="rec-apply-btn" style="padding:2px 5px;font-weight:normal;" onclick="toggleRecDrawer()">⚙️ 微调</button>
-                    <button type="button" class="rec-apply-btn" style="padding:2px 5px;font-weight:normal;" onclick="openRecHistoryModal(5)">📜 5期回看</button>
+                    <button type="button" class="rec-apply-btn" style="padding:2px 5px;font-weight:normal;" onclick="openRecHistoryModal(100)" title="支持查看最近5期至100期逐期复盘验证">📜 100期回看</button>
                 </span>
             </h3>
 
@@ -1211,10 +1217,12 @@
                             <option value="size">📏 大小分界</option>
                             <option value="normal_track">🎰 平特肖尾双轨</option>
                         </select>
-                        <div style="display:inline-flex;gap:3px;align-items:center;">
-                            <button type="button" class="rec-track-btn active" id="recModalTab5" onclick="setRecModalCount(5)" style="padding:2px 8px;font-size:10px;">5期回看</button>
-                            <button type="button" class="rec-track-btn" id="recModalTab10" onclick="setRecModalCount(10)" style="padding:2px 8px;font-size:10px;">10期</button>
-                            <button type="button" class="rec-track-btn" id="recModalTab20" onclick="setRecModalCount(20)" style="padding:2px 8px;font-size:10px;">20期全景</button>
+                        <div style="display:inline-flex;gap:3px;align-items:center;flex-wrap:wrap;">
+                            <button type="button" class="rec-track-btn" id="recModalTab5" onclick="setRecModalCount(5)" style="padding:2px 7px;font-size:10px;">5期</button>
+                            <button type="button" class="rec-track-btn" id="recModalTab10" onclick="setRecModalCount(10)" style="padding:2px 7px;font-size:10px;">10期</button>
+                            <button type="button" class="rec-track-btn" id="recModalTab20" onclick="setRecModalCount(20)" style="padding:2px 7px;font-size:10px;">20期</button>
+                            <button type="button" class="rec-track-btn" id="recModalTab50" onclick="setRecModalCount(50)" style="padding:2px 7px;font-size:10px;">50期</button>
+                            <button type="button" class="rec-track-btn active" id="recModalTab100" onclick="setRecModalCount(100)" style="padding:2px 7px;font-size:10px;">100期全景</button>
                             <button type="button" onclick="closeRecHistoryModal()" style="background:transparent;border:none;color:var(--text-secondary);font-size:16px;cursor:pointer;padding:0 4px;margin-left:4px;">✕</button>
                         </div>
                     </div>
