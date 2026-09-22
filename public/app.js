@@ -24,6 +24,57 @@
                 '水': ['01', '14', '15', '22', '23', '30', '31', '44', '45'],
                 '火': ['02', '03', '10', '11', '18', '19', '32', '33', '40', '41', '48', '49'],
                 '土': ['06', '07', '20', '21', '28', '29', '36', '37']
+            },
+            wuxingMapByYear: {
+                2020: {
+                    '金': ['06', '07', '20', '21', '28', '29', '36', '37'],
+                    '木': ['02', '03', '10', '11', '18', '19', '32', '33', '40', '41', '48', '49'],
+                    '水': ['08', '09', '16', '17', '24', '25', '38', '39', '46', '47'],
+                    '火': ['04', '05', '12', '13', '26', '27', '34', '35', '42', '43'],
+                    '土': ['01', '14', '15', '22', '23', '30', '31', '44', '45']
+                },
+                2021: {
+                    '金': ['07', '08', '21', '22', '29', '30', '37', '38'],
+                    '木': ['03', '04', '11', '12', '19', '20', '33', '34', '41', '42', '49'],
+                    '水': ['09', '10', '17', '18', '25', '26', '39', '40', '47', '48'],
+                    '火': ['05', '06', '13', '14', '27', '28', '35', '36', '43', '44'],
+                    '土': ['01', '02', '15', '16', '23', '24', '31', '32', '45', '46']
+                },
+                2022: {
+                    '金': ['01', '08', '09', '22', '23', '30', '31', '38', '39'],
+                    '木': ['04', '05', '12', '13', '20', '21', '34', '35', '42', '43'],
+                    '水': ['10', '11', '18', '19', '26', '27', '40', '41', '48', '49'],
+                    '火': ['06', '07', '14', '15', '28', '29', '36', '37', '44', '45'],
+                    '土': ['02', '03', '16', '17', '24', '25', '32', '33', '46', '47']
+                },
+                2023: {
+                    '金': ['01', '02', '09', '10', '23', '24', '31', '32', '39', '40'],
+                    '木': ['05', '06', '13', '14', '21', '22', '35', '36', '43', '44'],
+                    '水': ['11', '12', '19', '20', '27', '28', '41', '42', '49'],
+                    '火': ['07', '08', '15', '16', '29', '30', '37', '38', '45', '46'],
+                    '土': ['03', '04', '17', '18', '25', '26', '33', '34', '47', '48']
+                },
+                2024: {
+                    '金': ['02', '03', '10', '11', '24', '25', '32', '33', '40', '41'],
+                    '木': ['06', '07', '14', '15', '22', '23', '36', '37', '44', '45'],
+                    '水': ['12', '13', '20', '21', '28', '29', '42', '43'],
+                    '火': ['01', '08', '09', '16', '17', '30', '31', '38', '39', '46', '47'],
+                    '土': ['04', '05', '18', '19', '26', '27', '34', '35', '48', '49']
+                },
+                2025: {
+                    '金': ['03', '04', '11', '12', '25', '26', '33', '34', '41', '42'],
+                    '木': ['07', '08', '15', '16', '23', '24', '37', '38', '45', '46'],
+                    '水': ['13', '14', '21', '22', '29', '30', '43', '44'],
+                    '火': ['01', '02', '09', '10', '17', '18', '31', '32', '39', '40', '47', '48'],
+                    '土': ['05', '06', '19', '20', '27', '28', '35', '36', '49']
+                },
+                2026: {
+                    '金': ['04', '05', '12', '13', '26', '27', '34', '35', '42', '43'],
+                    '木': ['08', '09', '16', '17', '24', '25', '38', '39', '46', '47'],
+                    '水': ['01', '14', '15', '22', '23', '30', '31', '44', '45'],
+                    '火': ['02', '03', '10', '11', '18', '19', '32', '33', '40', '41', '48', '49'],
+                    '土': ['06', '07', '20', '21', '28', '29', '36', '37']
+                }
             }
         };
 
@@ -128,6 +179,7 @@
             updateFollowZodiacOptions();
             updateTailOptions();
             updateFollowNumAbsentOptions();
+            updateWuxingUI();
             buildModeQuickBar();
             updateFollowPanelSummaries();
             updateSetModeButton();
@@ -761,6 +813,7 @@
             updateFollowZodiacOptions();
             updateTailOptions();
             updateFollowNumAbsentOptions();
+            updateWuxingUI();
             updateFollowPanelSummaries();
             buildOverlayOptions();
             const zodiacs = CONFIG.zodiacMap[state.currentYear];
@@ -792,6 +845,15 @@
                 tailCounts[t] = 0;
                 state.tailGlobalMaxOm[t] = 0;
             }
+            const wuxingKeys = ['金', '木', '水', '火', '土'];
+            let wuxingOmissions = {};
+            let wuxingCounts = {};
+            state.wuxingGlobalMaxOm = {};
+            wuxingKeys.forEach(wx => {
+                wuxingOmissions[wx] = 0;
+                wuxingCounts[wx] = 0;
+                state.wuxingGlobalMaxOm[wx] = 0;
+            });
             const overlayItems = (state.overlay && state.overlay.enabled && state.overlay.type !== 'cold' && state.overlay.items) || [];
             const overlayScores = {};
             const colorStreaks = {
@@ -806,6 +868,7 @@
             let sizeMaxOmissions = { big: 0, small: 0 };
 
             list.forEach((item, idx) => {
+                const itemYear = parseInt(String(item.expect).slice(0, 4), 10) || state.currentYear;
                 const zList = item.zodiac.split(',');
                 const wList = (item.wave || '').split(',');
                 const cList = item.openCode.split(',');
@@ -856,7 +919,7 @@
                             selectedHeads: cold.selectedHeads,
                             selectedTails: cold.selectedTails,
                             selectedSegments: cold.selectedSegments
-                        });
+                        }, itemYear);
                         const smode = cold.setMode || cold.filterCalcMode || 'all';
                         const killsToUse = cold.excludeKills || state.excludeKills;
                         const rollingColdSource = getRollingColdSourceData(state.historyData, idx);
@@ -895,7 +958,7 @@
                             selectedHeads: cold.selectedHeads,
                             selectedTails: cold.selectedTails,
                             selectedSegments: cold.selectedSegments
-                        });
+                        }, itemYear);
                         const { finalNumbers: curNums } = applySetModeAndExcludeKills(
                             currentOptionSets,
                             smode,
@@ -948,8 +1011,8 @@
                         matches = countColdConditionMatches(cold, rollingColdSets, {
                             numStr, winZ, winNum, color, cList,
                             headKey, tailKey, halfWaveKey, halfHeadKey, segment, regionKey, regionShort, jiaYe,
-                            wuxingKey: getWuxingKey(winNum),
-                            wuxingDsKey: getWuxingDsKey(winNum)
+                            wuxingKey: getWuxingKey(winNum, itemYear),
+                            wuxingDsKey: getWuxingDsKey(winNum, itemYear)
                         });
 
                         step = matches > 0 ? 1 : -1;
@@ -1115,6 +1178,19 @@
                     }
                 }
 
+                const currentWx = getWuxingKey(winNum, itemYear);
+                wuxingKeys.forEach(wx => {
+                    if (wx === currentWx) {
+                        wuxingOmissions[wx] = 0;
+                        wuxingCounts[wx]++;
+                    } else {
+                        wuxingOmissions[wx]++;
+                    }
+                    if (wuxingOmissions[wx] > state.wuxingGlobalMaxOm[wx]) {
+                        state.wuxingGlobalMaxOm[wx] = wuxingOmissions[wx];
+                    }
+                });
+
                 overlayItems.forEach(item => {
                     let ovHit = false;
                     if (state.overlay.type === 'zodiac') {
@@ -1145,7 +1221,7 @@
                             regionKey: getRegionKey(winNum),
                             regionShort: getRegionShortKey(winNum),
                             jiaYe: getJiaYe(winZ),
-                            wuxingKey: getWuxingKey(winNum)
+                            wuxingKey: getWuxingKey(winNum, itemYear)
                         });
                         overlayScores['cold_' + si] = (overlayScores['cold_' + si] || 0) + (m > 0 ? 1 : -1);
                     });
@@ -1174,6 +1250,8 @@
                     counts: { ...counts },
                     tailSnapshot: { ...tailOmissions },
                     tailCounts: { ...tailCounts },
+                    wuxingSnapshot: { ...wuxingOmissions },
+                    wuxingCounts: { ...wuxingCounts },
                     total: idx + 1,
                     totalSum: pointTotalSum,
                     normalSpan: pointNormalSpan,
@@ -4361,8 +4439,9 @@
         }
 
         // ==================== 辅助计算 ====================
-        function getZodiac(num) {
-            const map = CONFIG.zodiacMap[state.currentYear];
+        function getZodiac(num, year) {
+            const y = year || state.currentYear;
+            const map = CONFIG.zodiacMap[y] || CONFIG.zodiacMap[state.currentYear];
             return map[(num - 1) % 12];
         }
 
@@ -4432,19 +4511,67 @@
             });
         });
 
-        function getWuxingKey(num) {
+        // 按年份缓存每个号码的五行属性对照
+        const NUMBER_TO_WUXING_BY_YEAR = {};
+        if (CONFIG.wuxingMapByYear) {
+            Object.entries(CONFIG.wuxingMapByYear).forEach(([yr, wxMap]) => {
+                const mapForYear = {};
+                Object.entries(wxMap).forEach(([wx, nums]) => {
+                    nums.forEach(n => {
+                        mapForYear[n] = wx;
+                        mapForYear[parseInt(n, 10)] = wx;
+                    });
+                });
+                NUMBER_TO_WUXING_BY_YEAR[yr] = mapForYear;
+            });
+        }
+
+        function getWuxingKey(num, year) {
             if (num === undefined || num === null) return '未知';
+            const y = year || state.currentYear;
             const n = typeof num === 'number' ? num.toString().padStart(2, '0') : num.toString().padStart(2, '0');
+            const yearMap = NUMBER_TO_WUXING_BY_YEAR[y];
+            if (yearMap && yearMap[n]) return yearMap[n];
             return NUMBER_TO_WUXING[n] || '未知';
         }
 
         const WUXING_DS_LIST = ['金单', '木单', '水单', '火单', '土单', '金双', '木双', '水双', '火双', '土双'];
 
-        function getWuxingDsKey(num) {
-            const wx = getWuxingKey(num);
+        function getWuxingDsKey(num, year) {
+            const wx = getWuxingKey(num, year);
             if (wx === '未知') return '未知';
             const n = typeof num === 'number' ? num : parseInt(num, 10);
             return `${wx}${n % 2 !== 0 ? '单' : '双'}`;
+        }
+
+        // 动态更新冷热与自选面板中五行与五行单双的号码提示
+        function updateWuxingUI() {
+            const y = state.currentYear;
+            const wxMap = (CONFIG.wuxingMapByYear && CONFIG.wuxingMapByYear[y]) ? CONFIG.wuxingMapByYear[y] : CONFIG.wuxingMap;
+            if (!wxMap) return;
+
+            // 更新五行选项卡上的号码展示/提示
+            ['金', '木', '水', '火', '土'].forEach(wx => {
+                const el = document.getElementById('wuxingOption_' + wx);
+                if (el && el.parentElement) {
+                    const nums = wxMap[wx] || [];
+                    el.parentElement.title = `${wx}行(${nums.join(',')})`;
+                }
+            });
+
+            // 更新五行单双每个选项的号码提示
+            WUXING_DS_LIST.forEach(wxds => {
+                const el = document.getElementById('wuxingDsOption_' + wxds);
+                if (el && el.parentElement) {
+                    const wx = wxds.slice(0, 1);
+                    const isDan = wxds.endsWith('单');
+                    const nums = (wxMap[wx] || []).filter(n => {
+                        const val = parseInt(n, 10);
+                        return isDan ? (val % 2 !== 0) : (val % 2 === 0);
+                    });
+                    el.parentElement.title = `${wx}行${isDan ? '单数' : '双数'}(${nums.join(',')})`;
+                }
+            });
         }
 
         function getNumHe(num) {
@@ -4485,23 +4612,23 @@
             return getNumTail(num) <= 4;
         }
 
-        function isQianXiao(num) {
-            const z = typeof num === 'string' && isNaN(parseInt(num, 10)) ? num : getZodiac(parseInt(num, 10));
+        function isQianXiao(num, year) {
+            const z = typeof num === 'string' && isNaN(parseInt(num, 10)) ? num : getZodiac(parseInt(num, 10), year);
             return ['鼠', '牛', '虎', '兔', '龙', '蛇'].includes(z);
         }
 
-        function isHouXiao(num) {
-            const z = typeof num === 'string' && isNaN(parseInt(num, 10)) ? num : getZodiac(parseInt(num, 10));
+        function isHouXiao(num, year) {
+            const z = typeof num === 'string' && isNaN(parseInt(num, 10)) ? num : getZodiac(parseInt(num, 10), year);
             return ['马', '羊', '猴', '鸡', '狗', '猪'].includes(z);
         }
 
-        function isTianXiao(num) {
-            const z = typeof num === 'string' && isNaN(parseInt(num, 10)) ? num : getZodiac(parseInt(num, 10));
+        function isTianXiao(num, year) {
+            const z = typeof num === 'string' && isNaN(parseInt(num, 10)) ? num : getZodiac(parseInt(num, 10), year);
             return ['马', '猴', '牛', '兔', '龙', '猪'].includes(z);
         }
 
-        function isDiXiao(num) {
-            const z = typeof num === 'string' && isNaN(parseInt(num, 10)) ? num : getZodiac(parseInt(num, 10));
+        function isDiXiao(num, year) {
+            const z = typeof num === 'string' && isNaN(parseInt(num, 10)) ? num : getZodiac(parseInt(num, 10), year);
             return ['鼠', '虎', '蛇', '羊', '鸡', '狗'].includes(z);
         }
 
@@ -4810,7 +4937,10 @@
 
         function getColdWuxing(sourceData, count = 1) {
             const keys = ['金', '木', '水', '火', '土'];
-            const counts = calculateOmissionCounts(keys, item => getWuxingKey(item.winNum), sourceData);
+            const counts = calculateOmissionCounts(keys, item => {
+                const yr = item.expect ? parseInt(String(item.expect).slice(0, 4), 10) : state.currentYear;
+                return getWuxingKey(item.winNum, yr);
+            }, sourceData);
             return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, count).map(item => item[0]);
         }
 
@@ -5993,7 +6123,8 @@
             });
         }
 
-        function getColdOptionNumberSets(sets) {
+                function getColdOptionNumberSets(sets, targetYear) {
+            const y = targetYear || state.currentYear;
             const allNumbers = Array.from({ length: 49 }, (_, i) => (i + 1).toString().padStart(2, '0'));
             const out = [];
             const add = (values, filterFn) => { if (values && values.length) out.push(allNumbers.filter(filterFn)); };
@@ -6004,29 +6135,29 @@
             add(sets.allColdNumbers, num => sets.allColdNumbers.includes(num));
             add(sets.hotNumberRange, num => sets.hotNumberRange.includes(num));
             add(sets.allHotNumberRange, num => sets.allHotNumberRange.includes(num));
-            add(sets.zodiacs, num => sets.zodiacs.includes(getZodiac(parseInt(num, 10))));
-            add(sets.hotZodiacs, num => sets.hotZodiacs.includes(getZodiac(parseInt(num, 10))));
-            add(sets.coldZodiacs, num => sets.coldZodiacs.includes(getZodiac(parseInt(num, 10))));
-            add(sets.allHotZodiacs, num => sets.allHotZodiacs.includes(getZodiac(parseInt(num, 10))));
-            add(sets.allColdZodiacs, num => sets.allColdZodiacs.includes(getZodiac(parseInt(num, 10))));
-            add(sets.hotZodiacRange, num => sets.hotZodiacRange.includes(getZodiac(parseInt(num, 10))));
-            add(sets.allHotZodiacRange, num => sets.allHotZodiacRange.includes(getZodiac(parseInt(num, 10))));
-            add(sets.selectZodiacs, num => sets.selectZodiacs.includes(getZodiac(parseInt(num, 10))));
+            add(sets.zodiacs, num => sets.zodiacs.includes(getZodiac(parseInt(num, 10), y)));
+            add(sets.hotZodiacs, num => sets.hotZodiacs.includes(getZodiac(parseInt(num, 10), y)));
+            add(sets.coldZodiacs, num => sets.coldZodiacs.includes(getZodiac(parseInt(num, 10), y)));
+            add(sets.allHotZodiacs, num => sets.allHotZodiacs.includes(getZodiac(parseInt(num, 10), y)));
+            add(sets.allColdZodiacs, num => sets.allColdZodiacs.includes(getZodiac(parseInt(num, 10), y)));
+            add(sets.hotZodiacRange, num => sets.hotZodiacRange.includes(getZodiac(parseInt(num, 10), y)));
+            add(sets.allHotZodiacRange, num => sets.allHotZodiacRange.includes(getZodiac(parseInt(num, 10), y)));
+            add(sets.selectZodiacs, num => sets.selectZodiacs.includes(getZodiac(parseInt(num, 10), y)));
             add(sets.selectedWaves, num => sets.selectedWaves.includes(getColor(num)));
-            add(sets.selectedWuxings, num => sets.selectedWuxings.includes(getWuxingKey(num)));
-            add(sets.selectedWuxingDs, num => sets.selectedWuxingDs.includes(getWuxingDsKey(num)));
+            add(sets.selectedWuxings, num => sets.selectedWuxings.includes(getWuxingKey(num, y)));
+            add(sets.selectedWuxingDs, num => sets.selectedWuxingDs.includes(getWuxingDsKey(num, y)));
             add(sets.selectedRegions, num => sets.selectedRegions.includes(getRegionKey(parseInt(num, 10))) || sets.selectedRegions.includes(getRegionShortKey(parseInt(num, 10))));
             add(sets.omissionRange, num => sets.omissionRange.includes(num));
-            add(sets.omissionZodiacRange, num => sets.omissionZodiacRange.includes(getZodiac(parseInt(num, 10))));
+            add(sets.omissionZodiacRange, num => sets.omissionZodiacRange.includes(getZodiac(parseInt(num, 10), y)));
             add(sets.pingOmissionRange, num => sets.pingOmissionRange.includes(num));
-            add(sets.pingOmissionZodiacRange, num => sets.pingOmissionZodiacRange.includes(getZodiac(parseInt(num, 10))));
+            add(sets.pingOmissionZodiacRange, num => sets.pingOmissionZodiacRange.includes(getZodiac(parseInt(num, 10), y)));
             add(sets.wave, num => sets.wave.includes(getColor(num)));
             add(sets.halfwave, num => sets.halfwave.includes(getHalfWaveKey(num)));
-            add(sets.jiaYe, num => sets.jiaYe.includes(getJiaYe(getZodiac(parseInt(num, 10)))));
+            add(sets.jiaYe, num => sets.jiaYe.includes(getJiaYe(getZodiac(parseInt(num, 10), y))));
             add(sets.head, num => sets.head.includes(`${Math.floor(parseInt(num, 10) / 10)}头`));
             add(sets.tail, num => sets.tail.includes(`${parseInt(num, 10) % 10}尾`));
             add(sets.wuxing, num => sets.wuxing.includes(getSegmentKey(parseInt(num, 10))));
-            add(sets.wuxingCold, num => sets.wuxingCold.includes(getWuxingKey(num)));
+            add(sets.wuxingCold, num => sets.wuxingCold.includes(getWuxingKey(num, y)));
             add(sets.halfHead, num => sets.halfHead.includes(getHalfHeadKey(parseInt(num, 10))));
             add(sets.region, num => sets.region.includes(getRegionKey(parseInt(num, 10))));
             if (sets.selectedMorphs && sets.selectedMorphs.length) {
@@ -6044,11 +6175,11 @@
                 }
                 const mQianHou = sets.selectedMorphs.filter(m => m === 'qianXiao' || m === 'houXiao');
                 if (mQianHou.length) {
-                    out.push(allNumbers.filter(n => (mQianHou.includes('qianXiao') && isQianXiao(n)) || (mQianHou.includes('houXiao') && isHouXiao(n))));
+                    out.push(allNumbers.filter(n => (mQianHou.includes('qianXiao') && isQianXiao(n, y)) || (mQianHou.includes('houXiao') && isHouXiao(n, y))));
                 }
                 const mTianDi = sets.selectedMorphs.filter(m => m === 'tianXiao' || m === 'diXiao');
                 if (mTianDi.length) {
-                    out.push(allNumbers.filter(n => (mTianDi.includes('tianXiao') && isTianXiao(n)) || (mTianDi.includes('diXiao') && isDiXiao(n))));
+                    out.push(allNumbers.filter(n => (mTianDi.includes('tianXiao') && isTianXiao(n, y)) || (mTianDi.includes('diXiao') && isDiXiao(n, y))));
                 }
                 const mBianZhong = sets.selectedMorphs.filter(m => m === 'bianShu' || m === 'zhongShu');
                 if (mBianZhong.length) {
@@ -6083,21 +6214,21 @@
             if (sets.inputNumbers && sets.inputNumbers.length) out.push(sets.inputNumbers.slice());
             if (sets.inputOmissionRangeNumbers && sets.inputOmissionRangeNumbers.length) out.push(sets.inputOmissionRangeNumbers.slice());
             if (sets.inputPingOmissionRangeNumbers && sets.inputPingOmissionRangeNumbers.length) out.push(sets.inputPingOmissionRangeNumbers.slice());
-            if (sets.inputPingOmissionZodiacRangeZodiacs && sets.inputPingOmissionZodiacRangeZodiacs.length) out.push(allNumbers.filter(n => sets.inputPingOmissionZodiacRangeZodiacs.includes(getZodiac(parseInt(n, 10)))));
-            if (sets.inputOmissionZodiacRangeZodiacs && sets.inputOmissionZodiacRangeZodiacs.length) out.push(allNumbers.filter(n => sets.inputOmissionZodiacRangeZodiacs.includes(getZodiac(parseInt(n, 10)))));
+            if (sets.inputPingOmissionZodiacRangeZodiacs && sets.inputPingOmissionZodiacRangeZodiacs.length) out.push(allNumbers.filter(n => sets.inputPingOmissionZodiacRangeZodiacs.includes(getZodiac(parseInt(n, 10), y))));
+            if (sets.inputOmissionZodiacRangeZodiacs && sets.inputOmissionZodiacRangeZodiacs.length) out.push(allNumbers.filter(n => sets.inputOmissionZodiacRangeZodiacs.includes(getZodiac(parseInt(n, 10), y))));
             if (sets.inputHotNumberRangeNumbers && sets.inputHotNumberRangeNumbers.length) out.push(sets.inputHotNumberRangeNumbers.slice());
             if (sets.inputAllHotNumberRangeNumbers && sets.inputAllHotNumberRangeNumbers.length) out.push(sets.inputAllHotNumberRangeNumbers.slice());
-            if (sets.inputHotZodiacRangeZodiacs && sets.inputHotZodiacRangeZodiacs.length) out.push(allNumbers.filter(n => sets.inputHotZodiacRangeZodiacs.includes(getZodiac(parseInt(n, 10)))));
-            if (sets.inputAllHotZodiacRangeZodiacs && sets.inputAllHotZodiacRangeZodiacs.length) out.push(allNumbers.filter(n => sets.inputAllHotZodiacRangeZodiacs.includes(getZodiac(parseInt(n, 10)))));
+            if (sets.inputHotZodiacRangeZodiacs && sets.inputHotZodiacRangeZodiacs.length) out.push(allNumbers.filter(n => sets.inputHotZodiacRangeZodiacs.includes(getZodiac(parseInt(n, 10), y))));
+            if (sets.inputAllHotZodiacRangeZodiacs && sets.inputAllHotZodiacRangeZodiacs.length) out.push(allNumbers.filter(n => sets.inputAllHotZodiacRangeZodiacs.includes(getZodiac(parseInt(n, 10), y))));
             if (sets.inputTerms) {
                 const it = sets.inputTerms;
                 if (it.numbers && it.numbers.length) out.push(it.numbers.slice());
-                if (it.zodiacs && it.zodiacs.length) out.push(allNumbers.filter(n => it.zodiacs.includes(getZodiac(parseInt(n, 10)))));
+                if (it.zodiacs && it.zodiacs.length) out.push(allNumbers.filter(n => it.zodiacs.includes(getZodiac(parseInt(n, 10), y))));
                 if (it.tails && it.tails.length) out.push(allNumbers.filter(n => it.tails.includes(parseInt(n, 10) % 10)));
                 if (it.heads && it.heads.length) out.push(allNumbers.filter(n => it.heads.includes(Math.floor(parseInt(n, 10) / 10))));
                 if (it.waves && it.waves.length) out.push(allNumbers.filter(n => it.waves.includes(getColor(n))));
-                if (it.wuxings && it.wuxings.length) out.push(allNumbers.filter(n => it.wuxings.includes(getWuxingKey(n))));
-                if (it.wuxingDs && it.wuxingDs.length) out.push(allNumbers.filter(n => it.wuxingDs.includes(getWuxingDsKey(n))));
+                if (it.wuxings && it.wuxings.length) out.push(allNumbers.filter(n => it.wuxings.includes(getWuxingKey(n, y))));
+                if (it.wuxingDs && it.wuxingDs.length) out.push(allNumbers.filter(n => it.wuxingDs.includes(getWuxingDsKey(n, y))));
                 if (it.segments && it.segments.length) out.push(allNumbers.filter(n => it.segments.includes(Math.ceil(parseInt(n, 10) / 7))));
                 if (it.regions && it.regions.length) out.push(allNumbers.filter(n => it.regions.includes(getRegionShortKey(parseInt(n, 10)))));
                 if (it.morphs && it.morphs.length) {
@@ -6108,9 +6239,9 @@
                     const mWeiDaXiao = it.morphs.filter(m => m === 'weiDa' || m === 'weiXiao');
                     if (mWeiDaXiao.length) out.push(allNumbers.filter(n => (mWeiDaXiao.includes('weiDa') && isWeiDa(n)) || (mWeiDaXiao.includes('weiXiao') && isWeiXiao(n))));
                     const mQianHou = it.morphs.filter(m => m === 'qianXiao' || m === 'houXiao');
-                    if (mQianHou.length) out.push(allNumbers.filter(n => (mQianHou.includes('qianXiao') && isQianXiao(n)) || (mQianHou.includes('houXiao') && isHouXiao(n))));
+                    if (mQianHou.length) out.push(allNumbers.filter(n => (mQianHou.includes('qianXiao') && isQianXiao(n, y)) || (mQianHou.includes('houXiao') && isHouXiao(n, y))));
                     const mTianDi = it.morphs.filter(m => m === 'tianXiao' || m === 'diXiao');
-                    if (mTianDi.length) out.push(allNumbers.filter(n => (mTianDi.includes('tianXiao') && isTianXiao(n)) || (mTianDi.includes('diXiao') && isDiXiao(n))));
+                    if (mTianDi.length) out.push(allNumbers.filter(n => (mTianDi.includes('tianXiao') && isTianXiao(n, y)) || (mTianDi.includes('diXiao') && isDiXiao(n, y))));
                     const mBianZhong = it.morphs.filter(m => m === 'bianShu' || m === 'zhongShu');
                     if (mBianZhong.length) out.push(allNumbers.filter(n => (mBianZhong.includes('bianShu') && isBianShu(n)) || (mBianZhong.includes('zhongShu') && isZhongShu(n))));
                 }
@@ -6959,6 +7090,7 @@
                 waves: [],
                 inputNumbers: document.getElementById('coldOption_inputNumbers')?.value || '',
                 calcWindow: document.getElementById('coldCalcWindowSel')?.value || 'auto',
+                pageSize: document.getElementById('pageSizeSel')?.value || '100',
                 filterCalcMode: state.filterCalcMode || 'all',
                 excludeKills: JSON.parse(JSON.stringify(state.excludeKills || {}))
             };
@@ -7033,7 +7165,7 @@
             showNotification(`方案 "${trimmedName}" 保存成功！`);
         }
 
-        function loadSelectedUserStrategy(name) {
+        async function loadSelectedUserStrategy(name) {
             if (!name) return;
             const strategies = getUserStrategies();
             const config = strategies[name];
@@ -7149,10 +7281,21 @@
                 state.excludeKills = JSON.parse(JSON.stringify(config.excludeKills));
                 updateKillChipsUI();
             }
+            if (config.pageSize) {
+                const pageSizeSel = document.getElementById('pageSizeSel');
+                if (pageSizeSel && pageSizeSel.value !== config.pageSize) {
+                    pageSizeSel.value = config.pageSize;
+                    if (typeof changePageSize === 'function') {
+                        await changePageSize(config.pageSize);
+                    }
+                }
+            }
             if (config.calcWindow) {
                 const sel = document.getElementById('coldCalcWindowSel');
                 if (sel) sel.value = config.calcWindow;
                 state.coldCalcWindow = config.calcWindow;
+                updateColdCalcWindowUI();
+            } else {
                 updateColdCalcWindowUI();
             }
             updateAllDualSliders();
