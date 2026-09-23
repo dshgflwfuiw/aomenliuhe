@@ -2340,32 +2340,112 @@
             lines.push(`(注: 量化模型基于统计与走势规律，仅供分析参考)`);
 
             const textToCopy = lines.join('\n');
+            copyTextToClipboard(textToCopy, '📋 推荐方案已成功复制到剪贴板！', '请复制以下推荐方案：');
+        }
 
+        async function copyTextToClipboard(text, successToastMsg = '📋 已复制到剪贴板！', failToastMsg = '请复制以下文本：', triggerBtn = null) {
+            let copied = false;
             if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(textToCopy).then(() => {
-                    showToast('📋 推荐方案已成功复制到剪贴板！');
-                }).catch(() => {
-                    fallbackCopy(textToCopy);
-                });
+                try {
+                    await navigator.clipboard.writeText(text);
+                    copied = true;
+                } catch (e) {
+                    copied = false;
+                }
+            }
+            if (!copied) {
+                try {
+                    const ta = document.createElement('textarea');
+                    ta.value = text;
+                    ta.setAttribute('readonly', '');
+                    ta.style.position = 'fixed';
+                    ta.style.top = '0';
+                    ta.style.left = '0';
+                    ta.style.width = '2em';
+                    ta.style.height = '2em';
+                    ta.style.padding = '0';
+                    ta.style.border = 'none';
+                    ta.style.outline = 'none';
+                    ta.style.boxShadow = 'none';
+                    ta.style.background = 'transparent';
+                    ta.style.opacity = '0.01';
+                    ta.style.zIndex = '-9999';
+                    ta.style.pointerEvents = 'none';
+                    document.body.appendChild(ta);
+                    ta.focus();
+                    ta.select();
+                    ta.setSelectionRange(0, text.length);
+                    copied = document.execCommand('copy');
+                    document.body.removeChild(ta);
+                } catch (err) {
+                    copied = false;
+                }
+            }
+
+            if (copied) {
+                if (typeof showToast === 'function') {
+                    showToast(successToastMsg);
+                } else if (typeof showNotification === 'function') {
+                    showNotification(successToastMsg);
+                }
+                if (triggerBtn) {
+                    const originalText = triggerBtn.getAttribute('data-orig-text') || triggerBtn.innerHTML;
+                    if (!triggerBtn.getAttribute('data-orig-text')) {
+                        triggerBtn.setAttribute('data-orig-text', originalText);
+                    }
+                    triggerBtn.classList.add('copied');
+                    triggerBtn.innerHTML = '✓ 已复制!';
+                    setTimeout(() => {
+                        triggerBtn.innerHTML = triggerBtn.getAttribute('data-orig-text') || originalText;
+                        triggerBtn.classList.remove('copied');
+                    }, 2000);
+                }
+                return true;
             } else {
-                fallbackCopy(textToCopy);
+                showCopyFallbackModal(text, failToastMsg);
+                return false;
+            }
+        }
+
+        function closeCopyFallbackModal() {
+            const m = document.getElementById('appCopyModal');
+            if (m) m.style.display = 'none';
+        }
+
+        function doModalSelectAllAndCopy() {
+            const ta = document.getElementById('appCopyModalText');
+            if (ta) {
+                ta.focus();
+                ta.select();
+                ta.setSelectionRange(0, ta.value.length);
+                try {
+                    document.execCommand('copy');
+                    if (typeof showToast === 'function') showToast('📋 已复制到剪贴板！');
+                } catch (e) {
+                    if (typeof showToast === 'function') showToast('请直接长按或按 Ctrl+C 复制选中文本');
+                }
+            }
+            closeCopyFallbackModal();
+        }
+
+        function showCopyFallbackModal(text, hint) {
+            const modal = document.getElementById('appCopyModal');
+            const ta = document.getElementById('appCopyModalText');
+            const hintEl = document.getElementById('appCopyModalHint');
+            if (modal && ta) {
+                ta.value = text;
+                if (hintEl && hint) hintEl.textContent = hint;
+                modal.style.display = 'flex';
+                setTimeout(() => {
+                    ta.focus();
+                    ta.select();
+                    ta.setSelectionRange(0, text.length);
+                }, 50);
             }
         }
 
         function fallbackCopy(text) {
-            const ta = document.createElement('textarea');
-            ta.value = text;
-            ta.style.position = 'fixed';
-            ta.style.left = '-9999px';
-            document.body.appendChild(ta);
-            ta.select();
-            try {
-                document.execCommand('copy');
-                showToast('📋 推荐方案已成功复制到剪贴板！');
-            } catch (e) {
-                showToast('⚠️ 复制失败，请手动截屏保存');
-            }
-            document.body.removeChild(ta);
+            copyTextToClipboard(text, '📋 推荐方案已成功复制到剪贴板！', '请复制以下推荐方案：');
         }
 
         function switchRecTrack(track) {
@@ -4406,11 +4486,7 @@
 
             text += `\n生成时间: ${new Date().toLocaleString()}`;
 
-            navigator.clipboard.writeText(text).then(() => {
-                showNotification('推荐已复制到剪贴板');
-            }).catch(() => {
-                alert('复制失败，请手动复制');
-            });
+            copyTextToClipboard(text, '📋 推荐已复制到剪贴板！', '请长按或复制以下推荐内容：');
         }
 
         function showNotification(message) {
@@ -5985,22 +6061,25 @@
             if (state.currentMode === 'cold_custom') generateColdKline();
         }
 
-        function copySelectedNumbers() {
+        async function copySelectedNumbers(btn) {
             const detail = calculateColdSelectionDetail();
             const { finalNumbers } = detail;
             if (!finalNumbers || !finalNumbers.length) {
-                return alert('当前没有选中的精选号码');
+                if (typeof showToast === 'function') {
+                    showToast('⚠️ 当前无精选号码，请先勾选下方指标条件', 2500);
+                } else if (typeof showNotification === 'function') {
+                    showNotification('⚠️ 当前无精选号码，请先勾选下方指标条件');
+                }
+                return;
             }
             const text = finalNumbers.join(' ');
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(text).then(() => {
-                    alert(`✅ 已复制 ${finalNumbers.length} 个精选号码到剪贴板:\n${text}`);
-                }).catch(() => {
-                    prompt('请手动复制精选号码：', text);
-                });
-            } else {
-                prompt('请手动复制精选号码：', text);
-            }
+            const triggerBtn = btn || document.getElementById('copySelectedNumbersBtn') || document.querySelector('#liveSelectionBox button');
+            await copyTextToClipboard(
+                text,
+                `📋 已成功复制 ${finalNumbers.length} 个精选号码到剪贴板！`,
+                '请在下方文本框中长按或复制精选号码：',
+                triggerBtn
+            );
         }
 
         function updateKillChipsUI() {
@@ -8946,15 +9025,8 @@
             lines.push(`生成时间：${new Date().toLocaleString()}`);
 
             const text = lines.join('\n');
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(text).then(() => {
-                    showToast('📋 10期倍投累加计划已复制到剪贴板！');
-                }).catch(() => {
-                    prompt('请手动复制以下计划文本：', text);
-                });
-            } else {
-                prompt('请手动复制以下计划文本：', text);
-            }
+            const betCopyBtn = document.querySelector('#betCalcModal button[onclick*="copyBetPlanText"]');
+            copyTextToClipboard(text, '📋 10期倍投累加计划已复制到剪贴板！', '请长按或复制以下计划文本：', betCopyBtn);
         }
 
         function quickOpenBetCalc() {
