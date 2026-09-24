@@ -7384,14 +7384,25 @@
 
         function deleteSelectedUserStrategy() {
             const sel = document.getElementById('userStrategySel') || document.getElementById('userStrategySelect');
-            if (!sel || !sel.value) return alert('请先选择要删除的方案');
+            if (!sel || !sel.value) {
+                if (typeof showToast === 'function') {
+                    showToast('⚠️ 请先在下拉框中选择要删除的方案');
+                } else {
+                    alert('请先选择要删除的方案');
+                }
+                return;
+            }
             const name = sel.value;
-            if (!confirm(`确定要删除方案 "${name}" 吗？`)) return;
+            if (!confirm(`确定要删除当前选中的方案 "${name}" 吗？\n（注：仅删除当前这一套方案，不会删除其他方案）`)) return;
             const strategies = getUserStrategies();
             delete strategies[name];
             saveUserStrategies(strategies);
             initUserStrategies();
-            showNotification(`方案 "${name}" 已删除`);
+            if (typeof showToast === 'function') {
+                showToast(`🗑️ 方案 "${name}" 已删除`);
+            } else {
+                showNotification(`方案 "${name}" 已删除`);
+            }
         }
 
         // ==================== 自由K线量化指标回测计算 ====================
