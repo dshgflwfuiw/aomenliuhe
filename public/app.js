@@ -3410,7 +3410,7 @@
                 const winNum = parseInt(cur.special, 10).toString().padStart(2, '0');
                 const winZodiac = cur.win;
                 const winColor = cur.currentColor;
-                const normalBalls = (cur.numbers || []).filter(Boolean);
+                const normalBalls = (cur.numbers || []).filter(Boolean).map(b => parseInt(b, 10).toString().padStart(2, '0'));
 
                 let resultType = '未中';
                 let hitRole = '';
@@ -3420,24 +3420,28 @@
                 let goldNumbers = [];
                 let silverNumbers = [];
                 let killNumbers = [];
+                let recZodiacs = [];
+                let recTails = [];
                 let isKillSafe = true;
 
                 if (activeTrack === 'normal') {
                     const rec = getNormalTrackRecommendations(prevLast, prevSubset);
-                    const allBalls = [...normalBalls, cur.special].filter(Boolean);
+                    const allBalls = [...normalBalls, winNum].filter(Boolean);
                     const openZodiacs = allBalls.map(b => getZodiac(parseInt(b, 10)));
                     const openTails = allBalls.map(b => `${parseInt(b, 10) % 10}尾`);
 
-                    const flatNums = (rec.topFlatNums || []).map(n => n.number);
+                    const flatNums = (rec.topFlatNums || []).map(n => parseInt(n.number, 10).toString().padStart(2, '0'));
                     const flatZodiacs = (rec.topFlatZodiacs || []).map(z => z.zodiac);
                     const flatTails = (rec.topFlatTails || []).map(t => t.tail);
 
-                    topNumbers = flatNums;
+                    topNumbers = flatNums.slice(0, 10);
+                    recZodiacs = flatZodiacs.slice(0, 3);
+                    recTails = flatTails.slice(0, 2);
 
                     // 检查平特命中情况
-                    const hitNums = normalBalls.filter(b => flatNums.slice(0, 10).includes(b));
-                    const hitZ = flatZodiacs.slice(0, 3).filter(z => openZodiacs.includes(z));
-                    const hitT = flatTails.slice(0, 2).filter(t => openTails.includes(t));
+                    const hitNums = allBalls.filter(b => topNumbers.includes(b));
+                    const hitZ = recZodiacs.filter(z => openZodiacs.includes(z));
+                    const hitT = recTails.filter(t => openTails.includes(t));
 
                     if (hitNums.length > 0 || hitZ.length > 0) {
                         isHit = true;
@@ -3460,7 +3464,7 @@
                         resultType = '未中';
                     }
 
-                    top10Text = `肖:${flatZodiacs.slice(0, 3).join('')} 尾:${flatTails.slice(0, 2).join('')} 码:${flatNums.slice(0, 5).join(',')}`;
+                    top10Text = `肖:${recZodiacs.join('')} 尾:${recTails.join('')} 码:${topNumbers.slice(0, 5).join(',')}`;
                 } else if (activeStrat === 'sum_span') {
                     const rec = getSumSpanRecommendations(prevLast, prevSubset);
                     topNumbers = (rec.topNumbers || []).map(n => n.number);
@@ -3525,13 +3529,25 @@
                     const terms = parseInputTerms(best.text);
                     isHit = terms.numbers.includes(winNum) || terms.zodiacs.includes(winZodiac) || terms.waves.includes(winColor);
                     if (isHit) hitTotal++;
-                    topNumbers = rec.topNumbers ? rec.topNumbers.map(n => n.number) : terms.numbers;
+                    const expandedNums = new Set([
+                        ...(rec.topNumbers ? rec.topNumbers.map(n => n.number) : []),
+                        ...(terms.numbers || [])
+                    ]);
+                    for (let n = 1; n <= 49; n++) {
+                        const numStr = n.toString().padStart(2, '0');
+                        if ((terms.zodiacs && terms.zodiacs.includes(getZodiac(n))) || (terms.waves && terms.waves.includes(getColor(numStr)))) {
+                            expandedNums.add(numStr);
+                        }
+                    }
+                    topNumbers = Array.from(expandedNums);
+                    recZodiacs = terms.zodiacs || [];
                     hitRole = isHit ? 'gold' : '';
                     resultType = isHit ? `🎯 命中(${best.name.slice(0, 5)})` : '未中';
                     top10Text = `${best.name}: ${best.text}`;
                 } else if (activeStrat === 'omission') {
                     const rec = getOmissionBasedRecommendations(prevLast.snapshot || {}, prevLast.colorMaxOmissions || {}, state.globalMaxOm || {}, prevLast.currentColor);
                     const topZ = rec.map(x => x.zodiac);
+                    recZodiacs = topZ;
                     const hitIdx = topZ.indexOf(winZodiac);
                     isHit = hitIdx >= 0;
                     if (isHit) hitTotal++;
@@ -3547,7 +3563,7 @@
                     } else {
                         resultType = '未中';
                     }
-                    topZ.slice(0, 4).forEach(z => {
+                    topZ.forEach(z => {
                         for (let n = 1; n <= 49; n++) {
                             if (getZodiac(n) === z) topNumbers.push(n.toString().padStart(2, '0'));
                         }
@@ -3556,6 +3572,7 @@
                 } else if (activeStrat === 'balance') {
                     const rec = getBalanceRecommendations(prevLast.snapshot || {}, prevLast.colorOmissions || {}, prevLast.sizeOmissions || {}, prevLast.counts || {}, prevSubset.length);
                     const topZ = rec.map(x => x.zodiac);
+                    recZodiacs = topZ;
                     const hitIdx = topZ.indexOf(winZodiac);
                     isHit = hitIdx >= 0;
                     if (isHit) hitTotal++;
@@ -3571,7 +3588,7 @@
                     } else {
                         resultType = '未中';
                     }
-                    topZ.slice(0, 4).forEach(z => {
+                    topZ.forEach(z => {
                         for (let n = 1; n <= 49; n++) {
                             if (getZodiac(n) === z) topNumbers.push(n.toString().padStart(2, '0'));
                         }
@@ -3580,6 +3597,7 @@
                 } else if (activeStrat === 'hot') {
                     const rec = getHotRecommendations(prevLast.snapshot || {}, prevLast.counts || {}, prevSubset.length);
                     const topZ = rec.map(x => x.zodiac);
+                    recZodiacs = topZ;
                     const hitIdx = topZ.indexOf(winZodiac);
                     isHit = hitIdx >= 0;
                     if (isHit) hitTotal++;
@@ -3595,7 +3613,7 @@
                     } else {
                         resultType = '未中';
                     }
-                    topZ.slice(0, 4).forEach(z => {
+                    topZ.forEach(z => {
                         for (let n = 1; n <= 49; n++) {
                             if (getZodiac(n) === z) topNumbers.push(n.toString().padStart(2, '0'));
                         }
@@ -3608,7 +3626,7 @@
                     if (isHit) hitTotal++;
                     hitRole = isHit ? 'gold' : '';
                     resultType = isHit ? `🎯 命中${topColor.name}` : `未中 (首推${topColor ? topColor.name : ''})`;
-                    topNumbers = (CONFIG.colors[topColor ? topColor.color : 'red'] || []).slice(0, 10);
+                    topNumbers = (CONFIG.colors[topColor ? topColor.color : 'red'] || []).slice();
                     top10Text = `首推波色: ${topColor ? topColor.name : ''}`;
                 } else if (activeStrat === 'size') {
                     const rec = getSizeRecommendations(prevLast.sizeOmissions || {});
@@ -3618,7 +3636,12 @@
                     if (isHit) hitTotal++;
                     hitRole = isHit ? 'gold' : '';
                     resultType = isHit ? `🎯 命中${topSize.name.slice(0, 2)}` : `未中 (推${topSize ? topSize.name.slice(0, 2) : ''})`;
-                    topNumbers = topSize && topSize.type === 'big' ? ['25','26','27','28','29','30'] : ['01','02','03','04','05','06'];
+                    const targetType = topSize ? topSize.type : 'big';
+                    for (let n = 1; n <= 49; n++) {
+                        if ((n >= 25 ? 'big' : 'small') === targetType) {
+                            topNumbers.push(n.toString().padStart(2, '0'));
+                        }
+                    }
                     top10Text = `推荐分界: ${topSize ? topSize.name : ''}`;
                 } else {
                     // multifactor
@@ -3647,6 +3670,8 @@
                     top10Text = topNumbers.slice(0, 6).join(' ');
                 }
 
+                const allRecNumbers = Array.from(new Set([...goldNumbers, ...silverNumbers, ...topNumbers]));
+
                 records.unshift({
                     issue: cur.period || cur.expect || cur.id,
                     special: winNum,
@@ -3654,10 +3679,13 @@
                     color: winColor,
                     normalBalls,
                     topNumbers,
+                    allRecNumbers,
                     top6: topNumbers.slice(0, 6),
                     goldNumbers,
                     silverNumbers,
                     killNumbers,
+                    recZodiacs,
+                    recTails,
                     isKillSafe,
                     top10Text,
                     hitRole,
@@ -3953,42 +3981,67 @@
                 }
             }
 
-            tbodyEl.innerHTML = records.map(r => {
+            tbodyEl.innerHTML = records.map((r, rowIdx) => {
+                const rowZebraClass = rowIdx % 2 === 1 ? 'zebra-even' : 'zebra-odd';
+                const recNumSet = new Set(r.allRecNumbers || r.topNumbers || []);
+                const recZSet = new Set(r.recZodiacs || []);
+                const recTSet = new Set(r.recTails || []);
+                const isSpecialInRec = r.isHit || recNumSet.has(r.special);
+
                 let ballDisplay = '';
                 if (activeStrat === 'normal_track') {
                     const normalBadges = (r.normalBalls || []).map(b => {
-                        const c = getColor(b);
+                        const bStr = parseInt(b, 10).toString().padStart(2, '0');
+                        const c = getColor(bStr);
                         const bg = c === 'red' ? '#ff1744' : c === 'blue' ? '#448aff' : '#00e676';
-                        return `<span style="display:inline-block;padding:0 3px;border-radius:3px;background:${bg};color:#fff;font-size:9.5px;margin-right:2px;">${b}</span>`;
+                        const isBallHit = recNumSet.has(bStr) || recZSet.has(getZodiac(parseInt(bStr, 10))) || recTSet.has(`${parseInt(bStr, 10) % 10}尾`);
+                        return `<span class="${isBallHit ? 'rec-drawn-hit-ball' : ''}" title="${isBallHit ? '包含在推荐列表中' : ''}" style="display:inline-block;padding:0 3px;border-radius:3px;background:${bg};color:#fff;font-size:9.5px;font-weight:${isBallHit ? '800' : 'normal'};margin-right:2px;">${bStr}</span>`;
                     }).join('');
                     const spColor = r.color === 'red' ? '#ff1744' : r.color === 'blue' ? '#448aff' : '#00e676';
+                    const isSpHit = recNumSet.has(r.special) || recZSet.has(r.zodiac) || recTSet.has(`${parseInt(r.special, 10) % 10}尾`);
                     ballDisplay = `
                         <div style="font-size:9.5px;display:flex;align-items:center;flex-wrap:wrap;gap:2px;">
                             ${normalBadges}
-                            <span style="display:inline-block;padding:0 4px;border-radius:3px;background:${spColor};color:#fff;font-weight:700;font-size:9.5px;">+${r.special}</span>
+                            <span class="${isSpHit ? 'rec-drawn-hit-ball' : ''}" title="${isSpHit ? '包含在推荐列表中' : ''}" style="display:inline-block;padding:0 4px;border-radius:3px;background:${spColor};color:#fff;font-weight:700;font-size:9.5px;">+${r.special}</span>
                         </div>
                     `;
                 } else {
                     ballDisplay = `
-                        <span style="display:inline-block;padding:1px 5px;border-radius:4px;background:${r.color === 'red' ? '#ff1744' : r.color === 'blue' ? '#448aff' : '#00e676'};color:#fff;font-weight:700;">${r.special}</span>
-                        <span style="font-size:10px;margin-left:3px;color:var(--text-secondary);">${r.zodiac}</span>
+                        <span class="${isSpecialInRec ? 'rec-drawn-hit-ball' : ''}" title="${isSpecialInRec ? '该期开出号码包含在推荐列表中' : ''}" style="display:inline-block;padding:1px 5px;border-radius:4px;background:${r.color === 'red' ? '#ff1744' : r.color === 'blue' ? '#448aff' : '#00e676'};color:#fff;font-weight:700;">${r.special}</span>
+                        <span style="font-size:10px;margin-left:3px;color:${isSpecialInRec ? '#ffd700' : 'var(--text-secondary)'};font-weight:${isSpecialInRec ? '700' : 'normal'};">${r.zodiac}</span>
+                        ${isSpecialInRec ? '<span class="rec-drawn-hit-tag">★命中</span>' : ''}
                     `;
                 }
 
+                const buildHighlightedNums = (numArray, maxPreview = 10, drawnSet = new Set([r.special])) => {
+                    if (!numArray || !numArray.length) return '';
+                    let displayList = numArray.slice(0, maxPreview);
+                    numArray.slice(maxPreview).forEach(num => {
+                        if (drawnSet.has(num) && !displayList.includes(num)) {
+                            displayList.push(num);
+                        }
+                    });
+                    const rendered = displayList.map(num =>
+                        drawnSet.has(num)
+                            ? `<b class="rec-hit-num-highlight">${num}</b>`
+                            : num
+                    ).join(' ');
+                    return numArray.length > displayList.length ? `${rendered}...` : rendered;
+                };
+
                 if (activeStrat === 'dan_base_kill') {
                     const goldHtml = (r.goldNumbers || []).map(num => num === r.special
-                        ? `<b style="color:#ffd700;background:rgba(255,215,0,0.18);padding:1px 3px;border-radius:2px;border:1px solid #ffd700;">${num}</b>`
+                        ? `<b class="rec-hit-num-highlight">${num}</b>`
                         : `<span style="color:#ffd700;">${num}</span>`).join(' ');
                     const silverHtml = (r.silverNumbers || []).map(num => num === r.special
-                        ? `<b style="color:#c0c0c0;background:rgba(192,192,192,0.2);padding:1px 3px;border-radius:2px;border:1px solid #c0c0c0;">${num}</b>`
+                        ? `<b class="rec-hit-num-highlight">${num}</b>`
                         : `<span style="color:#c0c0c0;">${num}</span>`).join(' ');
-                    const baseRest = (r.topNumbers || []).slice(5, 12).map(num => num === r.special
-                        ? `<b style="color:var(--up);background:rgba(0,230,118,0.15);padding:1px 3px;border-radius:2px;border:1px solid var(--up);">${num}</b>`
-                        : num).join(' ');
+                    const baseOnly = (r.topNumbers || []).slice(5);
+                    const baseRest = buildHighlightedNums(baseOnly.length ? baseOnly : (r.topNumbers || []), 10, new Set([r.special]));
                     const recDetail = `
                         <div style="line-height:1.4;">
                             <div><span style="color:#ffd700;font-weight:700;">🥇金:</span> ${goldHtml} <span style="color:#c0c0c0;font-weight:700;margin-left:4px;">🥈银:</span> ${silverHtml}</div>
-                            <div style="font-size:9.5px;color:var(--text-secondary);" title="完整大底(${(r.topNumbers || []).length}码): ${(r.topNumbers || []).join(' ')}">🎯大底: ${baseRest}...</div>
+                            <div style="font-size:9.5px;color:var(--text-secondary);" title="完整大底(${(r.topNumbers || []).length}码): ${(r.topNumbers || []).join(' ')}">🎯大底: ${baseRest}</div>
                         </div>
                     `;
                     const killDetail = (r.killNumbers || []).map(num => {
@@ -3997,7 +4050,7 @@
                     }).join('');
 
                     return `
-                        <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <tr class="rec-modal-row ${rowZebraClass}">
                             <td style="padding:6px 4px;color:var(--text-secondary);white-space:nowrap;">${String(r.issue).slice(-3)}期</td>
                             <td style="padding:6px 4px;white-space:nowrap;">${ballDisplay}</td>
                             <td style="padding:6px 4px;font-size:10px;color:var(--text-secondary);">${recDetail}</td>
@@ -4018,15 +4071,28 @@
 
                 let recDetail = '';
                 if (activeStrat === 'normal_track') {
-                    recDetail = `<span style="color:var(--text-secondary);">${r.top10Text}</span>`;
+                    const allDrawnSet = new Set([...(r.normalBalls || []).map(b => parseInt(b, 10).toString().padStart(2, '0')), r.special]);
+                    const openZodiacSet = new Set(Array.from(allDrawnSet).map(b => getZodiac(parseInt(b, 10))));
+                    const openTailSet = new Set(Array.from(allDrawnSet).map(b => `${parseInt(b, 10) % 10}尾`));
+                    const zHtml = (r.recZodiacs || []).map(z => openZodiacSet.has(z) ? `<b class="rec-hit-num-highlight">${z}</b>` : z).join(' ');
+                    const tHtml = (r.recTails || []).map(t => openTailSet.has(t) ? `<b class="rec-hit-num-highlight">${t}</b>` : t).join(' ');
+                    const nHtml = buildHighlightedNums(r.topNumbers || [], 10, allDrawnSet);
+                    recDetail = `<span style="color:var(--text-secondary);">肖:${zHtml} 尾:${tHtml} 码:${nHtml}</span>`;
+                } else if (activeStrat === 'omission' || activeStrat === 'balance' || activeStrat === 'hot') {
+                    const zHtml = (r.recZodiacs || []).map(z => z === r.zodiac ? `<b class="rec-hit-num-highlight">${z}</b>` : z).join(' ');
+                    const nHtml = buildHighlightedNums(r.topNumbers || [], 8, new Set([r.special]));
+                    recDetail = `<div><span style="color:var(--accent);">肖:</span> ${zHtml} <span style="margin-left:4px;opacity:0.85;">(${nHtml})</span></div>`;
+                } else if (activeStrat === 'color' || activeStrat === 'size' || activeStrat === 'auto_opt') {
+                    const nHtml = buildHighlightedNums(r.topNumbers || [], 8, new Set([r.special]));
+                    recDetail = `<span style="color:var(--text-secondary);">${r.top10Text}</span> <span style="margin-left:4px;">[${nHtml}]</span>`;
                 } else if (r.topNumbers && r.topNumbers.length > 0) {
-                    recDetail = r.topNumbers.slice(0, 8).map(num => num === r.special ? `<b style="color:${r.hitRole === 'gold' ? '#ffd700' : 'var(--up)'};background:rgba(255,255,255,0.08);padding:1px 3px;border-radius:2px;border:1px solid currentColor;">${num}</b>` : num).join(' ') + '...';
+                    recDetail = buildHighlightedNums(r.topNumbers, 12, new Set([r.special]));
                 } else {
                     recDetail = `<span style="color:var(--text-secondary);">${r.top10Text}</span>`;
                 }
 
                 return `
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                    <tr class="rec-modal-row ${rowZebraClass}">
                         <td style="padding:6px 4px;color:var(--text-secondary);white-space:nowrap;">${String(r.issue).slice(-3)}期</td>
                         <td style="padding:6px 4px;white-space:nowrap;">${ballDisplay}</td>
                         <td style="padding:6px 4px;font-size:10px;color:var(--text-secondary);">${recDetail}</td>
