@@ -1110,11 +1110,11 @@
 
         <div class="sidebar-card collapsed" id="recommendCard" data-category="recommend" style="border-color: var(--accent);">
             <h3 style="color: var(--warn);margin-bottom:8px;">
-                <span style="display:flex;align-items:center;gap:6px;" title="智能量化推荐：支持最多可看100期历史逐期复盘验证">🎯 智能量化推荐</span>
+                <span style="display:flex;align-items:center;gap:6px;" title="智能量化推荐：支持5期至一年(365期)历史逐期复盘验证">🎯 智能量化推荐</span>
                 <span class="rec-header-actions" style="display:inline-flex;gap:4px;align-items:center;">
                     <button type="button" class="rec-apply-btn" style="padding:2px 5px;font-weight:normal;" onclick="exportRecommendationPlan()">📋 导出单</button>
                     <button type="button" class="rec-apply-btn" style="padding:2px 5px;font-weight:normal;" onclick="toggleRecDrawer()">⚙️ 微调</button>
-                    <button type="button" class="rec-apply-btn" style="padding:2px 5px;font-weight:normal;" onclick="openRecHistoryModal(100)" title="支持查看最近5期至100期逐期复盘验证">📜 100期回看</button>
+                    <button type="button" class="rec-apply-btn" style="padding:2px 5px;font-weight:normal;" onclick="openRecHistoryModal()" title="支持查看最近5期至一年(365期)逐期复盘验证">📜 历史回看</button>
                 </span>
             </h3>
 
@@ -1218,11 +1218,17 @@
                             <option value="normal_track">🎰 平特肖尾双轨</option>
                         </select>
                         <div style="display:inline-flex;gap:3px;align-items:center;flex-wrap:wrap;">
-                            <button type="button" class="rec-track-btn" id="recModalTab5" onclick="setRecModalCount(5)" style="padding:2px 7px;font-size:10px;">5期</button>
-                            <button type="button" class="rec-track-btn" id="recModalTab10" onclick="setRecModalCount(10)" style="padding:2px 7px;font-size:10px;">10期</button>
-                            <button type="button" class="rec-track-btn" id="recModalTab20" onclick="setRecModalCount(20)" style="padding:2px 7px;font-size:10px;">20期</button>
-                            <button type="button" class="rec-track-btn" id="recModalTab50" onclick="setRecModalCount(50)" style="padding:2px 7px;font-size:10px;">50期</button>
-                            <button type="button" class="rec-track-btn active" id="recModalTab100" onclick="setRecModalCount(100)" style="padding:2px 7px;font-size:10px;">100期全景</button>
+                            <button type="button" class="rec-track-btn" id="recModalTab5" onclick="setRecModalCount(5)" style="padding:2px 6px;font-size:10px;">5期</button>
+                            <button type="button" class="rec-track-btn" id="recModalTab10" onclick="setRecModalCount(10)" style="padding:2px 6px;font-size:10px;">10期</button>
+                            <button type="button" class="rec-track-btn" id="recModalTab20" onclick="setRecModalCount(20)" style="padding:2px 6px;font-size:10px;">20期</button>
+                            <button type="button" class="rec-track-btn" id="recModalTab30" onclick="setRecModalCount(30)" style="padding:2px 6px;font-size:10px;">30期</button>
+                            <button type="button" class="rec-track-btn" id="recModalTab50" onclick="setRecModalCount(50)" style="padding:2px 6px;font-size:10px;">50期</button>
+                            <button type="button" class="rec-track-btn active" id="recModalTab100" onclick="setRecModalCount(100)" style="padding:2px 6px;font-size:10px;">100期</button>
+                            <button type="button" class="rec-track-btn" id="recModalTab180" onclick="setRecModalCount(180)" style="padding:2px 6px;font-size:10px;">半年(180期)</button>
+                            <button type="button" class="rec-track-btn" id="recModalTab365" onclick="setRecModalCount(365)" style="padding:2px 6px;font-size:10px;">一年(365期)</button>
+                            <span style="display:inline-flex;align-items:center;gap:2px;margin-left:2px;font-size:10px;color:var(--text-secondary);" title="输入5~365任意期数回看">
+                                <input type="number" id="recModalCustomCount" min="5" max="365" value="100" onchange="setRecModalCount(this.value)" style="width:46px;padding:2px 4px;font-size:10px;background:rgba(0,0,0,0.4);border:1px solid var(--border);border-radius:4px;color:var(--accent);text-align:center;">期
+                            </span>
                             <button type="button" onclick="closeRecHistoryModal()" style="background:transparent;border:none;color:var(--text-secondary);font-size:16px;cursor:pointer;padding:0 4px;margin-left:4px;">✕</button>
                         </div>
                     </div>
