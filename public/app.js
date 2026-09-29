@@ -5510,19 +5510,19 @@
             if (types.includes('region')) sets.region = getColdRegion(omissionSourceData, counts.region || 1);
             const resolveRangeItems = (rangeKey, getter, source) => {
                 const segs = counts[`${rangeKey}Segments`];
+                const s = counts[`${rangeKey}Start`] !== undefined ? counts[`${rangeKey}Start`] : 1;
+                const defaultEnd = (DUAL_RANGE_CONFIGS[rangeKey]?.max) || (rangeKey.includes('Zodiac') ? 3 : 10);
+                const e = counts[`${rangeKey}End`] !== undefined ? counts[`${rangeKey}End`] : defaultEnd;
                 if (segs && segs.length > 0) {
                     const itemSet = new Set();
                     segs.forEach(seg => {
-                        const s = seg.start !== undefined ? seg.start : 1;
-                        const defaultEnd = (DUAL_RANGE_CONFIGS[rangeKey]?.max) || (rangeKey.includes('Zodiac') ? 3 : 10);
-                        const e = seg.end !== undefined ? seg.end : defaultEnd;
-                        getter(source, s, e).forEach(item => itemSet.add(item));
+                        const segS = seg.start !== undefined ? seg.start : 1;
+                        const segE = seg.end !== undefined ? seg.end : defaultEnd;
+                        getter(source, segS, segE).forEach(item => itemSet.add(item));
                     });
+                    getter(source, s, e).forEach(item => itemSet.add(item));
                     return Array.from(itemSet);
                 } else {
-                    const s = counts[`${rangeKey}Start`] !== undefined ? counts[`${rangeKey}Start`] : 1;
-                    const defaultEnd = (DUAL_RANGE_CONFIGS[rangeKey]?.max) || (rangeKey.includes('Zodiac') ? 3 : 10);
-                    const e = counts[`${rangeKey}End`] !== undefined ? counts[`${rangeKey}End`] : defaultEnd;
                     return getter(source, s, e);
                 }
             };
@@ -7027,7 +7027,10 @@
                     segs.forEach(seg => {
                         getItemsForRangeType(rangeType, seg.start, seg.end, omissionSourceData, hotColdSourceData).forEach(it => itemSet.add(it));
                     });
-                    badge.textContent = `滑块:${orient}第${sVal}~${eVal}位 | 多段(${segs.length}段)共${itemSet.size}${u}`;
+                    getItemsForRangeType(rangeType, sVal, eVal, omissionSourceData, hotColdSourceData).forEach(it => itemSet.add(it));
+                    const isSliderInSegs = segs.some(seg => seg.start === sVal && seg.end === eVal);
+                    const segLabel = isSliderInSegs ? `多段(${segs.length}段)` : `多段(${segs.length}段+滑块)`;
+                    badge.textContent = `滑块:${orient}第${sVal}~${eVal}位 | ${segLabel}共${itemSet.size}${u}`;
                 } else {
                     badge.textContent = `${orient}第 ${sVal} ~ ${eVal} 位 (共${count}${u})`;
                 }
@@ -7293,11 +7296,23 @@
         function removeRangeSegment(rangeType, index) {
             const segments = getRangeSegments(rangeType);
             if (!segments) return;
+            const removed = segments[index];
             segments.splice(index, 1);
             if (rangeType === 'omissionRange') {
                 state.omissionRangeSegments = segments;
             }
             const cfg = DUAL_RANGE_CONFIGS[rangeType] || { max: 49, unit: '码' };
+            if (segments.length > 0 && removed) {
+                const sEl = document.getElementById(`coldOption_${rangeType}_start`);
+                const eEl = document.getElementById(`coldOption_${rangeType}_end`);
+                const curS = sEl ? parseInt(sEl.value, 10) : null;
+                const curE = eEl ? parseInt(eEl.value, 10) : null;
+                if (curS === removed.start && curE === removed.end) {
+                    const lastSeg = segments[segments.length - 1];
+                    if (sEl) sEl.value = String(lastSeg.start);
+                    if (eEl) eEl.value = String(lastSeg.end);
+                }
+            }
             renderRangeSegments(rangeType);
             updateDualSliderUI(rangeType, cfg.max, cfg.unit);
             updateLiveSelectionPreview();
@@ -7326,6 +7341,8 @@
             if (eEl) eEl.value = String(end);
             const cfg = DUAL_RANGE_CONFIGS[rangeType] || { max: 49, unit: '码' };
             updateDualSliderUI(rangeType, cfg.max, cfg.unit);
+            updateLiveSelectionPreview();
+            requestColdKlineUpdate(true);
             const rName = RANGE_TYPE_NAMES[rangeType] || '区间';
             showNotification(`已载入[${rName}]分段: 第${start}至第${end}位`);
         }
