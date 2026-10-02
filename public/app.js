@@ -3734,14 +3734,14 @@
                 return state.coldSelection;
             }
             return {
-                types: ['setKline'],
+                types: [],
                 setKline: true,
                 setMode: 'all',
                 filterCalcMode: 'all',
                 excludeKills: state.excludeKills || {},
-                setTypes: ['omissionRange'],
-                setCounts: { omissionRangeStart: 1, omissionRangeEnd: 15 },
-                counts: { omissionRangeStart: 1, omissionRangeEnd: 15 },
+                setTypes: [],
+                setCounts: {},
+                counts: {},
                 selectedZodiacs: [],
                 selectedWaves: [],
                 selectedWuxings: [],
@@ -4976,21 +4976,6 @@
 
         // ==================== 全分析模式·历史回看引擎 (保留K线 + 下方/内嵌逐期复盘表) ====================
         function ensureColdSelectionForLookback() {
-            const detail = typeof calculateColdSelectionDetail === 'function' ? calculateColdSelectionDetail() : { types: [] };
-            if (!detail.types || detail.types.length === 0) {
-                if (!state.coldSelection || !state.coldSelection.types || !state.coldSelection.types.length) {
-                    const omRangeCb = document.getElementById('coldOption_omissionRange');
-                    if (omRangeCb && !omRangeCb.checked) {
-                        omRangeCb.checked = true;
-                        const sEl = document.getElementById('coldOption_omissionRange_start');
-                        const eEl = document.getElementById('coldOption_omissionRange_end');
-                        if (sEl && !sEl.value) sEl.value = '1';
-                        if (eEl && (!eEl.value || eEl.value === '10')) eEl.value = '15';
-                        if (typeof updateDualSliderUI === 'function') updateDualSliderUI('omissionRange', 49, '码');
-                        if (typeof updateLiveSelectionPreview === 'function') updateLiveSelectionPreview();
-                    }
-                }
-            }
             const refreshed = typeof calculateColdSelectionDetail === 'function' ? calculateColdSelectionDetail() : null;
             if (refreshed && refreshed.types && refreshed.types.length > 0 && refreshed.finalNumbers && refreshed.finalNumbers.length > 0) {
                 const mode = state.filterCalcMode || state.setMode || 'all';
@@ -9263,8 +9248,8 @@
                 coldCard.style.display = (isColdKlineMode(mode) && showInCat) ? 'block' : 'none';
             }
             if (mode === 'cold_custom') {
-                if (typeof ensureColdSelectionForLookback === 'function') {
-                    ensureColdSelectionForLookback();
+                if (typeof updateLiveSelectionPreview === 'function') {
+                    updateLiveSelectionPreview();
                 }
             }
             if (typeof updateTableSectionModeBar === 'function') {
