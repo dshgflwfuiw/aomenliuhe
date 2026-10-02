@@ -3717,12 +3717,14 @@
         }
 
         /* 历史回看模态窗表格斑马纹与命中高亮样式 */
-        #recModalTable {
+        #recModalTable,
+        #klineLookbackTable {
             width: 100%;
             font-size: 11px;
             border-collapse: collapse;
         }
-        #recModalTable thead th {
+        #recModalTable thead th,
+        #klineLookbackTable thead th {
             background: rgba(18, 24, 38, 0.95);
             position: sticky;
             top: 0;
@@ -3731,46 +3733,62 @@
             font-size: 10.5px;
             border-bottom: 1px solid var(--border);
         }
-        #recModalTable tbody tr {
+        #recModalTable tbody tr,
+        #klineLookbackTable tbody tr {
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
             transition: background 0.15s ease;
         }
         #recModalTable tbody tr:nth-child(odd),
-        #recModalTable tbody tr.zebra-odd {
+        #recModalTable tbody tr.zebra-odd,
+        #klineLookbackTable tbody tr:nth-child(odd),
+        #klineLookbackTable tbody tr.zebra-odd {
             background: rgba(255, 255, 255, 0.015);
         }
         #recModalTable tbody tr:nth-child(even),
-        #recModalTable tbody tr.zebra-even {
+        #recModalTable tbody tr.zebra-even,
+        #klineLookbackTable tbody tr:nth-child(even),
+        #klineLookbackTable tbody tr.zebra-even {
             background: rgba(255, 255, 255, 0.06);
         }
         #recModalTable tbody tr:hover,
-        #recModalTable tbody tr:hover td {
+        #recModalTable tbody tr:hover td,
+        #klineLookbackTable tbody tr:hover,
+        #klineLookbackTable tbody tr:hover td {
             background: rgba(0, 212, 255, 0.1) !important;
         }
-        #recModalTable tbody td {
+        #recModalTable tbody td,
+        #klineLookbackTable tbody td {
             background: transparent;
             padding: 6px 5px;
             text-align: left;
             border-bottom: 1px solid rgba(255, 255, 255, 0.04);
         }
-        body.light-theme #recModalTable thead th {
+        body.light-theme #recModalTable thead th,
+        body.light-theme #klineLookbackTable thead th {
             background: #eef2f6;
             color: #1e293b;
             border-bottom-color: #cbd5e1;
         }
         body.light-theme #recModalTable tbody tr:nth-child(odd),
-        body.light-theme #recModalTable tbody tr.zebra-odd {
+        body.light-theme #recModalTable tbody tr.zebra-odd,
+        body.light-theme #klineLookbackTable tbody tr:nth-child(odd),
+        body.light-theme #klineLookbackTable tbody tr.zebra-odd {
             background: #ffffff;
         }
         body.light-theme #recModalTable tbody tr:nth-child(even),
-        body.light-theme #recModalTable tbody tr.zebra-even {
+        body.light-theme #recModalTable tbody tr.zebra-even,
+        body.light-theme #klineLookbackTable tbody tr:nth-child(even),
+        body.light-theme #klineLookbackTable tbody tr.zebra-even {
             background: #f1f5f9;
         }
         body.light-theme #recModalTable tbody tr:hover,
-        body.light-theme #recModalTable tbody tr:hover td {
+        body.light-theme #recModalTable tbody tr:hover td,
+        body.light-theme #klineLookbackTable tbody tr:hover,
+        body.light-theme #klineLookbackTable tbody tr:hover td {
             background: rgba(0, 150, 214, 0.1) !important;
         }
-        body.light-theme #recModalTable tbody td {
+        body.light-theme #recModalTable tbody td,
+        body.light-theme #klineLookbackTable tbody td {
             color: #334155;
             border-bottom-color: #e2e8f0;
         }

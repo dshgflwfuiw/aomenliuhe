@@ -91,7 +91,10 @@
         </div>
 
         <div class="sidebar-card mode-card" id="modeCard" data-category="trend">
-            <h3>📈 分析模式</h3>
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; margin-bottom:8px;">
+                <h3 style="margin:0;">📈 分析模式</h3>
+                <button type="button" class="rec-apply-btn" onclick="openKlineHistoryModal()" style="padding:2px 7px; font-size:10px; font-weight:normal; flex-shrink:0;" title="查看当前分析模式的逐期历史回看 (支持5期~一年365期)">📜 历史回看</button>
+            </div>
             <select id="trendModeSel" onchange="switchTrendMode(this.value)">
                 <option value="zodiac" selected>特肖遗漏分析</option>
                 <option value="oddeven">单双走势</option>
@@ -105,6 +108,10 @@
                 <option value="pingtail_follow">平特尾K线</option>
                 <option value="pingnum_absent">平特断号K线</option>
             </select>
+            <div style="display:flex; gap:6px; margin-top:8px;">
+                <button type="button" onclick="switchToKlineLookbackMode()" style="flex:1; padding:5px 6px; font-size:11px; font-weight:700; background:rgba(0,212,255,0.14); border:1px solid var(--accent); color:var(--accent); border-radius:6px; cursor:pointer;" title="保留上方K线走势图，在下方展开当前分析模式的逐期历史回看表">📜 下方展开回看表</button>
+                <button type="button" onclick="openKlineHistoryModal()" style="flex:1; padding:5px 6px; font-size:11px; font-weight:600; border-radius:6px; cursor:pointer;" title="弹窗查看当前分析模式5期~一年365期逐期复盘">🔍 弹窗全景复盘</button>
+            </div>
             <div id="followWrap" class="follow-panel collapsed" style="display: none; margin-top: 10px;">
                 <div class="follow-panel-header" onclick="toggleFollowPanel('followWrap')">
                     <span class="follow-panel-title">平特肖K线</span>
@@ -201,17 +208,23 @@
                     <div id="followNumAbsentHint" style="font-size: 11px; color: var(--accent);"></div>
                 </div>
                 </div>
+            <div id="modeHistory5Wrap" style="margin-top: 10px;"></div>
         </div>
 
-        <div class="sidebar-card" id="coldCard" data-category="trend" style="display: none;">
+        <div class="sidebar-card" id="coldCard" data-category="trend,stats,recommend" style="display: none;">
             <div class="cold-sticky-header">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
                     <h3 style="margin: 0; font-size: 13px;">❄️ 特码综合K线与智能多维选号</h3>
+                    <button type="button" class="rec-apply-btn" onclick="openKlineHistoryModal()" style="padding:2px 6px; font-size:10px; font-weight:normal; flex-shrink:0;" title="打开特码综合K线逐期历史回看表 (支持5期~一年365期)">📜 历史回看</button>
                 </div>
-                <button class="primary" style="width: 100%; margin-top: 8px; font-weight: 700; height: 36px;" onclick="generateColdKline()">🚀 生成特码综合K线</button>
+                <div style="display: flex; gap: 6px; margin-top: 8px;">
+                    <button class="primary" style="flex: 1.35; font-weight: 700; height: 36px; font-size: 12px;" onclick="generateColdKline()">🚀 生成特码综合K线</button>
+                    <button type="button" onclick="switchToKlineLookbackMode('cold_custom')" style="flex: 1; font-weight: 700; height: 36px; font-size: 11.5px; background: rgba(0, 212, 255, 0.14); border: 1px solid var(--accent); color: var(--accent); border-radius: 6px; cursor: pointer;" title="保留上方K线走势图，并切换下方为K线逐期历史回看表">📜 下方回看表</button>
+                </div>
                 <div style="display: flex; gap: 6px; margin-top: 6px;">
-                    <button style="flex: 1; padding: 5px 8px; font-size: 11px;" onclick="addColdToOverlay()">➕ 加入叠加</button>
-                    <button style="flex: 1; padding: 5px 8px; font-size: 11px;" onclick="resetColdSelection()">🔄 重置所有选择</button>
+                    <button style="flex: 1; padding: 5px 6px; font-size: 11px;" onclick="addColdToOverlay()">➕ 加入叠加</button>
+                    <button style="flex: 1; padding: 5px 6px; font-size: 11px;" onclick="openKlineHistoryModal()" title="弹窗查看5期~一年365期逐期复盘验证表">🔍 弹窗逐期复盘</button>
+                    <button style="flex: 1; padding: 5px 6px; font-size: 11px;" onclick="resetColdSelection()">🔄 重置选择</button>
                 </div>
             </div>
 
@@ -311,9 +324,12 @@
 
             <!-- 量化回测数据看板 -->
             <div class="kline-metrics-box" id="klineMetricsBox" style="display: none;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px; gap: 4px; flex-wrap: wrap;">
                     <span style="font-size: 11px; font-weight: 700; color: var(--accent);">📊 策略历史量化回测</span>
-                    <span style="font-size: 10px; color: var(--text-secondary);" id="metricPeriodCount">最近 100 期</span>
+                    <div style="display:inline-flex; align-items:center; gap:6px;">
+                        <span style="font-size: 10px; color: var(--text-secondary);" id="metricPeriodCount">最近 100 期</span>
+                        <button type="button" class="rec-apply-btn" onclick="openKlineHistoryModal()" style="padding:1px 6px; font-size:9.5px; font-weight:normal;" title="打开K线历史回看逐期复盘表">📜 逐期回看表 ▸</button>
+                    </div>
                 </div>
                 <div class="kline-metrics-grid">
                     <div class="metric-item">
@@ -1206,16 +1222,31 @@
                     </div>
                     <div style="display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap;">
                         <select id="recModalStrategySelect" onchange="onRecModalStrategyChange(this.value)" style="background:var(--card-bg, #1a1e29);color:var(--text-primary);border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:10.5px;cursor:pointer;">
-                            <option value="multifactor">🌟 多因子量化共振</option>
-                            <option value="sum_span">📐 和值跨度·均值回归</option>
-                            <option value="dan_base_kill">🎯 胆码·大底·杀码</option>
-                            <option value="auto_opt">🤖 AI 历史全景自动寻优</option>
-                            <option value="omission">📊 极值遗漏回补</option>
-                            <option value="balance">⚖️ 周期均线回归</option>
-                            <option value="hot">🔥 顺势热码追热</option>
-                            <option value="color">🎨 波色共振</option>
-                            <option value="size">📏 大小分界</option>
-                            <option value="normal_track">🎰 平特肖尾双轨</option>
+                            <optgroup label="📈 分析模式历史回看 (全部11种K线模式)">
+                                <option value="kline_mode:zodiac">📈 特肖遗漏分析 (遗漏最浅前6肖)</option>
+                                <option value="kline_mode:oddeven">📈 单双走势K线 (单双分布推演)</option>
+                                <option value="kline_mode:bigsmall">📈 大小分布K线 (大小分布推演)</option>
+                                <option value="kline_mode:color">📈 波色分析K线 (红蓝绿波推演)</option>
+                                <option value="kline_mode:zodiac_hotcold">📈 特肖冷热K线 (窗口前6热肖)</option>
+                                <option value="kline_mode:number_hotcold">📈 特码冷热K线 (窗口前25热码)</option>
+                                <option value="kline_custom">⚡ 特码综合K线 (多维自由组合选号)</option>
+                                <option value="kline_mode:pingxiao_follow">📈 平特肖K线 (跟肖/位次/连肖/遗漏)</option>
+                                <option value="kline_mode:special_zodiac_follow">📈 前期定特K线 (上期开出肖定特)</option>
+                                <option value="kline_mode:pingtail_follow">📈 平特尾K线 (跟尾/位次/连尾/遗漏)</option>
+                                <option value="kline_mode:pingnum_absent">📈 平特断号K线 (5~12码全断不出)</option>
+                            </optgroup>
+                            <optgroup label="🤖 智能量化推荐策略回看">
+                                <option value="multifactor">🌟 多因子量化共振</option>
+                                <option value="sum_span">📐 和值跨度·均值回归</option>
+                                <option value="dan_base_kill">🎯 胆码·大底·杀码</option>
+                                <option value="auto_opt">🤖 AI 历史全景自动寻优</option>
+                                <option value="omission">📊 极值遗漏回补</option>
+                                <option value="balance">⚖️ 周期均线回归</option>
+                                <option value="hot">🔥 顺势热码追热</option>
+                                <option value="color">🎨 波色共振</option>
+                                <option value="size">📏 大小分界</option>
+                                <option value="normal_track">🎰 平特肖尾双轨</option>
+                            </optgroup>
                         </select>
                         <div style="display:inline-flex;gap:3px;align-items:center;flex-wrap:wrap;">
                             <button type="button" class="rec-track-btn" id="recModalTab5" onclick="setRecModalCount(5)" style="padding:2px 6px;font-size:10px;">5期</button>
@@ -1504,24 +1535,77 @@
             <span id="chartToggleLabel">收起走势图</span>
         </div>
 
-        <div class="table-section">
-            <table>
-                <thead>
-                    <tr>
-                        <th width="8%" data-sort="rank" onclick="sortTable('rank')">排名</th>
-                        <th width="10%" data-sort="name" onclick="sortTable('name')">生肖<span class="sort-arrow"></span></th>
-                        <th width="10%" data-sort="om" onclick="sortTable('om')">遗漏期数<span class="sort-arrow"></span></th>
-                        <th width="10%" data-sort="max" onclick="sortTable('max')">历史极值<span class="sort-arrow"></span></th>
-                        <th width="20%">遗漏走势</th>
-                        <th width="10%" data-sort="count" onclick="sortTable('count')">出现次数<span class="sort-arrow"></span></th>
-                        <th width="9%" data-sort="avg" onclick="sortTable('avg')">平均周期<span class="sort-arrow"></span></th>
-                        <th width="8%">波色</th>
-                        <th width="8%">大小</th>
-                        <th width="7%">趋势</th>
-                    </tr>
-                </thead>
-                <tbody id="tableBody"></tbody>
-            </table>
+        <div class="table-section" id="tableSection">
+            <div id="tableSectionModeBar" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 8px 12px; background: rgba(22, 27, 34, 0.92); border-bottom: 1px solid var(--border);">
+                <div style="display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                    <button type="button" id="tabTableStandard" class="rec-track-btn active" onclick="switchTableSectionView('standard')" style="padding: 4px 10px; font-size: 11px;">📊 生肖/基础统计表</button>
+                    <button type="button" id="tabTableKlineLookback" class="rec-track-btn" onclick="switchTableSectionView('lookback')" style="padding: 4px 10px; font-size: 11px;">📜 当前分析模式·历史逐期回看表 (5期~一年)</button>
+                </div>
+                <div id="klineTableLookbackControls" style="display: none; align-items: center; gap: 4px; flex-wrap: wrap;">
+                    <select id="klineLookbackModeSelect" onchange="switchTrendMode(this.value)" style="background:var(--card-bg, #1a1e29);color:var(--accent);border:1px solid rgba(0,212,255,0.35);border-radius:4px;padding:2px 6px;font-size:10.5px;cursor:pointer;margin-right:4px;" title="切换要回看的K线分析模式">
+                        <option value="zodiac">📈 特肖遗漏分析</option>
+                        <option value="oddeven">📈 单双走势K线</option>
+                        <option value="bigsmall">📈 大小分布K线</option>
+                        <option value="color">📈 波色分析K线</option>
+                        <option value="zodiac_hotcold">📈 特肖冷热K线</option>
+                        <option value="number_hotcold">📈 特码冷热K线</option>
+                        <option value="cold_custom">⚡ 特码综合K线</option>
+                        <option value="pingxiao_follow">📈 平特肖K线</option>
+                        <option value="special_zodiac_follow">📈 前期定特K线</option>
+                        <option value="pingtail_follow">📈 平特尾K线</option>
+                        <option value="pingnum_absent">📈 平特断号K线</option>
+                    </select>
+                    <button type="button" class="rec-track-btn kline-lb-tab" data-count="5" onclick="setKlineLookbackCount(5)" style="padding:2px 6px;font-size:10px;">5期</button>
+                    <button type="button" class="rec-track-btn kline-lb-tab" data-count="10" onclick="setKlineLookbackCount(10)" style="padding:2px 6px;font-size:10px;">10期</button>
+                    <button type="button" class="rec-track-btn kline-lb-tab" data-count="20" onclick="setKlineLookbackCount(20)" style="padding:2px 6px;font-size:10px;">20期</button>
+                    <button type="button" class="rec-track-btn kline-lb-tab" data-count="30" onclick="setKlineLookbackCount(30)" style="padding:2px 6px;font-size:10px;">30期</button>
+                    <button type="button" class="rec-track-btn kline-lb-tab" data-count="50" onclick="setKlineLookbackCount(50)" style="padding:2px 6px;font-size:10px;">50期</button>
+                    <button type="button" class="rec-track-btn kline-lb-tab active" data-count="100" onclick="setKlineLookbackCount(100)" style="padding:2px 6px;font-size:10px;">100期</button>
+                    <button type="button" class="rec-track-btn kline-lb-tab" data-count="180" onclick="setKlineLookbackCount(180)" style="padding:2px 6px;font-size:10px;">半年(180期)</button>
+                    <button type="button" class="rec-track-btn kline-lb-tab" data-count="365" onclick="setKlineLookbackCount(365)" style="padding:2px 6px;font-size:10px;">一年(365期)</button>
+                    <span style="display:inline-flex;align-items:center;gap:2px;font-size:10px;color:var(--text-secondary);" title="输入5~365任意期数回看">
+                        <input type="number" id="klineLookbackCustomCount" min="5" max="365" value="100" onchange="setKlineLookbackCount(this.value)" style="width:46px;padding:2px 4px;font-size:10px;background:rgba(0,0,0,0.4);border:1px solid var(--border);border-radius:4px;color:var(--accent);text-align:center;">期
+                    </span>
+                    <button type="button" class="rec-apply-btn" onclick="openKlineHistoryModal()" style="padding:3px 8px;font-size:10px;margin-left:4px;">🔍 弹窗大屏</button>
+                </div>
+            </div>
+            <div id="standardTableWrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th width="8%" data-sort="rank" onclick="sortTable('rank')">排名</th>
+                            <th width="10%" data-sort="name" onclick="sortTable('name')">生肖<span class="sort-arrow"></span></th>
+                            <th width="10%" data-sort="om" onclick="sortTable('om')">遗漏期数<span class="sort-arrow"></span></th>
+                            <th width="10%" data-sort="max" onclick="sortTable('max')">历史极值<span class="sort-arrow"></span></th>
+                            <th width="20%">遗漏走势</th>
+                            <th width="10%" data-sort="count" onclick="sortTable('count')">出现次数<span class="sort-arrow"></span></th>
+                            <th width="9%" data-sort="avg" onclick="sortTable('avg')">平均周期<span class="sort-arrow"></span></th>
+                            <th width="8%">波色</th>
+                            <th width="8%">大小</th>
+                            <th width="7%">趋势</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+            <div id="klineLookbackTableWrap" style="display: none; padding: 10px 14px;">
+                <div id="klineLookbackStatsBar" style="margin-bottom: 10px;"></div>
+                <div id="klineLookbackSparkBar" style="display:flex;gap:2px;align-items:flex-end;margin-bottom:10px;background:rgba(0,0,0,0.3);padding:6px 8px;border-radius:6px;height:28px;overflow-x:auto;"></div>
+                <div style="overflow-x:auto;">
+                    <table style="width:100%;font-size:11px;border-collapse:collapse;" id="klineLookbackTable">
+                        <thead>
+                            <tr style="color:var(--text-secondary);border-bottom:1px solid var(--border);text-align:left;">
+                                <th style="padding:6px 4px;width:9%;">期号</th>
+                                <th style="padding:6px 4px;width:14%;">开出特码</th>
+                                <th style="padding:6px 4px;width:53%;">当期开奖前·K线动态推演选号 (含命中高亮)</th>
+                                <th style="padding:6px 4px;width:12%;text-align:center;">K线涨跌/指数</th>
+                                <th style="padding:6px 4px;width:12%;text-align:center;">验证结果</th>
+                            </tr>
+                        </thead>
+                        <tbody id="klineLookbackTbody"></tbody>
+                    </table>
+                </div>
+            </div>
         </div>
 
         <div class="omission-section" id="omissionSection" style="display: none;">

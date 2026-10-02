@@ -406,6 +406,10 @@
             }, duration);
         }
 
+        function isColdKlineMode(mode = state.currentMode) {
+            return mode === 'cold_custom';
+        }
+
         function switchSidebarCategory(category) {
             state.activeSidebarCategory = category;
             try {
@@ -422,7 +426,7 @@
             let firstVisibleCard = null;
             cards.forEach(card => {
                 const isColdCard = card.id === 'coldCard';
-                if (isColdCard && state.currentMode !== 'cold_custom') {
+                if (isColdCard && !isColdKlineMode(state.currentMode)) {
                     card.style.display = 'none';
                     return;
                 }
@@ -891,6 +895,8 @@
                 let coldHitSetsForPoint = null;
                 let coldMatchesForPoint = 0;
                 let followTargetForPoint = null;
+                let klinePreDrawNumsForPoint = [];
+                let klineKilledNumsForPoint = [];
 
                 if (state.currentMode === 'zodiac') {
                     const sorted = zodiacs.map(z => ({ name: z, om: omissions[z] }))
@@ -906,7 +912,7 @@
                     colorScores.blue += (color === 'blue' ? 1 : -0.5);
                     colorScores.green += (color === 'green' ? 1 : -0.5);
                     step = 0;
-                } else if (state.currentMode === 'cold_custom' && state.coldSelection && state.coldSelection.types.length) {
+                } else if (isColdKlineMode(state.currentMode) && state.coldSelection && state.coldSelection.types.length) {
                     const cold = state.coldSelection;
                     if (cold.setKline) {
                         const rollingSets = calculateColdSets(
@@ -934,13 +940,15 @@
                         const smode = cold.setMode || cold.filterCalcMode || 'all';
                         const killsToUse = cold.excludeKills || state.excludeKills;
                         const rollingColdSource = getRollingColdSourceData(state.historyData, idx);
-                        const { finalNumbers: nums } = applySetModeAndExcludeKills(
+                        const { finalNumbers: nums, excludedNumbers: killedNums } = applySetModeAndExcludeKills(
                             rollingOptionSets,
                             smode,
                             killsToUse,
                             rollingColdSource,
                             itemYear
                         );
+                        klinePreDrawNumsForPoint = nums.slice();
+                        klineKilledNumsForPoint = (killedNums || []).slice();
                         // 悬浮显示用含本期的窗口（本期开奖后数据）
                         const currentWxForPoint = getWuxingKey(winNum, itemYear);
                         const currentWuxingSnapshot = {};
@@ -1293,12 +1301,15 @@
                     coldHitSets: coldHitSetsForPoint,
                     coldMatches: coldMatchesForPoint,
                     followZodiac: followTargetForPoint,
-                    followHit: state.currentMode === 'special_zodiac_follow' && !followTargetForPoint ? null : step > 0
+                    followHit: state.currentMode === 'special_zodiac_follow' && !followTargetForPoint ? null : step > 0,
+                    klinePreDrawNums: klinePreDrawNumsForPoint,
+                    klineKilledNums: klineKilledNumsForPoint,
+                    klineStep: step
                 };
 
                 state.historyData.push(historyPoint);
 
-                if (state.currentMode === 'cold_custom' && state.coldSelection && state.coldSelection.types.length) {
+                if (isColdKlineMode(state.currentMode) && state.coldSelection && state.coldSelection.types.length) {
                     if (state.coldSelection.setKline) {
                         historyPoint.coldSets = coldHitSetsForPoint || {};
                     } else {
@@ -1322,7 +1333,7 @@
             });
 
             // 期数切换后，同步更新自由K线当前显示的号码集，避免仍保留生成时的旧窗口结果。
-            if (state.currentMode === 'cold_custom' && state.coldSelection) {
+            if (isColdKlineMode(state.currentMode) && state.coldSelection) {
                 const cold = state.coldSelection;
                 const selectedSourceData = getSelectedColdSourceData();
                 const selectedHotColdSourceData = getSelectedHotColdSourceData();
@@ -1413,6 +1424,9 @@
                 panelUpdateTimer = null;
                 updateChartLegend();
                 updateKlineMetricsDisplay();
+                if (typeof updateTableSectionModeBar === 'function') updateTableSectionModeBar();
+                if (typeof renderKlineHistory5Inline === 'function') renderKlineHistory5Inline();
+                if (typeof renderKlineLookbackTableSection === 'function') renderKlineLookbackTableSection();
                 renderOverlayComparison();
                 renderHotColdMatrix();
                 runBacktest();
@@ -2570,20 +2584,25 @@
             const sizeOm = last.sizeOmissions || { big: 0, small: 0 };
             const maxOm = last.colorMaxOmissions || { red: 0, blue: 0, green: 0 };
 
+            // 基于最近统计窗口计算权重偏离度与冷热过渡期动态杀号权重
+            const windowDevMeta = computeWindowWeightDeviation(state.historyData);
+            state.lastWindowDeviation = windowDevMeta;
+
             let recommendations = [];
 
             // 3. 平特肖尾双轨模式分支
             if (recConfig.track === 'normal') {
-                recommendations = getNormalTrackRecommendations(last, state.historyData);
+                recommendations = getNormalTrackRecommendations(last, state.historyData, windowDevMeta);
                 renderRecommendations(container, recommendations, 'normal_track');
                 renderRecHistory5Inline('normal_track', 'normal');
                 const lookbackCount = state.recInlineCount || 5;
                 const hitLb = getLookbackRecords(lookbackCount, 'normal_track', 'normal');
                 const hitEl = document.getElementById('recommendHitRate');
                 if (hitEl) {
+                    const devTag = windowDevMeta ? ` <span style="opacity:0.4;margin:0 4px;">|</span> ⚖️ ${windowDevMeta.winSize}期偏离压制${windowDevMeta.overheatedCount}码` : '';
                     hitEl.innerHTML = hitLb.count
-                        ? `📜 平特近${hitLb.count}期命中: <b style="color:${hitLb.winRate >= 50 ? 'var(--up)' : 'var(--warn)'};">${hitLb.hitTotal}/${hitLb.count}</b>（${hitLb.winRate}%） <span style="opacity:0.4;margin:0 4px;">|</span> 正码1~6落球共振`
-                        : `平特双轨模式：已根据正码1~6落球共振生成平特肖与精选尾数`;
+                        ? `📜 平特近${hitLb.count}期命中: <b style="color:${hitLb.winRate >= 50 ? 'var(--up)' : 'var(--warn)'};">${hitLb.hitTotal}/${hitLb.count}</b>（${hitLb.winRate}%）${devTag}`
+                        : `平特双轨模式：已根据正码1~6落球共振生成平特肖与精选尾数${devTag}`;
                 }
                 const modal = document.getElementById('recHistoryModal');
                 if (modal && modal.style.display !== 'none') {
@@ -2594,16 +2613,16 @@
 
             switch (strategy) {
                 case 'multifactor':
-                    recommendations = getMultiFactorRecommendations(last, state.historyData);
+                    recommendations = getMultiFactorRecommendations(last, state.historyData, windowDevMeta);
                     break;
                 case 'sum_span':
-                    recommendations = getSumSpanRecommendations(last, state.historyData);
+                    recommendations = getSumSpanRecommendations(last, state.historyData, windowDevMeta);
                     break;
                 case 'dan_base_kill':
-                    recommendations = getDanBaseKillRecommendations(last, state.historyData);
+                    recommendations = getDanBaseKillRecommendations(last, state.historyData, windowDevMeta);
                     break;
                 case 'auto_opt':
-                    recommendations = getAutoOptimizedStrategy(last, state.historyData);
+                    recommendations = getAutoOptimizedStrategy(last, state.historyData, windowDevMeta);
                     break;
                 case 'omission':
                     recommendations = getOmissionBasedRecommendations(snapshot, maxOm, state.globalMaxOm, last.currentColor);
@@ -2621,7 +2640,7 @@
                     recommendations = getSizeRecommendations(sizeOm);
                     break;
                 default:
-                    recommendations = getMultiFactorRecommendations(last, state.historyData);
+                    recommendations = getMultiFactorRecommendations(last, state.historyData, windowDevMeta);
                     break;
             }
 
@@ -2641,7 +2660,10 @@
                 const hit10Html = hitStats.total
                     ? `最近10期命中：<b style="color:${hitStats.rate >= 50 ? 'var(--up)' : 'var(--down)'};">${hitStats.hit}/${hitStats.total}</b>（${hitStats.rate.toFixed(0)}%）`
                     : '数据就绪';
-                hitEl.innerHTML = hitLbHtml ? `${hitLbHtml} <span style="opacity:0.4;margin:0 4px;">|</span> ${hit10Html}` : hit10Html;
+                const devBadge = windowDevMeta
+                    ? ` <span style="opacity:0.4;margin:0 4px;">|</span> <span style="color:var(--accent);" title="基于最近${windowDevMeta.winSize}期统计窗口计算频率偏离度，对高频透支号码动态施加杀号降权，提升冷热过渡期命中率">⚖️ ${windowDevMeta.winSize}期偏离度杀号(${windowDevMeta.overheatedCount}码降权)</span>`
+                    : '';
+                hitEl.innerHTML = (hitLbHtml ? `${hitLbHtml} <span style="opacity:0.4;margin:0 4px;">|</span> ${hit10Html}` : hit10Html) + devBadge;
             }
 
             const modal = document.getElementById('recHistoryModal');
@@ -2828,8 +2850,12 @@
 
                 let rejectReason = null;
 
-                // 1. 同尾扎堆过滤
-                if ((tailCounts[tail] || 0) >= maxPerTail) {
+                // 1. 近期高频偏离过载过滤 (动态杀号拦截)
+                if (item.isOverheatedKill && selected.length < target - 1) {
+                    rejectReason = `高频偏离杀号(偏离+${item.devIndex})`;
+                }
+                // 2. 同尾扎堆过滤
+                else if ((tailCounts[tail] || 0) >= maxPerTail) {
                     rejectReason = `同尾(${tail}尾超标)`;
                 }
                 // 2. 同肖扎堆过滤
@@ -2888,13 +2914,213 @@
             };
         }
 
-        // ==================== 1. 多因子量化打分模型 ====================
-        function getMultiFactorRecommendations(last, historyData) {
+        // ==================== 1. 多因子量化打分模型 (含统计窗口权重偏离度与动态杀号调节) ====================
+        function computeWindowWeightDeviation(historyData, customWin = null) {
+            if (!historyData || !historyData.length) {
+                return { winSize: 30, transitionIntensity: 1.0, isTransitionRegime: false, overheatedCount: 0, numMap: {}, zodiacMap: {} };
+            }
+            const last = historyData[historyData.length - 1] || {};
+            const rawWin = customWin !== null
+                ? customWin
+                : (typeof getEffectiveColdWindow === 'function' ? getEffectiveColdWindow() : 50);
+            const winSize = Math.max(10, Math.min(historyData.length, rawWin === Infinity ? Math.min(120, historyData.length) : (parseInt(rawWin, 10) || 50)));
+            const shortSize = Math.max(5, Math.min(10, Math.floor(winSize * 0.35)));
+
+            // 缓存加速逐期365期历史回看
+            if (last._cachedWinDev && last._cachedWinDev.winSize === winSize && last._cachedWinDev.totalLen === historyData.length) {
+                return last._cachedWinDev;
+            }
+
+            const winSlice = historyData.slice(-winSize);
+            const shortSlice = historyData.slice(-shortSize);
+            const numSnapshot = last.numberSnapshot || {};
+            const zSnapshot = last.snapshot || {};
+
+            const spFreqWin = {};
+            const allFreqWin = {};
+            const spFreqShort = {};
+            const allFreqShort = {};
+            const zSpFreqWin = {};
+            const zSpFreqShort = {};
+
+            winSlice.forEach(d => {
+                if (d && d.special) {
+                    const spNum = parseInt(d.special, 10);
+                    if (!isNaN(spNum)) {
+                        const spStr = spNum.toString().padStart(2, '0');
+                        spFreqWin[spStr] = (spFreqWin[spStr] || 0) + 1;
+                        const z = d.win || getZodiac(spNum);
+                        zSpFreqWin[z] = (zSpFreqWin[z] || 0) + 1;
+                    }
+                }
+                const balls = [...(d?.numbers || []), d?.special].filter(Boolean);
+                balls.forEach(b => {
+                    const n = parseInt(b, 10);
+                    if (!isNaN(n)) {
+                        const nStr = n.toString().padStart(2, '0');
+                        allFreqWin[nStr] = (allFreqWin[nStr] || 0) + 1;
+                    }
+                });
+            });
+
+            shortSlice.forEach(d => {
+                if (d && d.special) {
+                    const spNum = parseInt(d.special, 10);
+                    if (!isNaN(spNum)) {
+                        const spStr = spNum.toString().padStart(2, '0');
+                        spFreqShort[spStr] = (spFreqShort[spStr] || 0) + 1;
+                        const z = d.win || getZodiac(spNum);
+                        zSpFreqShort[z] = (zSpFreqShort[z] || 0) + 1;
+                    }
+                }
+                const balls = [...(d?.numbers || []), d?.special].filter(Boolean);
+                balls.forEach(b => {
+                    const n = parseInt(b, 10);
+                    if (!isNaN(n)) {
+                        const nStr = n.toString().padStart(2, '0');
+                        allFreqShort[nStr] = (allFreqShort[nStr] || 0) + 1;
+                    }
+                });
+            });
+
+            // 理论期望与标准差
+            const expSp = winSize / 49;
+            const stdSp = Math.max(0.55, Math.sqrt(winSize * (1 / 49) * (48 / 49)));
+            const expAll = (winSize * 7) / 49;
+            const stdAll = Math.max(1.05, Math.sqrt(winSize * (7 / 49) * (42 / 49)));
+            const expZ = winSize / 12;
+            const stdZ = Math.max(0.85, Math.sqrt(winSize * (1 / 12) * (11 / 12)));
+
+            // 检测当前窗口是否处于冷热过渡期 (统计高频过载码与回落拐点码占比)
+            let overheatedCount = 0;
+            let coolingInflectionCount = 0;
+            for (let i = 1; i <= 49; i++) {
+                const nStr = i.toString().padStart(2, '0');
+                const fSp = spFreqWin[nStr] || 0;
+                const fSpS = spFreqShort[nStr] || 0;
+                const om = numSnapshot[nStr] !== undefined ? numSnapshot[nStr] : 0;
+                const zSp = (fSp - expSp) / stdSp;
+                if (zSp >= 1.25 || fSpS >= 2) {
+                    overheatedCount++;
+                    if (om >= 1 && om <= 6) coolingInflectionCount++;
+                }
+            }
+
+            // 冷热过渡期强度系数 (0.85 ~ 1.55)：当高频号开始断档进入1~6期遗漏时，过渡期杀热补温效应显著增强
+            const transitionIntensity = Math.min(1.55, Math.max(0.85, 0.95 + (coolingInflectionCount / 10) * 0.35 + (overheatedCount / 14) * 0.25));
+            const isTransitionRegime = coolingInflectionCount >= 3 || overheatedCount >= 6;
+
+            const zodiacMap = {};
+            const zodiacs = CONFIG.zodiacMap[state.currentYear] || [];
+            zodiacs.forEach(z => {
+                const zF = zSpFreqWin[z] || 0;
+                const zFS = zSpFreqShort[z] || 0;
+                const zOm = zSnapshot[z] || 0;
+                const zDev = Number((((zF - expZ) / stdZ) + (zFS >= 3 ? (zFS - 2) * 0.45 : 0)).toFixed(2));
+                let zKillPenalty = 0;
+                let zTransitionBonus = 0;
+                if (zDev > 1.15 && zOm >= 1 && zOm <= 4) {
+                    // 高频热肖断档回落期，动态下调权重
+                    zKillPenalty = Math.min(28, Math.round((zDev - 0.9) * 12 * transitionIntensity));
+                } else if (zDev > 1.65) {
+                    zKillPenalty = Math.min(24, Math.round((zDev - 1.1) * 10 * transitionIntensity));
+                } else if (zDev >= -0.6 && zDev <= 0.7 && zOm >= 3 && zOm <= 8) {
+                    // 冷热过渡黄金回补肖
+                    zTransitionBonus = Math.round(10 * transitionIntensity);
+                }
+                zodiacMap[z] = { zFreq: zF, zShortFreq: zFS, zDev, zKillPenalty, zTransitionBonus };
+            });
+
+            const numMap = {};
+            for (let i = 1; i <= 49; i++) {
+                const nStr = i.toString().padStart(2, '0');
+                const z = getZodiac(i);
+                const om = numSnapshot[nStr] !== undefined ? numSnapshot[nStr] : 0;
+                const fSp = spFreqWin[nStr] || 0;
+                const fAll = allFreqWin[nStr] || 0;
+                const fSpS = spFreqShort[nStr] || 0;
+                const fAllS = allFreqShort[nStr] || 0;
+
+                const zSp = (fSp - expSp) / stdSp;
+                const zAll = (fAll - expAll) / stdAll;
+                const zZod = zodiacMap[z] ? zodiacMap[z].zDev : 0;
+
+                // 短期爆发过载偏离
+                const shortOverburst = (fSpS >= 2 ? (fSpS - 1) * 1.1 : 0) + (fAllS >= 4 ? (fAllS - 3) * 0.42 : 0);
+
+                // 综合权重偏离度指数 (devIndex)
+                const devIndex = Number((zSp * 0.58 + zAll * 0.27 + zZod * 0.15 + shortOverburst).toFixed(2));
+
+                // 计算对近期出现频率过高号码的动态“杀号”权重 (killWeight: 0 ~ 55)
+                let killWeight = 0;
+                let killReason = '';
+                const isCoolingStall = (fSp >= 2 || fAllS >= 3) && (om >= 1 && om <= 6);
+                const isImmediateRepeatOverload = (om === 0 && (fSp >= 2 || fAllS >= 3));
+
+                if (devIndex > 0.95 || fSpS >= 2 || fAllS >= 4) {
+                    const excess = Math.max(0.2, devIndex - 0.80);
+                    let stallMultiplier = 1.0;
+                    if (isCoolingStall) {
+                        // 热极转冷拐点期（近期高频出现后进入1~6期停滞），加大杀号降权力度
+                        stallMultiplier = 1.45;
+                        killReason = `热转冷拐点(窗内${fSp}特/${fAll}平·偏离+${devIndex})`;
+                    } else if (isImmediateRepeatOverload) {
+                        stallMultiplier = 1.30;
+                        killReason = `连开透支(窗内${fSp}特/${fAll}平·偏离+${devIndex})`;
+                    } else {
+                        stallMultiplier = 1.12;
+                        killReason = `高频过载(窗内${fSp}特/${fAll}平·偏离+${devIndex})`;
+                    }
+                    killWeight = Math.min(55, Math.round(excess * 16.5 * transitionIntensity * stallMultiplier));
+                }
+
+                // 冷热过渡期回补加成：统计窗口内正码适度预热(1~3次)、特码未透支、遗漏处于中温转折带(5~18期)
+                let transitionBonus = 0;
+                if (killWeight === 0 && om >= 5 && om <= 18 && fSp <= Math.ceil(expSp) && fAll >= Math.max(1, Math.floor(expAll * 0.55)) && fAll <= Math.ceil(expAll * 1.35)) {
+                    const sweetSpot = (om >= 7 && om <= 14) ? 1.25 : 1.0;
+                    const warmSignal = (fAllS >= 1 && fAllS <= 2) ? 4 : 0;
+                    transitionBonus = Math.min(22, Math.round((9 * sweetSpot + warmSignal) * transitionIntensity));
+                }
+
+                const isOverheated = killWeight >= 14 || devIndex >= 1.35;
+                const isOverheatedKill = killWeight >= 22 || devIndex >= 1.65;
+
+                numMap[nStr] = {
+                    winSp: fSp,
+                    winAll: fAll,
+                    shortSp: fSpS,
+                    shortAll: fAllS,
+                    devIndex,
+                    killWeight,
+                    killReason,
+                    transitionBonus,
+                    isOverheated,
+                    isOverheatedKill
+                };
+            }
+
+            const result = {
+                winSize,
+                shortSize,
+                totalLen: historyData.length,
+                transitionIntensity: Number(transitionIntensity.toFixed(2)),
+                isTransitionRegime,
+                overheatedCount,
+                coolingInflectionCount,
+                numMap,
+                zodiacMap
+            };
+            last._cachedWinDev = result;
+            return result;
+        }
+
+        function getMultiFactorRecommendations(last, historyData, devContext = null) {
             const zodiacs = CONFIG.zodiacMap[state.currentYear] || [];
             const snapshot = last.snapshot || {};
             const numSnapshot = last.numberSnapshot || {};
             const globalMaxOm = state.globalMaxOm || {};
             const total = historyData.length || 1;
+            const winDev = devContext || computeWindowWeightDeviation(historyData);
 
             const recent30 = historyData.slice(-30);
             const recent10 = historyData.slice(-10);
@@ -2944,8 +3170,16 @@
                 const zRatio = zMax > 0 ? zOm / zMax : 0;
                 const f30 = freq30[numStr] || 0;
                 const f10 = freq10[numStr] || 0;
+                const devInfo = (winDev && winDev.numMap && winDev.numMap[numStr]) || {
+                    devIndex: 0,
+                    killWeight: 0,
+                    killReason: '',
+                    transitionBonus: 0,
+                    isOverheated: false,
+                    isOverheatedKill: false
+                };
 
-                const morphTags = getMorphologyTags(numStr, historyData);
+                const morphTags = getMorphologyTags(numStr, historyData).slice();
 
                 // 1. 遗漏冷度得分 (0 ~ 100)
                 let coldScore = 0;
@@ -2960,23 +3194,25 @@
                 }
                 if (zRatio >= 0.75) coldScore = Math.min(100, coldScore + 15);
 
-                // 2. 热度活跃得分 (0 ~ 100)
-                let hotScore = (f30 * 12) + (f10 * 18);
+                // 2. 热度活跃得分 (0 ~ 100)，引入边际递减防高频盲目追高
+                const effectiveF30 = f30 <= 2 ? f30 * 12 : (24 + (f30 - 2) * 5);
+                const effectiveF10 = f10 <= 1 ? f10 * 18 : (18 + (f10 - 1) * 6);
+                let hotScore = effectiveF30 + effectiveF10;
                 if (currentOm === 0) {
-                    hotScore += 35;
+                    hotScore += (f30 >= 2 ? 14 : 28);
                 } else if (currentOm <= 2) {
-                    hotScore += 22;
+                    hotScore += (f30 >= 2 ? 10 : 20);
                 } else if (currentOm <= 5) {
                     hotScore += 10;
                 } else if (currentOm >= 12) {
                     hotScore = Math.max(0, hotScore - (currentOm - 10) * 3);
                 }
-                if (zOm <= 1) hotScore = Math.min(100, hotScore + 15);
+                if (zOm <= 1) hotScore = Math.min(100, hotScore + 12);
                 hotScore = Math.min(100, hotScore);
 
                 // 3. 形态学共振得分 (0 ~ 100)
                 let morphScore = 0;
-                if (morphTags.includes('特重号')) morphScore += 30;
+                if (morphTags.includes('特重号')) morphScore += (devInfo.isOverheated ? 12 : 26);
                 if (morphTags.includes('特邻号')) morphScore += 26;
                 if (morphTags.includes('正邻号')) morphScore += 16;
                 if (morphTags.includes('隔期跳')) morphScore += 22;
@@ -2991,15 +3227,30 @@
                 }
                 morphScore = Math.min(100, morphScore);
 
-                // 综合评分计算：冷热平衡基底 + 形态加权
+                // 4. 基于统计窗口权重偏离度动态调整高频“杀号”降权与冷热过渡回补
+                const killModulator = Math.max(0.55, 1.35 - (hotBias * 0.32));
+                const dynamicKillPenalty = Math.round(devInfo.killWeight * killModulator);
+                const transitionComp = Math.round(devInfo.transitionBonus * (0.75 + coldBias * 0.25));
+
+                if (devInfo.isOverheated && !morphTags.includes('高频降权')) {
+                    morphTags.push('高频降权');
+                } else if (transitionComp >= 10 && !morphTags.includes('过渡共振')) {
+                    morphTags.push('过渡共振');
+                }
+
+                // 综合评分计算：冷热平衡基底 + 形态加权 + 冷热过渡补偿 - 高频偏离杀号权重
                 const statBase = (coldScore * coldBias) + (hotScore * hotBias);
                 const statPart = statBase * (1.0 - morphWeight * 0.4);
                 const morphPart = morphScore * (morphWeight * 2.0);
-                const finalScore = Math.round(statPart + morphPart);
+                const finalScore = Math.max(5, Math.round(statPart + morphPart + transitionComp - dynamicKillPenalty));
 
                 // 标签匹配
                 let primaryTag = '均线平衡';
-                if (wCold <= 35 && currentOm >= 8) {
+                if (devInfo.isOverheated) {
+                    primaryTag = '高频降权';
+                } else if (transitionComp >= 11 && currentOm >= 6 && currentOm <= 16) {
+                    primaryTag = '过渡回补';
+                } else if (wCold <= 35 && currentOm >= 8) {
                     primaryTag = currentOm >= 20 ? '极冷超跌' : '遗漏反弹';
                 } else if (wCold >= 65 && (f30 >= 2 || currentOm <= 2)) {
                     primaryTag = currentOm <= 1 ? '顺势连庄' : '高频热码';
@@ -3007,7 +3258,7 @@
                     primaryTag = morphTags[0];
                 } else if (currentOm >= 15) {
                     primaryTag = '极值回补';
-                } else if (f30 >= 3) {
+                } else if (f30 >= 2) {
                     primaryTag = '热码中继';
                 } else if (morphTags.length > 0) {
                     primaryTag = morphTags[0];
@@ -3021,6 +3272,12 @@
                     currentOm,
                     f30,
                     f10,
+                    devIndex: devInfo.devIndex,
+                    killWeight: devInfo.killWeight,
+                    killReason: devInfo.killReason,
+                    transitionBonus: transitionComp,
+                    isOverheated: devInfo.isOverheated,
+                    isOverheatedKill: devInfo.isOverheatedKill,
                     tag: primaryTag,
                     morphTags
                 });
@@ -3037,20 +3294,21 @@
                 const shrinkRes = applyShrinkMatrix(scoredNumbers, displayCount);
                 topNumbers = shrinkRes.result;
                 shrinkCount = shrinkRes.shrinkCount;
-                shrinkInfo = shrinkRes.details.length > 0 ? shrinkRes.details.join('、') : '优化同尾与生肖过度集中';
+                shrinkInfo = shrinkRes.details.length > 0 ? shrinkRes.details.join('、') : '优化同尾、同肖及高频偏离过载';
             } else {
                 topNumbers = scoredNumbers.slice(0, displayCount);
             }
 
-            // 12生肖评分
+            // 12生肖评分（融合统计窗口生肖偏离度修正）
             const scoredZodiacs = zodiacs.map(z => {
                 const currentOm = snapshot[z] || 0;
                 const maxRecord = (globalMaxOm || {})[z] || 25;
                 const ratio = maxRecord > 0 ? currentOm / maxRecord : 0;
                 const count = (last.counts || {})[z] || 0;
-                let zScore = (currentOm * 4 * coldBias) + (ratio * 35) + ((count / total) * 100 * hotBias);
-                let zTag = ratio >= 0.75 ? '极限逼近' : currentOm <= 2 ? '顺势热肖' : '中枢回归';
-                return { zodiac: z, score: Math.round(zScore), currentOm, maxRecord, ratio, tag: zTag };
+                const zDevInfo = (winDev && winDev.zodiacMap && winDev.zodiacMap[z]) || { zDev: 0, zKillPenalty: 0, zTransitionBonus: 0 };
+                let zScore = (currentOm * 4 * coldBias) + (ratio * 35) + ((count / total) * 100 * hotBias) + zDevInfo.zTransitionBonus - zDevInfo.zKillPenalty;
+                let zTag = zDevInfo.zTransitionBonus >= 8 ? '过渡回补' : ratio >= 0.75 ? '极限逼近' : currentOm <= 2 ? '顺势热肖' : '中枢回归';
+                return { zodiac: z, score: Math.round(zScore), currentOm, maxRecord, ratio, tag: zTag, zDev: zDevInfo.zDev };
             }).sort((a, b) => b.score - a.score);
 
             return {
@@ -3058,24 +3316,40 @@
                 topNumbers,
                 topZodiacs: scoredZodiacs.slice(0, 4),
                 allScored: scoredNumbers,
+                windowDevMeta: winDev,
                 shrinkApplied: recConfig.shrink,
                 shrinkCount,
                 shrinkInfo
             };
         }
 
-        // ==================== 2. 胆码·大底·智能杀码 ====================
-        function getDanBaseKillRecommendations(last, historyData) {
-            const mf = getMultiFactorRecommendations(last, historyData);
+        // ==================== 2. 胆码·大底·智能杀码 (双轨动态杀号：高频过载偏离杀 + 极弱惰性杀) ====================
+        function getDanBaseKillRecommendations(last, historyData, devContext = null) {
+            const mf = getMultiFactorRecommendations(last, historyData, devContext);
             const all = mf.allScored;
 
             const goldDan = all.slice(0, 2);
             const silverDan = all.slice(2, 5);
-            const baseCount = recConfig.spanCount || 20;
             const baseNumbers = mf.topNumbers;
+            const baseSet = new Set(baseNumbers.map(n => n.number));
 
-            const killCandidates = all.slice(-12).filter(item => item.f30 === 0 && item.currentOm < 35).slice(0, 8);
-            const killedNumbers = killCandidates.length >= 5 ? killCandidates : all.slice(-8);
+            // 排除已入选大底的号码，从剩余号码中按“高频偏离杀号权重 + 综合低分惰性”双轨计算杀码优先级
+            const nonBasePool = all.filter(item => !baseSet.has(item.number));
+            const rankedKillPool = nonBasePool.map(item => {
+                const overheatKillScore = (item.killWeight || 0) * 1.85 + (item.devIndex > 1.0 ? item.devIndex * 12 : 0);
+                const coldInertScore = (item.f30 === 0 && item.currentOm < 32) ? (60 - item.score) : Math.max(0, 48 - item.score);
+                const killPriority = Math.round(overheatKillScore + coldInertScore);
+                const killType = (item.killWeight >= 14 || item.devIndex >= 1.2)
+                    ? (item.killReason || `高频过载(偏离+${item.devIndex})`)
+                    : '极弱冷态排除';
+                return {
+                    ...item,
+                    killPriority,
+                    killType
+                };
+            }).sort((a, b) => b.killPriority - a.killPriority);
+
+            const killedNumbers = rankedKillPool.slice(0, 8);
 
             return {
                 type: 'dan_base_kill',
@@ -3085,14 +3359,15 @@
                 killedNumbers,
                 killNumbers: killedNumbers,
                 topZodiacs: mf.topZodiacs,
+                windowDevMeta: mf.windowDevMeta,
                 shrinkCount: mf.shrinkCount,
                 shrinkInfo: mf.shrinkInfo
             };
         }
 
         // ==================== 2.5 和值跨度·均值回归精选模型 ====================
-        function getSumSpanRecommendations(last, historyData) {
-            const mf = getMultiFactorRecommendations(last, historyData);
+        function getSumSpanRecommendations(last, historyData, devContext = null) {
+            const mf = getMultiFactorRecommendations(last, historyData, devContext);
             const all = mf.allScored;
 
             // 1. 提取最新一期 7 码数据与和值、跨度
@@ -3258,8 +3533,9 @@
         }
 
         // ==================== 3. 平特肖与平特尾双轨推荐 ====================
-        function getNormalTrackRecommendations(last, historyData) {
+        function getNormalTrackRecommendations(last, historyData, devContext = null) {
             const zodiacs = CONFIG.zodiacMap[state.currentYear] || [];
+            const winDev = devContext || computeWindowWeightDeviation(historyData);
             const recent30 = historyData.slice(-30);
             const zFlatFreq = {};
             const tailFlatFreq = {};
@@ -3298,13 +3574,14 @@
                 rate: Math.round(((tailFlatFreq[t] || 0) / (recent30.length * 7)) * 100)
             })).sort((a, b) => b.hits - a.hits).slice(0, 3);
 
-            // 排序平特推荐码（结合冷热偏好）
+            // 排序平特推荐码（结合冷热偏好与统计窗口偏离度杀号抑制）
             const topFlatNums = [];
             for (let i = 1; i <= 49; i++) {
                 const nStr = i.toString().padStart(2, '0');
                 const om = (last.numberSnapshot || {})[nStr] || 0;
                 const hits = numFlatFreq[nStr] || 0;
-                const flatScore = (hits * 6 * hBias) + (Math.min(30, om * 2) * cBias);
+                const devInfo = (winDev && winDev.numMap && winDev.numMap[nStr]) || { killWeight: 0, transitionBonus: 0 };
+                const flatScore = (hits * 6 * hBias) + (Math.min(30, om * 2) * cBias) + (devInfo.transitionBonus * 0.45) - (devInfo.killWeight * 0.55);
                 topFlatNums.push({
                     number: nStr,
                     zodiac: getZodiac(i),
@@ -3325,8 +3602,8 @@
         }
 
         // ==================== 4. AI 自动寻优最优组合 ====================
-        function getAutoOptimizedStrategy(last, historyData) {
-            const mf = getMultiFactorRecommendations(last, historyData);
+        function getAutoOptimizedStrategy(last, historyData, devContext = null) {
+            const mf = getMultiFactorRecommendations(last, historyData, devContext);
             const top12Nums = mf.allScored.slice(0, 12).map(x => x.number);
             const top3Z = mf.topZodiacs.slice(0, 3).map(x => x.zodiac);
 
@@ -3371,8 +3648,34 @@
             };
         }
 
-        // ==================== 1. 历史逐期复盘与5期回看核心逻辑 ====================
+        // ==================== 1. 历史逐期复盘与全模式回看核心逻辑 ====================
+        const ANALYSIS_MODE_LABELS = {
+            zodiac: '特肖遗漏分析 (前6热肖)',
+            oddeven: '单双走势K线 (单双分布)',
+            bigsmall: '大小分布K线 (大小分布)',
+            color: '波色分析K线 (红蓝绿波)',
+            zodiac_hotcold: '特肖冷热K线 (窗口前6热肖)',
+            number_hotcold: '特码冷热K线 (窗口前25热码)',
+            cold_custom: '特码综合K线 (多维自由选号)',
+            pingxiao_follow: '平特肖K线 (跟肖/位次/连肖/遗漏)',
+            special_zodiac_follow: '前期定特K线 (上期开出肖定特)',
+            pingtail_follow: '平特尾K线 (跟尾/位次/连尾/遗漏)',
+            pingnum_absent: '平特断号K线 (5~12码全断验证)'
+        };
+
         const STRATEGY_NAME_MAP = {
+            'kline_custom': '特码综合K线 (多维自选方案)',
+            'kline_mode:zodiac': '特肖遗漏分析 (遗漏最浅前6肖)',
+            'kline_mode:oddeven': '单双走势K线 (单双分布推演)',
+            'kline_mode:bigsmall': '大小分布K线 (大小分布推演)',
+            'kline_mode:color': '波色分析K线 (红蓝绿波推演)',
+            'kline_mode:zodiac_hotcold': '特肖冷热K线 (窗口前6热肖)',
+            'kline_mode:number_hotcold': '特码冷热K线 (窗口前25热码)',
+            'kline_mode:cold_custom': '特码综合K线 (多维自选方案)',
+            'kline_mode:pingxiao_follow': '平特肖K线 (跟肖/位次/连肖/遗漏)',
+            'kline_mode:special_zodiac_follow': '前期定特K线 (上期开出肖定特)',
+            'kline_mode:pingtail_follow': '平特尾K线 (跟尾/位次/连尾/遗漏)',
+            'kline_mode:pingnum_absent': '平特断号K线 (5~12码全断不出)',
             'multifactor': '多因子量化共振',
             'sum_span': '和值跨度·均值回归',
             'dan_base_kill': '胆码·大底·杀码',
@@ -3385,18 +3688,509 @@
             'normal_track': '平特肖尾双轨'
         };
 
+        function normalizeLookbackMode(rawMode = null) {
+            let m = rawMode || state.currentMode || 'zodiac';
+            if (m === 'kline_custom') return 'cold_custom';
+            if (typeof m === 'string' && m.startsWith('kline_mode:')) {
+                m = m.replace('kline_mode:', '');
+            }
+            return ANALYSIS_MODE_LABELS[m] ? m : 'zodiac';
+        }
+
+        function isKlineStratKey(stratKey) {
+            return stratKey === 'kline_custom' || (typeof stratKey === 'string' && stratKey.startsWith('kline_mode:'));
+        }
+
+        function getActiveColdKlineConfig() {
+            if (typeof calculateColdSelectionDetail === 'function') {
+                const detail = calculateColdSelectionDetail();
+                if (detail && detail.types && detail.types.length > 0) {
+                    const mode = state.filterCalcMode || state.setMode || 'all';
+                    return {
+                        types: ['setKline'],
+                        setKline: true,
+                        setMode: mode,
+                        filterCalcMode: mode,
+                        excludeKills: state.excludeKills || {},
+                        setTypes: detail.types.slice(),
+                        setCounts: detail.counts || {},
+                        counts: detail.counts || {},
+                        selectedZodiacs: detail.selectedZodiacs || [],
+                        selectedWaves: detail.selectedWaves || [],
+                        selectedWuxings: detail.selectedWuxings || [],
+                        selectedWuxingDs: detail.selectedWuxingDs || [],
+                        selectedMorphs: detail.selectedMorphs || [],
+                        selectedHeNumbers: detail.selectedHeNumbers || [],
+                        selectedHeTails: detail.selectedHeTails || [],
+                        selectedHeads: detail.selectedHeads || [],
+                        selectedTails: detail.selectedTails || [],
+                        selectedSegments: detail.selectedSegments || [],
+                        selectedNumbers: detail.selectedNumbers || [],
+                        inputTerms: detail.inputTerms || {}
+                    };
+                }
+            }
+            if (state.coldSelection && ((state.coldSelection.setTypes && state.coldSelection.setTypes.length) || (state.coldSelection.types && state.coldSelection.types.length))) {
+                return state.coldSelection;
+            }
+            return {
+                types: ['setKline'],
+                setKline: true,
+                setMode: 'all',
+                filterCalcMode: 'all',
+                excludeKills: state.excludeKills || {},
+                setTypes: ['omissionRange'],
+                setCounts: { omissionRangeStart: 1, omissionRangeEnd: 15 },
+                counts: { omissionRangeStart: 1, omissionRangeEnd: 15 },
+                selectedZodiacs: [],
+                selectedWaves: [],
+                selectedWuxings: [],
+                selectedWuxingDs: [],
+                selectedMorphs: [],
+                selectedHeNumbers: [],
+                selectedHeTails: [],
+                selectedHeads: [],
+                selectedTails: [],
+                selectedSegments: [],
+                selectedNumbers: [],
+                inputTerms: {}
+            };
+        }
+
+        function getKlineLookbackRecords(reviewCount = 100, rawMode = null) {
+            const data = state.historyData;
+            const mode = normalizeLookbackMode(rawMode);
+            const stratKey = mode === 'cold_custom' ? 'kline_custom' : `kline_mode:${mode}`;
+            const isFlatMode = ['pingxiao_follow', 'pingtail_follow', 'pingnum_absent'].includes(mode);
+
+            if (!data || data.length < 2) {
+                return {
+                    records: [],
+                    hitTotal: 0,
+                    count: 0,
+                    winRate: 0,
+                    killSafeTotal: 0,
+                    killSafeRate: 100,
+                    activeStrat: stratKey,
+                    activeMode: mode,
+                    activeModeLabel: ANALYSIS_MODE_LABELS[mode] || '特肖遗漏分析',
+                    activeTrack: isFlatMode ? 'normal' : 'special',
+                    maxWinStreak: 0,
+                    maxLossStreak: 0,
+                    curStreak: { type: 'none', count: 0 },
+                    avgNumCount: 0,
+                    netScore: 0,
+                    roi: '0.0'
+                };
+            }
+
+            const count = Math.min(reviewCount, data.length - 1);
+            const coldCfg = mode === 'cold_custom' ? getActiveColdKlineConfig() : null;
+            const pageSizeVal = document.getElementById('pageSizeSel')?.value || '100';
+            const isAllPage = pageSizeVal === 'all';
+            const pageN = isAllPage ? data.length : (parseInt(pageSizeVal, 10) || 100);
+
+            const records = [];
+            let hitTotal = 0;
+            let killSafeTotal = 0;
+            let cumScore = 0;
+            let totalNumSum = 0;
+            let totalCost = 0;
+            let totalReturn = 0;
+            let curWin = 0;
+            let curLoss = 0;
+            let maxWinStreak = 0;
+            let maxLossStreak = 0;
+
+            for (let i = data.length - count; i < data.length; i++) {
+                const cur = data[i];
+                const prevLast = data[i - 1] || {};
+                const itemYear = parseInt(String(cur.expect).slice(0, 4), 10) || state.currentYear;
+                const zodiacs = CONFIG.zodiacMap[itemYear] || CONFIG.zodiacMap[state.currentYear];
+                const winNumInt = parseInt(cur.special != null ? cur.special : cur.winNum, 10);
+                const winNum = winNumInt.toString().padStart(2, '0');
+                const winZodiac = cur.win;
+                const winColor = cur.currentColor || getColor(winNum);
+                const normalBalls = (cur.numbers || []).filter(Boolean).map(b => parseInt(b, 10).toString().padStart(2, '0'));
+                const allBalls = [...normalBalls, winNum];
+                const allBallZodiacs = allBalls.map(b => getZodiac(parseInt(b, 10), itemYear));
+
+                let nums = [];
+                let killedNums = [];
+                let recZodiacs = [];
+                let recTails = [];
+                let isHit = false;
+                let step = 0;
+                let resultType = '未中 (-1)';
+                let modeSummaryHtml = '';
+                let top10Text = '';
+
+                if (mode === 'zodiac') {
+                    const snap = prevLast.snapshot || {};
+                    const sorted = zodiacs.map(z => ({ name: z, om: snap[z] != null ? snap[z] : 0 }))
+                        .sort((a, b) => a.om - b.om);
+                    recZodiacs = sorted.slice(0, 6).map(x => x.name);
+                    for (let n = 1; n <= 49; n++) {
+                        if (recZodiacs.includes(getZodiac(n, itemYear))) {
+                            nums.push(n.toString().padStart(2, '0'));
+                        }
+                    }
+                    isHit = recZodiacs.includes(winZodiac);
+                    step = isHit ? 1 : -1;
+                    resultType = isHit ? '🎯 命中热肖 (+1)' : '未中 (-1)';
+                    const zBadges = sorted.slice(0, 6).map(x =>
+                        x.name === winZodiac
+                            ? `<b class="rec-hit-num-highlight">${x.name}(遗${x.om})</b>`
+                            : `${x.name}<span style="opacity:0.75;font-size:9px;">(遗${x.om})</span>`
+                    ).join(' ');
+                    modeSummaryHtml = `<span style="color:var(--accent);font-weight:600;">遗漏最浅前6肖:</span> ${zBadges}`;
+                    top10Text = `前6热肖: ${recZodiacs.join(' ')}`;
+                } else if (mode === 'oddeven') {
+                    for (let n = 1; n <= 49; n += 2) nums.push(n.toString().padStart(2, '0'));
+                    let oddOm = 0, evenOm = 0;
+                    for (let k = i - 1; k >= 0; k--) {
+                        if (parseInt(data[k].special || data[k].winNum, 10) % 2 === 1) break;
+                        oddOm++;
+                    }
+                    for (let k = i - 1; k >= 0; k--) {
+                        if (parseInt(data[k].special || data[k].winNum, 10) % 2 === 0) break;
+                        evenOm++;
+                    }
+                    isHit = (winNumInt % 2 === 1);
+                    step = isHit ? 1 : -1;
+                    resultType = isHit ? '📈 开单 (+1)' : '📉 开双 (-1)';
+                    modeSummaryHtml = `<span style="color:var(--accent);font-weight:600;">[K线做多:单数25码]</span> <span style="font-size:9.5px;color:var(--text-secondary);">(开奖前: 单遗漏${oddOm}期 / 双遗漏${evenOm}期)</span>`;
+                    top10Text = `单双走势: 开奖前单遗${oddOm}期/双遗${evenOm}期`;
+                } else if (mode === 'bigsmall') {
+                    for (let n = 25; n <= 49; n++) nums.push(n.toString().padStart(2, '0'));
+                    const bigOm = prevLast.sizeOmissions?.big ?? 0;
+                    const smallOm = prevLast.sizeOmissions?.small ?? 0;
+                    isHit = (winNumInt >= 25);
+                    step = isHit ? 1 : -1;
+                    resultType = isHit ? '📈 开大 (+1)' : '📉 开小 (-1)';
+                    modeSummaryHtml = `<span style="color:var(--accent);font-weight:600;">[K线做多:大数25~49]</span> <span style="font-size:9.5px;color:var(--text-secondary);">(开奖前: 大遗漏${bigOm}期 / 小遗漏${smallOm}期)</span>`;
+                    top10Text = `大小分布: 开奖前大遗${bigOm}期/小遗${smallOm}期`;
+                } else if (mode === 'color') {
+                    const cOm = prevLast.colorOmissions || { red: 0, blue: 0, green: 0 };
+                    const cMax = prevLast.colorMaxOmissions || { red: 1, blue: 1, green: 1 };
+                    const recColors = getColorRecommendations(cOm, cMax);
+                    const topColor = recColors[0] || { color: 'red', name: '红波' };
+                    nums = (CONFIG.colors[topColor.color] || []).slice();
+                    isHit = (topColor.color === winColor);
+                    step = isHit ? 1 : -1;
+                    const winWaveName = winColor === 'red' ? '红波' : winColor === 'blue' ? '蓝波' : '绿波';
+                    resultType = isHit ? `🎯 命中${topColor.name} (+1)` : `未中(开${winWaveName})`;
+                    modeSummaryHtml = `<span style="color:var(--accent);font-weight:600;">首推:${topColor.name}</span> <span style="font-size:9.5px;color:var(--text-secondary);">(开奖前遗漏: 红${cOm.red || 0} 蓝${cOm.blue || 0} 绿${cOm.green || 0})</span>`;
+                    top10Text = `首推${topColor.name} (红遗${cOm.red || 0}/蓝遗${cOm.blue || 0}/绿遗${cOm.green || 0})`;
+                } else if (mode === 'zodiac_hotcold') {
+                    const winSlice = data.slice(Math.max(0, i - (isAllPage ? Math.max(1, i) : pageN)), i);
+                    const zCounts = {};
+                    zodiacs.forEach(z => { zCounts[z] = 0; });
+                    winSlice.forEach(item => { if (item.win && zCounts[item.win] != null) zCounts[item.win]++; });
+                    const sortedZ = Object.entries(zCounts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+                    recZodiacs = sortedZ.slice(0, 6).map(e => e[0]);
+                    for (let n = 1; n <= 49; n++) {
+                        if (recZodiacs.includes(getZodiac(n, itemYear))) nums.push(n.toString().padStart(2, '0'));
+                    }
+                    isHit = recZodiacs.includes(winZodiac);
+                    step = isHit ? 1 : -1;
+                    resultType = isHit ? '🔥 命中热肖 (+1)' : '❄️ 开出冷肖 (-1)';
+                    const zBadges = sortedZ.slice(0, 6).map(([z, c]) =>
+                        z === winZodiac
+                            ? `<b class="rec-hit-num-highlight">${z}(${c}次)</b>`
+                            : `${z}<span style="opacity:0.75;font-size:9px;">(${c}次)</span>`
+                    ).join(' ');
+                    modeSummaryHtml = `<span style="color:var(--accent);font-weight:600;">近${winSlice.length}期前6热肖:</span> ${zBadges}`;
+                    top10Text = `前6热肖: ${recZodiacs.join(' ')}`;
+                } else if (mode === 'number_hotcold') {
+                    const winSlice = data.slice(Math.max(0, i - (isAllPage ? Math.max(1, i) : pageN)), i);
+                    const nCounts = {};
+                    for (let n = 1; n <= 49; n++) nCounts[n] = 0;
+                    winSlice.forEach(item => { if (item.winNum) nCounts[item.winNum]++; });
+                    const sortedN = Object.entries(nCounts).sort((a, b) => b[1] - a[1] || parseInt(a[0], 10) - parseInt(b[0], 10));
+                    nums = sortedN.slice(0, 25).map(e => parseInt(e[0], 10).toString().padStart(2, '0'));
+                    isHit = nums.includes(winNum);
+                    step = isHit ? 1 : -1;
+                    resultType = isHit ? '🔥 命中热码 (+1)' : '❄️ 开出冷码 (-1)';
+                    modeSummaryHtml = `<span style="color:var(--accent);font-weight:600;">近${winSlice.length}期前25热码:</span>`;
+                    top10Text = `前25热码: ${nums.slice(0, 10).join(' ')}...`;
+                } else if (mode === 'pingxiao_follow') {
+                    const fMode = state.followMode || 'zodiac';
+                    if (fMode === 'missnum') {
+                        const ranks = (state.followMissRanks && state.followMissRanks.length ? state.followMissRanks : [1])
+                            .filter(r => r >= 1 && r <= 15).sort((a, b) => a - b);
+                        const lastSeen = {};
+                        for (let n = 1; n <= 49; n++) lastSeen[n.toString().padStart(2, '0')] = -1;
+                        for (let k = 0; k < i; k++) {
+                            const kBalls = [...(data[k].numbers || []), data[k].special].filter(Boolean);
+                            kBalls.forEach(b => { lastSeen[parseInt(b, 10).toString().padStart(2, '0')] = k; });
+                        }
+                        const sortedNums = Object.entries(lastSeen)
+                            .sort((a, b) => (i - 1 - b[1]) - (i - 1 - a[1]) || parseInt(a[0], 10) - parseInt(b[0], 10))
+                            .map(e => e[0]);
+                        const targetNums = ranks.map(r => sortedNums[r - 1]).filter(Boolean);
+                        recZodiacs = Array.from(new Set(targetNums.map(num => getZodiac(parseInt(num, 10), itemYear))));
+                        nums = targetNums;
+                        isHit = targetNums.length > 0 && targetNums.every(num => allBallZodiacs.includes(getZodiac(parseInt(num, 10), itemYear)));
+                        step = isHit ? 1 : -1;
+                        const desc = ranks.map((r, idxR) => `${r}名${targetNums[idxR]}(${getZodiac(parseInt(targetNums[idxR], 10), itemYear)})`).join('、');
+                        modeSummaryHtml = `<span style="color:var(--accent);font-weight:600;">平特遗漏名次跟肖:</span> ${desc}`;
+                        top10Text = desc;
+                    } else if (fMode === 'multi') {
+                        const targets = (state.followMultiZodiacs && state.followMultiZodiacs.length >= 2)
+                            ? state.followMultiZodiacs.filter(Boolean)
+                            : zodiacs.slice(0, 2);
+                        recZodiacs = targets;
+                        isHit = targets.every(z => allBallZodiacs.includes(z));
+                        step = isHit ? 1 : -1;
+                        modeSummaryHtml = `<span style="color:var(--accent);font-weight:600;">平特连肖(${targets.length}连肖全中+1):</span> ${targets.map(z => allBallZodiacs.includes(z) ? `<b class="rec-hit-num-highlight">${z}</b>` : z).join('、')}`;
+                        top10Text = `连肖: ${targets.join(' ')}`;
+                    } else if (fMode === 'position') {
+                        const posIdx = state.followPosition != null ? state.followPosition : 2;
+                        const prevBalls = [...(prevLast.numbers || []), prevLast.special].filter(Boolean);
+                        const posBall = prevBalls[posIdx] || prevBalls[0];
+                        const targetZ = posBall ? getZodiac(parseInt(posBall, 10), itemYear) : zodiacs[0];
+                        recZodiacs = [targetZ];
+                        isHit = allBallZodiacs.includes(targetZ);
+                        step = isHit ? 1 : -1;
+                        modeSummaryHtml = `<span style="color:var(--accent);font-weight:600;">跟上期第${posIdx + 1}位平特肖:</span> ${isHit ? `<b class="rec-hit-num-highlight">${targetZ}</b>` : targetZ}`;
+                        top10Text = `跟第${posIdx + 1}位肖: ${targetZ}`;
+                    } else {
+                        const targetZ = state.followZodiac || zodiacs[0];
+                        recZodiacs = [targetZ];
+                        isHit = allBallZodiacs.includes(targetZ);
+                        step = isHit ? 1 : -1;
+                        modeSummaryHtml = `<span style="color:var(--accent);font-weight:600;">固定跟踪平特肖:</span> ${isHit ? `<b class="rec-hit-num-highlight">${targetZ}</b>` : targetZ}`;
+                        top10Text = `跟平特肖: ${targetZ}`;
+                    }
+                    if (!nums.length && recZodiacs.length) {
+                        for (let n = 1; n <= 49; n++) {
+                            if (recZodiacs.includes(getZodiac(n, itemYear))) nums.push(n.toString().padStart(2, '0'));
+                        }
+                    }
+                    resultType = isHit ? '🎯 平特命中 (+1)' : '未中 (-1)';
+                } else if (mode === 'special_zodiac_follow') {
+                    const prevBalls = [...(prevLast.numbers || []), prevLast.special].filter(Boolean);
+                    const prevYear = parseInt(String(prevLast.expect || cur.expect).slice(0, 4), 10) || itemYear;
+                    recZodiacs = Array.from(new Set(prevBalls.map(b => getZodiac(parseInt(b, 10), prevYear)).filter(Boolean)));
+                    for (let n = 1; n <= 49; n++) {
+                        if (recZodiacs.includes(getZodiac(n, itemYear))) nums.push(n.toString().padStart(2, '0'));
+                    }
+                    isHit = recZodiacs.includes(winZodiac);
+                    step = isHit ? 1 : -1;
+                    resultType = isHit ? '🎯 延续命中 (+1)' : '未延续 (-1)';
+                    const zBadges = recZodiacs.map(z => z === winZodiac ? `<b class="rec-hit-num-highlight">${z}</b>` : z).join(' ');
+                    modeSummaryHtml = `<span style="color:var(--accent);font-weight:600;">上期开出${recZodiacs.length}肖定本期特肖:</span> ${zBadges}`;
+                    top10Text = `上期${recZodiacs.length}肖: ${recZodiacs.join(' ')}`;
+                } else if (mode === 'pingtail_follow') {
+                    const tMode = state.tailMode || 'single';
+                    const tailHit = t => allBalls.some(b => parseInt(b, 10) % 10 === t);
+                    let targetTailNums = [];
+                    if (tMode === 'missrank') {
+                        const ranks = (state.tailMissRanks && state.tailMissRanks.length ? state.tailMissRanks : [1])
+                            .filter(r => r >= 1 && r <= 10).sort((a, b) => a - b);
+                        const tSnap = prevLast.tailSnapshot || {};
+                        const sortedTails = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+                            .sort((a, b) => (tSnap[b] || 0) - (tSnap[a] || 0) || a - b);
+                        targetTailNums = ranks.map(r => sortedTails[r - 1]).filter(t => t != null);
+                        recTails = targetTailNums.map(t => `${t}尾`);
+                        isHit = targetTailNums.length > 0 && targetTailNums.every(t => tailHit(t));
+                        step = isHit ? 1 : -1;
+                        const desc = ranks.map((r, idxT) => `${r}名:${targetTailNums[idxT]}尾(遗${tSnap[targetTailNums[idxT]] || 0})`).join('、');
+                        modeSummaryHtml = `<span style="color:var(--accent);font-weight:600;">平特遗漏名次跟尾:</span> ${desc}`;
+                        top10Text = desc;
+                    } else if (tMode === 'multi') {
+                        targetTailNums = (state.tailMultiTails && state.tailMultiTails.length >= 2)
+                            ? state.tailMultiTails.filter(t => t >= 0 && t <= 9)
+                            : [0, 1];
+                        recTails = targetTailNums.map(t => `${t}尾`);
+                        isHit = targetTailNums.every(t => tailHit(t));
+                        step = isHit ? 1 : -1;
+                        modeSummaryHtml = `<span style="color:var(--accent);font-weight:600;">平特连尾(${targetTailNums.length}尾全中+1):</span> ${targetTailNums.map(t => tailHit(t) ? `<b class="rec-hit-num-highlight">${t}尾</b>` : `${t}尾`).join('、')}`;
+                        top10Text = `连尾: ${recTails.join(' ')}`;
+                    } else if (tMode === 'position') {
+                        const posIdx = state.tailPosition != null ? state.tailPosition : 2;
+                        const prevBalls = [...(prevLast.numbers || []), prevLast.special].filter(Boolean);
+                        const posBall = prevBalls[posIdx] || prevBalls[0] || '01';
+                        const t = parseInt(posBall, 10) % 10;
+                        targetTailNums = [t];
+                        recTails = [`${t}尾`];
+                        isHit = tailHit(t);
+                        step = isHit ? 1 : -1;
+                        modeSummaryHtml = `<span style="color:var(--accent);font-weight:600;">跟上期第${posIdx + 1}位尾数:</span> ${isHit ? `<b class="rec-hit-num-highlight">${t}尾</b>` : `${t}尾`}`;
+                        top10Text = `跟第${posIdx + 1}位: ${t}尾`;
+                    } else {
+                        const t = state.tailValue != null ? state.tailValue : 0;
+                        targetTailNums = [t];
+                        recTails = [`${t}尾`];
+                        isHit = tailHit(t);
+                        step = isHit ? 1 : -1;
+                        modeSummaryHtml = `<span style="color:var(--accent);font-weight:600;">固定跟踪平特尾:</span> ${isHit ? `<b class="rec-hit-num-highlight">${t}尾</b>` : `${t}尾`}`;
+                        top10Text = `跟平特尾: ${t}尾`;
+                    }
+                    for (let n = 1; n <= 49; n++) {
+                        if (targetTailNums.includes(n % 10)) nums.push(n.toString().padStart(2, '0'));
+                    }
+                    resultType = isHit ? '🎯 平特尾命中 (+1)' : '未中 (-1)';
+                } else if (mode === 'pingnum_absent') {
+                    let targets = (state.followNumAbsent || []).filter(Boolean).map(n => parseInt(n, 10).toString().padStart(2, '0'));
+                    if (targets.length < 5) {
+                        targets = ['01', '02', '03', '04', '05', '06'];
+                    }
+                    nums = targets;
+                    const hitBalls = targets.filter(n => allBalls.includes(n));
+                    isHit = hitBalls.length === 0;
+                    step = isHit ? 1 : -1;
+                    resultType = isHit ? '🎯 全断成功 (+1)' : `⚠️ 破断(${hitBalls.join(',')}) (-1)`;
+                    const renderedTargets = targets.map(n =>
+                        allBalls.includes(n)
+                            ? `<span style="color:#ff1744;font-weight:800;text-decoration:line-through;">${n}(开出)</span>`
+                            : `<span style="color:var(--up);">${n}</span>`
+                    ).join(' ');
+                    modeSummaryHtml = `<span style="color:var(--accent);font-weight:600;">平特断号(${targets.length}码不出+1):</span> ${renderedTargets}`;
+                    top10Text = `断号${targets.length}码: ${targets.join(' ')}`;
+                } else {
+                    // cold_custom (特码综合K线)
+                    const setTypes = coldCfg.setTypes || coldCfg.types || [];
+                    const setCounts = coldCfg.setCounts || coldCfg.counts || {};
+                    const smode = coldCfg.setMode || coldCfg.filterCalcMode || state.filterCalcMode || state.setMode || 'all';
+                    const killsToUse = coldCfg.excludeKills || state.excludeKills || {};
+
+                    const rollingColdSource = getRollingColdSourceData(data, i);
+                    const rollingHotColdSource = getRollingHotColdSourceData(data, i);
+                    const rollingSets = calculateColdSets(
+                        setTypes,
+                        rollingColdSource,
+                        setCounts,
+                        rollingHotColdSource
+                    );
+                    const rollingOptionSets = getColdOptionNumberSets({
+                        ...rollingSets,
+                        base49: setTypes.includes('base49'),
+                        inputNumbers: coldCfg.selectedNumbers,
+                        inputTerms: coldCfg.inputTerms,
+                        selectZodiacs: coldCfg.selectedZodiacs,
+                        selectedWaves: coldCfg.selectedWaves,
+                        selectedWuxings: coldCfg.selectedWuxings,
+                        selectedWuxingDs: coldCfg.selectedWuxingDs,
+                        selectedMorphs: coldCfg.selectedMorphs,
+                        selectedHeNumbers: coldCfg.selectedHeNumbers,
+                        selectedHeTails: coldCfg.selectedHeTails,
+                        selectedHeads: coldCfg.selectedHeads,
+                        selectedTails: coldCfg.selectedTails,
+                        selectedSegments: coldCfg.selectedSegments
+                    }, itemYear);
+
+                    const resSet = applySetModeAndExcludeKills(
+                        rollingOptionSets,
+                        smode,
+                        killsToUse,
+                        rollingColdSource,
+                        itemYear
+                    );
+                    nums = resSet.finalNumbers || [];
+                    killedNums = resSet.excludedNumbers || [];
+                    isHit = nums.includes(winNum);
+                    step = nums.length > 0 ? (isHit ? 1 : -1) : 0;
+                    resultType = isHit ? '🎯 命中特码 (+1)' : '未中 (-1)';
+
+                    const zTmp = [];
+                    ['zodiacs', 'omissionZodiacRange', 'pingOmissionZodiacRange', 'hotZodiacs', 'coldZodiacs', 'allHotZodiacs', 'allColdZodiacs', 'hotZodiacRange', 'allHotZodiacRange'].forEach(k => {
+                        if (rollingSets[k]) zTmp.push(...rollingSets[k]);
+                    });
+                    if (coldCfg.selectedZodiacs && coldCfg.selectedZodiacs.length) zTmp.push(...coldCfg.selectedZodiacs);
+                    recZodiacs = Array.from(new Set(zTmp));
+                    top10Text = `共${nums.length}码: ${nums.slice(0, 10).join(' ')}${nums.length > 10 ? '...' : ''}`;
+                }
+
+                const isKillSafe = !(killedNums || []).includes(winNum);
+                cumScore += step;
+                totalNumSum += nums.length;
+                const unitCost = Math.max(1, nums.length);
+                totalCost += unitCost;
+                if (isHit) {
+                    hitTotal++;
+                    totalReturn += isFlatMode ? (unitCost * 1.95) : 47;
+                    curWin++;
+                    curLoss = 0;
+                    if (curWin > maxWinStreak) maxWinStreak = curWin;
+                } else if (step < 0) {
+                    curLoss++;
+                    curWin = 0;
+                    if (curLoss > maxLossStreak) maxLossStreak = curLoss;
+                }
+                if (isKillSafe) killSafeTotal++;
+
+                records.push({
+                    issue: cur.expect,
+                    special: winNum,
+                    zodiac: winZodiac,
+                    color: winColor,
+                    normalBalls,
+                    isHit,
+                    isFlatMode,
+                    activeMode: mode,
+                    modeSummaryHtml,
+                    resultType,
+                    hitRole: isHit ? 'gold' : '',
+                    topNumbers: nums,
+                    allRecNumbers: nums,
+                    top10Text,
+                    goldNumbers: [],
+                    silverNumbers: [],
+                    killNumbers: killedNums || [],
+                    recZodiacs,
+                    recTails,
+                    isKillSafe,
+                    klineStep: step,
+                    klineCumScore: cumScore,
+                    numCount: nums.length
+                });
+            }
+
+            const winRate = count > 0 ? Math.round((hitTotal / count) * 100) : 0;
+            const killSafeRate = count > 0 ? Math.round((killSafeTotal / count) * 100) : 100;
+            const avgNumCount = count > 0 ? (totalNumSum / count).toFixed(1) : '0.0';
+            const roi = totalCost > 0 ? (((totalReturn - totalCost) / totalCost) * 100).toFixed(1) : '0.0';
+            const curStreak = curWin > 0 ? { type: 'win', count: curWin } : (curLoss > 0 ? { type: 'loss', count: curLoss } : { type: 'none', count: 0 });
+
+            return {
+                records: records.reverse(),
+                hitTotal,
+                count,
+                winRate,
+                killSafeTotal,
+                killSafeRate,
+                activeStrat: stratKey,
+                activeMode: mode,
+                activeModeLabel: ANALYSIS_MODE_LABELS[mode] || '特肖遗漏分析',
+                activeTrack: isFlatMode ? 'normal' : 'special',
+                maxWinStreak,
+                maxLossStreak,
+                curStreak,
+                avgNumCount,
+                netScore: cumScore,
+                roi
+            };
+        }
+
         function getLookbackRecords(reviewCount = 5, customStrat = null, customTrack = null) {
             const data = state.historyData;
             if (!data || data.length < 2) return { records: [], hitTotal: 0, count: 0, winRate: 0, activeStrat: 'multifactor', activeTrack: 'special' };
 
-            const count = Math.min(reviewCount, data.length - 1);
             let activeTrack = customTrack !== null ? customTrack : (recConfig.track || 'special');
             let activeStrat = customStrat || document.getElementById('recommendStrategy')?.value || 'multifactor';
+
+            if (isKlineStratKey(customStrat) || isKlineStratKey(activeStrat)) {
+                const key = isKlineStratKey(customStrat) ? customStrat : activeStrat;
+                return getKlineLookbackRecords(reviewCount, key);
+            }
 
             if (customStrat === 'normal_track' || activeStrat === 'normal_track') {
                 activeTrack = 'normal';
                 activeStrat = 'normal_track';
             }
+            const count = Math.min(reviewCount, data.length - 1);
 
             const records = [];
             let hitTotal = 0;
@@ -3845,7 +4639,7 @@
             `;
         }
 
-        function setRecModalCount(count) {
+        async function setRecModalCount(count) {
             count = Math.max(5, Math.min(365, parseInt(count, 10) || 100));
             state.recModalCount = count;
             state.recInlineCount = count;
@@ -3853,6 +4647,9 @@
                 localStorage.setItem('aomen_rec_modal_count', count);
                 localStorage.setItem('aomen_rec_inline_count', count);
             } catch (e) {}
+            if (typeof ensureCrossYearData === 'function' && state.historyData && state.historyData.length < count + 20) {
+                await ensureCrossYearData(count + 50);
+            }
             [5, 10, 20, 30, 50, 100, 180, 365].forEach(c => {
                 const tab = document.getElementById('recModalTab' + c);
                 if (tab) tab.classList.toggle('active', count === c);
@@ -3862,18 +4659,38 @@
                 customInput.value = count;
             }
 
+            const selectEl = document.getElementById('recModalStrategySelect');
+            const stratVal = selectEl ? selectEl.value : '';
+            const isKlineStrat = isKlineStratKey(stratVal);
             const periodTag = count === 365 ? '·一年' : count === 180 ? '·半年' : count === 30 ? '·一月' : '';
             const titleEl = document.getElementById('recModalTitle');
-            if (titleEl) titleEl.textContent = `📜 智能推荐·逐期复盘验证 (近${count}期${periodTag}，支持5期~一年)`;
+            if (titleEl) {
+                const modeTitle = STRATEGY_NAME_MAP[stratVal] || 'K线分析模式';
+                titleEl.textContent = isKlineStrat
+                    ? `📜 ${modeTitle}·逐期历史回看 (近${count}期${periodTag}，支持5期~一年)`
+                    : `📜 智能推荐·逐期复盘验证 (近${count}期${periodTag}，支持5期~一年)`;
+            }
 
             renderRecHistoryModal(count);
             const strategy = document.getElementById('recommendStrategy')?.value || 'multifactor';
             const track = recConfig.track || 'special';
             renderRecHistory5Inline(strategy, track);
+            if (typeof renderKlineHistory5Inline === 'function') {
+                renderKlineHistory5Inline(count);
+            }
         }
         window.setRecModalCount = setRecModalCount;
 
         function onRecModalStrategyChange(newStrat) {
+            if (isKlineStratKey(newStrat)) {
+                renderRecHistoryModal(state.recModalCount || 100, newStrat);
+                const count = state.recModalCount || 100;
+                const periodTag = count === 365 ? '·一年' : count === 180 ? '·半年' : count === 30 ? '·一月' : '';
+                const titleEl = document.getElementById('recModalTitle');
+                const modeTitle = STRATEGY_NAME_MAP[newStrat] || 'K线分析模式';
+                if (titleEl) titleEl.textContent = `📜 ${modeTitle}·逐期历史回看 (近${count}期${periodTag}，支持5期~一年)`;
+                return;
+            }
             if (newStrat === 'normal_track') {
                 recConfig.track = 'normal';
                 document.getElementById('recTrackSpecial')?.classList.remove('active');
@@ -3903,6 +4720,23 @@
         }
         window.openRecHistoryModal = openRecHistoryModal;
 
+        function openKlineHistoryModal(count = null, targetMode = null) {
+            const mode = normalizeLookbackMode(targetMode || state.currentMode);
+            if (mode === 'cold_custom' && typeof ensureColdSelectionForLookback === 'function') {
+                ensureColdSelectionForLookback();
+            }
+            const modal = document.getElementById('recHistoryModal');
+            if (!modal) return;
+            modal.style.display = 'flex';
+            const selectEl = document.getElementById('recModalStrategySelect');
+            if (selectEl) {
+                selectEl.value = mode === 'cold_custom' ? 'kline_custom' : `kline_mode:${mode}`;
+            }
+            const targetCount = count !== null ? parseInt(count, 10) : (state.klineLookbackCount || state.recModalCount || 100);
+            setRecModalCount(targetCount);
+        }
+        window.openKlineHistoryModal = openKlineHistoryModal;
+
         function closeRecHistoryModal() {
             const modal = document.getElementById('recHistoryModal');
             if (modal) modal.style.display = 'none';
@@ -3925,23 +4759,38 @@
                 selectEl.value = targetStrat;
             }
 
-            const { records, hitTotal, count: actualCount, winRate, killSafeTotal, killSafeRate, activeStrat } = getLookbackRecords(count, targetStrat, targetTrack);
+            const lookbackRes = getLookbackRecords(count, targetStrat, targetTrack);
+            const { records, hitTotal, count: actualCount, winRate, killSafeTotal, killSafeRate, activeStrat } = lookbackRes;
             if (!records.length) return;
 
             const stratDisplayName = STRATEGY_NAME_MAP[activeStrat] || '当前策略';
             const periodLabel = actualCount === 365 ? `近${actualCount}期(一年)` : actualCount === 180 ? `近${actualCount}期(半年)` : `近${actualCount}期`;
+            const isKlineModeStrat = isKlineStratKey(activeStrat);
 
             if (statsEl) {
-                statsEl.innerHTML = `
-                    <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.3);border-radius:8px;padding:8px 12px;font-size:11px;flex-wrap:wrap;gap:8px;">
-                        <span>复盘样本: <b>${periodLabel}</b> (${stratDisplayName}) <span style="font-size:9.5px;color:var(--text-secondary);">[支持5期~一年365期]</span></span>
-                        <span>综合命中率: <b style="color:var(--up);font-size:13px;">${winRate}%</b> (${hitTotal}/${actualCount})</span>
-                        ${activeStrat === 'dan_base_kill'
-                            ? `<span>杀码准确率: <b style="color:${killSafeRate >= 80 ? 'var(--up)' : 'var(--warn)'};font-size:13px;">${killSafeRate}%</b> (${killSafeTotal}/${actualCount}期未误杀)</span>`
-                            : `<span>盈利收益比: <b style="color:var(--accent);">+${Math.max(0, winRate * 3 - 100)}%</b></span>`
-                        }
-                    </div>
-                `;
+                if (isKlineModeStrat) {
+                    statsEl.innerHTML = `
+                        <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.3);border-radius:8px;padding:8px 12px;font-size:11px;flex-wrap:wrap;gap:8px;">
+                            <span>复盘样本: <b>${periodLabel}</b> (📈 ${stratDisplayName})</span>
+                            <span>命中胜率: <b style="color:var(--up);font-size:13px;">${winRate}%</b> (${hitTotal}/${actualCount}期)</span>
+                            <span>场均覆盖: <b style="color:var(--accent);">${lookbackRes.avgNumCount || '--'}码</b></span>
+                            <span>极值连击: <b style="color:var(--up);">+${lookbackRes.maxWinStreak || 0}连中</b> / <b style="color:var(--down);">-${lookbackRes.maxLossStreak || 0}连落</b></span>
+                            <span>K线净指数: <b style="color:${(lookbackRes.netScore || 0) >= 0 ? 'var(--up)' : 'var(--down)'};">${(lookbackRes.netScore || 0) >= 0 ? '+' : ''}${lookbackRes.netScore || 0}</b></span>
+                            <span>模拟收益(ROI): <b style="color:${parseFloat(lookbackRes.roi || 0) >= 0 ? 'var(--up)' : 'var(--down)'};">${parseFloat(lookbackRes.roi || 0) >= 0 ? '+' : ''}${lookbackRes.roi || '0.0'}%</b></span>
+                        </div>
+                    `;
+                } else {
+                    statsEl.innerHTML = `
+                        <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.3);border-radius:8px;padding:8px 12px;font-size:11px;flex-wrap:wrap;gap:8px;">
+                            <span>复盘样本: <b>${periodLabel}</b> (${stratDisplayName}) <span style="font-size:9.5px;color:var(--text-secondary);">[支持5期~一年365期]</span></span>
+                            <span>综合命中率: <b style="color:var(--up);font-size:13px;">${winRate}%</b> (${hitTotal}/${actualCount})</span>
+                            ${activeStrat === 'dan_base_kill'
+                                ? `<span>杀码准确率: <b style="color:${killSafeRate >= 80 ? 'var(--up)' : 'var(--warn)'};font-size:13px;">${killSafeRate}%</b> (${killSafeTotal}/${actualCount}期未误杀)</span>`
+                                : `<span>盈利收益比: <b style="color:var(--accent);">+${Math.max(0, winRate * 3 - 100)}%</b></span>`
+                            }
+                        </div>
+                    `;
+                }
             }
 
             if (sparkEl) {
@@ -3954,6 +4803,8 @@
                     </div>
                 `).join('');
             }
+
+            const isFlatDisplay = activeStrat === 'normal_track' || (isKlineModeStrat && lookbackRes.activeTrack === 'normal');
 
             if (tableEl) {
                 const theadEl = tableEl.querySelector('thead');
@@ -3972,8 +4823,8 @@
                         theadEl.innerHTML = `
                             <tr style="color:var(--text-secondary);border-bottom:1px solid var(--border);text-align:left;">
                                 <th style="padding:6px 4px;">期号</th>
-                                <th style="padding:6px 4px;">${activeStrat === 'normal_track' ? '开奖落球 (平特+特码)' : '开出特码'}</th>
-                                <th style="padding:6px 4px;">当时推荐核心 (${stratDisplayName})</th>
+                                <th style="padding:6px 4px;">${isFlatDisplay ? '开奖落球 (平特+特码)' : '开出特码'}</th>
+                                <th style="padding:6px 4px;">当时推荐/推演目标 (${stratDisplayName})</th>
                                 <th style="padding:6px 4px;text-align:center;">验证结果</th>
                             </tr>
                         `;
@@ -3987,22 +4838,28 @@
                 const recZSet = new Set(r.recZodiacs || []);
                 const recTSet = new Set(r.recTails || []);
                 const isSpecialInRec = r.isHit || recNumSet.has(r.special);
+                const itemYear = parseInt(String(r.issue).slice(0, 4), 10) || state.currentYear;
 
                 let ballDisplay = '';
-                if (activeStrat === 'normal_track') {
+                if (isFlatDisplay) {
+                    const isAbsentMode = r.activeMode === 'pingnum_absent';
                     const normalBadges = (r.normalBalls || []).map(b => {
                         const bStr = parseInt(b, 10).toString().padStart(2, '0');
                         const c = getColor(bStr);
                         const bg = c === 'red' ? '#ff1744' : c === 'blue' ? '#448aff' : '#00e676';
-                        const isBallHit = recNumSet.has(bStr) || recZSet.has(getZodiac(parseInt(bStr, 10))) || recTSet.has(`${parseInt(bStr, 10) % 10}尾`);
-                        return `<span class="${isBallHit ? 'rec-drawn-hit-ball' : ''}" title="${isBallHit ? '包含在推荐列表中' : ''}" style="display:inline-block;padding:0 3px;border-radius:3px;background:${bg};color:#fff;font-size:9.5px;font-weight:${isBallHit ? '800' : 'normal'};margin-right:2px;">${bStr}</span>`;
+                        const isBallHit = isAbsentMode
+                            ? recNumSet.has(bStr)
+                            : (recNumSet.has(bStr) || recZSet.has(getZodiac(parseInt(bStr, 10), itemYear)) || recTSet.has(`${parseInt(bStr, 10) % 10}尾`));
+                        return `<span class="${isBallHit ? 'rec-drawn-hit-ball' : ''}" title="${isBallHit ? (isAbsentMode ? '破断号码' : '命中跟踪目标') : ''}" style="display:inline-block;padding:0 3px;border-radius:3px;background:${bg};color:#fff;font-size:9.5px;font-weight:${isBallHit ? '800' : 'normal'};margin-right:2px;">${bStr}</span>`;
                     }).join('');
                     const spColor = r.color === 'red' ? '#ff1744' : r.color === 'blue' ? '#448aff' : '#00e676';
-                    const isSpHit = recNumSet.has(r.special) || recZSet.has(r.zodiac) || recTSet.has(`${parseInt(r.special, 10) % 10}尾`);
+                    const isSpHit = isAbsentMode
+                        ? recNumSet.has(r.special)
+                        : (recNumSet.has(r.special) || recZSet.has(r.zodiac) || recTSet.has(`${parseInt(r.special, 10) % 10}尾`));
                     ballDisplay = `
                         <div style="font-size:9.5px;display:flex;align-items:center;flex-wrap:wrap;gap:2px;">
                             ${normalBadges}
-                            <span class="${isSpHit ? 'rec-drawn-hit-ball' : ''}" title="${isSpHit ? '包含在推荐列表中' : ''}" style="display:inline-block;padding:0 4px;border-radius:3px;background:${spColor};color:#fff;font-weight:700;font-size:9.5px;">+${r.special}</span>
+                            <span class="${isSpHit ? 'rec-drawn-hit-ball' : ''}" title="${isSpHit ? (isAbsentMode ? '破断号码' : '命中跟踪目标') : ''}" style="display:inline-block;padding:0 4px;border-radius:3px;background:${spColor};color:#fff;font-weight:700;font-size:9.5px;">+${r.special}</span>
                         </div>
                     `;
                 } else {
@@ -4085,6 +4942,17 @@
                 } else if (activeStrat === 'color' || activeStrat === 'size' || activeStrat === 'auto_opt') {
                     const nHtml = buildHighlightedNums(r.topNumbers || [], 8, new Set([r.special]));
                     recDetail = `<span style="color:var(--text-secondary);">${r.top10Text}</span> <span style="margin-left:4px;">[${nHtml}]</span>`;
+                } else if (isKlineModeStrat) {
+                    const drawnSetForHighlight = isFlatDisplay
+                        ? new Set([...(r.normalBalls || []).map(b => parseInt(b, 10).toString().padStart(2, '0')), r.special])
+                        : new Set([r.special]);
+                    const nHtml = buildHighlightedNums(r.topNumbers || [], 25, drawnSetForHighlight);
+                    const zTag = (!r.modeSummaryHtml && r.recZodiacs && r.recZodiacs.length)
+                        ? `<span style="color:var(--accent);margin-right:6px;">[肖:${r.recZodiacs.map(z => z === r.zodiac ? `<b class="rec-hit-num-highlight">${z}</b>` : z).join(' ')}]</span>`
+                        : '';
+                    const summaryBlock = r.modeSummaryHtml ? `<span style="margin-right:6px;">${r.modeSummaryHtml}</span>` : '';
+                    const stepTag = `<span style="margin-left:6px;font-size:9.5px;color:${r.klineStep > 0 ? 'var(--up)' : 'var(--down)'};font-weight:700;">K线${r.klineStep > 0 ? '+1' : '-1'} (累计:${r.klineCumScore >= 0 ? '+' : ''}${r.klineCumScore})</span>`;
+                    recDetail = `<div style="line-height:1.45;">${summaryBlock}${zTag}${r.activeMode !== 'pingnum_absent' ? `<span style="color:var(--text-secondary);font-weight:600;margin-right:4px;">[${(r.topNumbers || []).length}码]</span>${nHtml}` : ''}${stepTag}</div>`;
                 } else if (r.topNumbers && r.topNumbers.length > 0) {
                     recDetail = buildHighlightedNums(r.topNumbers, 12, new Set([r.special]));
                 } else {
@@ -4092,7 +4960,7 @@
                 }
 
                 return `
-                    <tr class="rec-modal-row ${rowZebraClass}">
+                    <tr class="rec-modal-row ${rowZebraClass}" ${isKlineModeStrat ? `onclick="focusKlineIssueOnChart('${r.issue}')" style="cursor:pointer;" title="点击在K线图上定位第 ${r.issue} 期"` : ''}>
                         <td style="padding:6px 4px;color:var(--text-secondary);white-space:nowrap;">${String(r.issue).slice(-3)}期</td>
                         <td style="padding:6px 4px;white-space:nowrap;">${ballDisplay}</td>
                         <td style="padding:6px 4px;font-size:10px;color:var(--text-secondary);">${recDetail}</td>
@@ -4105,6 +4973,408 @@
                 `;
             }).join('');
         }
+
+        // ==================== 全分析模式·历史回看引擎 (保留K线 + 下方/内嵌逐期复盘表) ====================
+        function ensureColdSelectionForLookback() {
+            const detail = typeof calculateColdSelectionDetail === 'function' ? calculateColdSelectionDetail() : { types: [] };
+            if (!detail.types || detail.types.length === 0) {
+                if (!state.coldSelection || !state.coldSelection.types || !state.coldSelection.types.length) {
+                    const omRangeCb = document.getElementById('coldOption_omissionRange');
+                    if (omRangeCb && !omRangeCb.checked) {
+                        omRangeCb.checked = true;
+                        const sEl = document.getElementById('coldOption_omissionRange_start');
+                        const eEl = document.getElementById('coldOption_omissionRange_end');
+                        if (sEl && !sEl.value) sEl.value = '1';
+                        if (eEl && (!eEl.value || eEl.value === '10')) eEl.value = '15';
+                        if (typeof updateDualSliderUI === 'function') updateDualSliderUI('omissionRange', 49, '码');
+                        if (typeof updateLiveSelectionPreview === 'function') updateLiveSelectionPreview();
+                    }
+                }
+            }
+            const refreshed = typeof calculateColdSelectionDetail === 'function' ? calculateColdSelectionDetail() : null;
+            if (refreshed && refreshed.types && refreshed.types.length > 0 && refreshed.finalNumbers && refreshed.finalNumbers.length > 0) {
+                const mode = state.filterCalcMode || state.setMode || 'all';
+                const excludeKillsCopy = JSON.parse(JSON.stringify(state.excludeKills || {}));
+                state.coldSelection = {
+                    types: ['setKline'],
+                    setKline: true,
+                    setMode: mode,
+                    filterCalcMode: mode,
+                    excludeKills: excludeKillsCopy,
+                    setNumbers: refreshed.finalNumbers,
+                    setTypes: refreshed.types,
+                    setCounts: refreshed.counts,
+                    sets: { setNumbers: refreshed.finalNumbers },
+                    counts: refreshed.counts,
+                    selectedZodiacs: refreshed.selectedZodiacs,
+                    selectedWaves: refreshed.selectedWaves,
+                    selectedWuxings: refreshed.selectedWuxings,
+                    selectedWuxingDs: refreshed.selectedWuxingDs,
+                    selectedMorphs: refreshed.selectedMorphs,
+                    selectedHeNumbers: refreshed.selectedHeNumbers,
+                    selectedHeTails: refreshed.selectedHeTails,
+                    selectedHeheads: refreshed.selectedHeads,
+                    selectedHeads: refreshed.selectedHeads,
+                    selectedTails: refreshed.selectedTails,
+                    selectedSegments: refreshed.selectedSegments,
+                    selectedNumbers: refreshed.selectedNumbers,
+                    inputTerms: refreshed.inputTerms
+                };
+                if (typeof updateColdSummary === 'function') updateColdSummary();
+            }
+        }
+        window.ensureColdSelectionForLookback = ensureColdSelectionForLookback;
+
+        function switchToKlineLookbackMode() {
+            const curMode = normalizeLookbackMode(state.currentMode);
+            if (curMode === 'cold_custom') {
+                ensureColdSelectionForLookback();
+            }
+            state.tableSectionView = 'lookback';
+            updateTableSectionModeBar();
+            const tableSec = document.getElementById('tableSection');
+            if (tableSec) {
+                tableSec.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+            const modeLabel = ANALYSIS_MODE_LABELS[curMode] || '当前分析模式';
+            if (typeof showToast === 'function') {
+                showToast(`📜 已展开「${modeLabel}」历史回看表：上方保留K线走势，下方展示逐期复盘明细`, 2800);
+            }
+        }
+        window.switchToKlineLookbackMode = switchToKlineLookbackMode;
+
+        function updateTableSectionModeBar() {
+            const bar = document.getElementById('tableSectionModeBar');
+            const stdWrap = document.getElementById('standardTableWrap');
+            const lbWrap = document.getElementById('klineLookbackTableWrap');
+            const lbControls = document.getElementById('klineTableLookbackControls');
+            const tabStd = document.getElementById('tabTableStandard');
+            const tabLb = document.getElementById('tabTableKlineLookback');
+            const modeSel = document.getElementById('klineLookbackModeSelect');
+            if (!bar || !stdWrap || !lbWrap) return;
+
+            bar.style.display = 'flex';
+            const normMode = normalizeLookbackMode(state.currentMode);
+            const modeLabel = ANALYSIS_MODE_LABELS[normMode] || '当前分析模式';
+            if (tabLb) {
+                tabLb.textContent = `📜 ${modeLabel.split(' ')[0]}·历史逐期回看表 (5期~一年)`;
+            }
+            if (modeSel && modeSel.value !== normMode) {
+                modeSel.value = normMode;
+            }
+
+            const activeView = state.tableSectionView || 'standard';
+
+            const isLookback = activeView === 'lookback';
+            stdWrap.style.display = isLookback ? 'none' : 'block';
+            lbWrap.style.display = isLookback ? 'block' : 'none';
+            if (lbControls) lbControls.style.display = isLookback ? 'inline-flex' : 'none';
+            if (tabStd) tabStd.classList.toggle('active', !isLookback);
+            if (tabLb) tabLb.classList.toggle('active', isLookback);
+
+            if (isLookback) {
+                renderKlineLookbackTableSection();
+            }
+        }
+        window.updateTableSectionModeBar = updateTableSectionModeBar;
+
+        function switchTableSectionView(view) {
+            state.tableSectionView = view === 'lookback' ? 'lookback' : 'standard';
+            if (view === 'lookback' && normalizeLookbackMode(state.currentMode) === 'cold_custom') {
+                ensureColdSelectionForLookback();
+            }
+            updateTableSectionModeBar();
+        }
+        window.switchTableSectionView = switchTableSectionView;
+
+        async function setKlineLookbackCount(count) {
+            count = Math.max(5, Math.min(365, parseInt(count, 10) || 100));
+            state.klineLookbackCount = count;
+            state.recModalCount = count;
+            state.recInlineCount = count;
+            try {
+                localStorage.setItem('aomen_kline_lookback_count', count);
+            } catch (e) {}
+
+            if (typeof ensureCrossYearData === 'function' && state.historyData && state.historyData.length < count + 20) {
+                await ensureCrossYearData(count + 50);
+            }
+
+            document.querySelectorAll('.kline-lb-tab').forEach(btn => {
+                btn.classList.toggle('active', parseInt(btn.dataset.count, 10) === count);
+            });
+            const customInput = document.getElementById('klineLookbackCustomCount');
+            if (customInput && parseInt(customInput.value, 10) !== count) {
+                customInput.value = count;
+            }
+            renderKlineLookbackTableSection(count);
+            renderKlineHistory5Inline(count);
+        }
+        window.setKlineLookbackCount = setKlineLookbackCount;
+
+        function renderKlineLookbackTableSection(reviewCount = null) {
+            const lbWrap = document.getElementById('klineLookbackTableWrap');
+            const statsBar = document.getElementById('klineLookbackStatsBar');
+            const sparkBar = document.getElementById('klineLookbackSparkBar');
+            const tableEl = document.getElementById('klineLookbackTable');
+            const tbody = document.getElementById('klineLookbackTbody');
+            if (!lbWrap || !tbody || !state.historyData || !state.historyData.length) return;
+            if (lbWrap.style.display === 'none') return;
+
+            const savedCount = parseInt(localStorage.getItem('aomen_kline_lookback_count') || '100', 10) || 100;
+            const count = Math.max(5, Math.min(365, reviewCount || state.klineLookbackCount || savedCount));
+            state.klineLookbackCount = count;
+
+            document.querySelectorAll('.kline-lb-tab').forEach(btn => {
+                btn.classList.toggle('active', parseInt(btn.dataset.count, 10) === count);
+            });
+            const customInput = document.getElementById('klineLookbackCustomCount');
+            if (customInput && parseInt(customInput.value, 10) !== count) {
+                customInput.value = count;
+            }
+
+            const normMode = normalizeLookbackMode(state.currentMode);
+            const res = getKlineLookbackRecords(count, normMode);
+            const { records, hitTotal, count: actualCount, winRate, maxWinStreak, maxLossStreak, curStreak, avgNumCount, netScore, roi, activeModeLabel, activeTrack } = res;
+            if (!records.length) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:16px;color:var(--text-secondary);">暂无可回看的历史期数数据</td></tr>';
+                return;
+            }
+
+            const isFlatDisplay = activeTrack === 'normal';
+            if (tableEl) {
+                const thead = tableEl.querySelector('thead');
+                if (thead) {
+                    thead.innerHTML = `
+                        <tr style="color:var(--text-secondary);border-bottom:1px solid var(--border);text-align:left;">
+                            <th style="padding:6px 4px;width:9%;">期号</th>
+                            <th style="padding:6px 4px;width:${isFlatDisplay ? '22%' : '14%'};">${isFlatDisplay ? '开奖落球 (平特6码+特码)' : '开出特码'}</th>
+                            <th style="padding:6px 4px;width:${isFlatDisplay ? '45%' : '53%'};">当期开奖前·${activeModeLabel}动态推演 (含命中高亮)</th>
+                            <th style="padding:6px 4px;width:12%;text-align:center;">K线涨跌/指数</th>
+                            <th style="padding:6px 4px;width:12%;text-align:center;">验证结果</th>
+                        </tr>
+                    `;
+                }
+            }
+
+            const periodLabel = actualCount === 365 ? `近${actualCount}期(一年)` : actualCount === 180 ? `近${actualCount}期(半年)` : `近${actualCount}期`;
+            const curStreakText = curStreak.type === 'win'
+                ? `<b style="color:var(--up);">${curStreak.count}连中🔥</b>`
+                : (curStreak.type === 'loss' ? `<b style="color:var(--down);">${curStreak.count}连落❄️</b>` : '--');
+
+            if (statsBar) {
+                statsBar.innerHTML = `
+                    <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.28);border-radius:8px;padding:7px 12px;font-size:11px;flex-wrap:wrap;gap:8px;">
+                        <span>📜 <b>${activeModeLabel}</b> (${periodLabel})</span>
+                        <span>命中胜率: <b style="color:var(--up);font-size:13px;">${winRate}%</b> (${hitTotal}/${actualCount}期)</span>
+                        <span>场均覆盖: <b style="color:var(--accent);">${avgNumCount}码</b></span>
+                        <span>极值连击: <b style="color:var(--up);">+${maxWinStreak}连中</b> / <b style="color:var(--down);">-${maxLossStreak}连落</b> (当前:${curStreakText})</span>
+                        <span>K线净涨跌: <b style="color:${netScore >= 0 ? 'var(--up)' : 'var(--down)'};">${netScore >= 0 ? '+' : ''}${netScore}</b></span>
+                        <span>模拟ROI: <b style="color:${parseFloat(roi) >= 0 ? 'var(--up)' : 'var(--down)'};">${parseFloat(roi) >= 0 ? '+' : ''}${roi}%</b></span>
+                    </div>
+                `;
+            }
+
+            if (sparkBar) {
+                const barMinW = actualCount > 200 ? '2px' : '3px';
+                sparkBar.innerHTML = records.slice().reverse().map(r => `
+                    <div class="rec-spark-bar" style="min-width:${barMinW};max-width:14px;cursor:pointer;" onclick="focusKlineIssueOnChart('${r.issue}')" title="${r.issue}期 开${r.special}(${r.zodiac}) | ${r.resultType} | 累计指数: ${r.klineCumScore >= 0 ? '+' : ''}${r.klineCumScore}">
+                        <div class="bar" style="height:${r.isHit ? '100%' : '22%'};background:${r.isHit ? 'var(--up)' : 'rgba(255,23,68,0.45)'};"></div>
+                    </div>
+                `).join('');
+            }
+
+            tbody.innerHTML = records.map((r, idx) => {
+                const rowZebraClass = idx % 2 === 1 ? 'zebra-even' : 'zebra-odd';
+                const spColor = r.color === 'red' ? '#ff1744' : r.color === 'blue' ? '#448aff' : '#00e676';
+                const nums = r.topNumbers || [];
+                const recNumSet = new Set(nums);
+                const recZSet = new Set(r.recZodiacs || []);
+                const recTSet = new Set(r.recTails || []);
+                const itemYear = parseInt(String(r.issue).slice(0, 4), 10) || state.currentYear;
+
+                let ballDisplay = '';
+                if (isFlatDisplay) {
+                    const isAbsentMode = r.activeMode === 'pingnum_absent';
+                    const normalBadges = (r.normalBalls || []).map(b => {
+                        const bStr = parseInt(b, 10).toString().padStart(2, '0');
+                        const c = getColor(bStr);
+                        const bg = c === 'red' ? '#ff1744' : c === 'blue' ? '#448aff' : '#00e676';
+                        const isBallHit = isAbsentMode
+                            ? recNumSet.has(bStr)
+                            : (recNumSet.has(bStr) || recZSet.has(getZodiac(parseInt(bStr, 10), itemYear)) || recTSet.has(`${parseInt(bStr, 10) % 10}尾`));
+                        return `<span class="${isBallHit ? 'rec-drawn-hit-ball' : ''}" style="display:inline-block;padding:0 3px;border-radius:3px;background:${bg};color:#fff;font-size:9.5px;font-weight:${isBallHit ? '800' : 'normal'};margin-right:2px;">${bStr}</span>`;
+                    }).join('');
+                    const isSpHit = isAbsentMode
+                        ? recNumSet.has(r.special)
+                        : (recNumSet.has(r.special) || recZSet.has(r.zodiac) || recTSet.has(`${parseInt(r.special, 10) % 10}尾`));
+                    ballDisplay = `
+                        <div style="font-size:9.5px;display:flex;align-items:center;flex-wrap:wrap;gap:2px;">
+                            ${normalBadges}
+                            <span class="${isSpHit ? 'rec-drawn-hit-ball' : ''}" style="display:inline-block;padding:0 4px;border-radius:3px;background:${spColor};color:#fff;font-weight:700;font-size:9.5px;">+${r.special}</span>
+                        </div>
+                    `;
+                } else {
+                    ballDisplay = `
+                        <span class="${r.isHit ? 'rec-drawn-hit-ball' : ''}" title="${r.isHit ? '该期开出特码包含在K线动态推演选号中' : ''}" style="display:inline-block;padding:1px 6px;border-radius:4px;background:${spColor};color:#fff;font-weight:700;">${r.special}</span>
+                        <span style="font-size:10.5px;margin-left:4px;color:${r.isHit ? '#ffd700' : 'var(--text-secondary)'};font-weight:${r.isHit ? '700' : 'normal'};">${r.zodiac}</span>
+                        ${r.isHit ? '<span class="rec-drawn-hit-tag">★命中</span>' : ''}
+                    `;
+                }
+
+                const drawnSetForHighlight = isFlatDisplay
+                    ? new Set([...(r.normalBalls || []).map(b => parseInt(b, 10).toString().padStart(2, '0')), r.special])
+                    : new Set([r.special]);
+
+                const renderedNums = nums.map(n =>
+                    drawnSetForHighlight.has(n)
+                        ? `<b class="rec-hit-num-highlight">${n}</b>`
+                        : n
+                ).join(' ');
+
+                const zTag = (!r.modeSummaryHtml && r.recZodiacs && r.recZodiacs.length)
+                    ? `<span style="color:var(--accent);margin-right:6px;">[肖:${r.recZodiacs.map(z => z === r.zodiac ? `<b class="rec-hit-num-highlight">${z}</b>` : z).join(' ')}]</span>`
+                    : '';
+                const summaryHtml = r.modeSummaryHtml ? `<span style="margin-right:6px;">${r.modeSummaryHtml}</span>` : '';
+
+                return `
+                    <tr class="rec-modal-row ${rowZebraClass}" onclick="focusKlineIssueOnChart('${r.issue}')" style="cursor:pointer;" title="点击在上方K线图高亮定位第 ${r.issue} 期">
+                        <td style="padding:6px 5px;color:var(--text-secondary);white-space:nowrap;font-weight:600;">${r.issue}期</td>
+                        <td style="padding:6px 5px;white-space:nowrap;">${ballDisplay}</td>
+                        <td style="padding:6px 5px;font-size:10.5px;color:var(--text-secondary);line-height:1.45;">
+                            ${summaryHtml}${zTag}${r.activeMode !== 'pingnum_absent' ? `<span style="color:var(--text-primary);font-weight:600;margin-right:4px;">[${nums.length}码]</span>${renderedNums || '<span style="color:var(--down);">无符合号码</span>'}` : ''}
+                        </td>
+                        <td style="padding:6px 5px;text-align:center;white-space:nowrap;">
+                            <span style="font-weight:700;color:${r.klineStep > 0 ? 'var(--up)' : 'var(--down)'};">${r.klineStep > 0 ? '📈 +1' : '📉 -1'}</span>
+                            <span style="font-size:9.5px;color:var(--text-secondary);margin-left:3px;">(指数:${r.klineCumScore >= 0 ? '+' : ''}${r.klineCumScore})</span>
+                        </td>
+                        <td style="padding:6px 5px;text-align:center;white-space:nowrap;">
+                            <span style="font-size:10px;padding:2px 7px;border-radius:4px;background:${r.isHit ? 'rgba(0,230,118,0.18)' : 'rgba(255,255,255,0.05)'};color:${r.isHit ? 'var(--up)' : 'var(--text-secondary)'};border:1px solid ${r.isHit ? 'var(--up)' : 'transparent'};font-weight:${r.isHit ? '700' : 'normal'};">
+                                ${r.resultType}
+                            </span>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+        window.renderKlineLookbackTableSection = renderKlineLookbackTableSection;
+
+        function renderKlineHistory5Inline(reviewCount = null) {
+            const modeWrap = document.getElementById('modeHistory5Wrap');
+            if (!state.historyData || state.historyData.length < 2) {
+                if (modeWrap) modeWrap.style.display = 'none';
+                return;
+            }
+
+            const count = Math.max(5, Math.min(365, reviewCount || state.klineLookbackCount || state.recInlineCount || 5));
+            const periodOptions = [
+                { val: 5, label: '近5期' },
+                { val: 10, label: '近10期' },
+                { val: 20, label: '近20期' },
+                { val: 30, label: '近30期' },
+                { val: 50, label: '近50期' },
+                { val: 100, label: '近100期' },
+                { val: 180, label: '半年(180期)' },
+                { val: 365, label: '一年(365期)' }
+            ];
+
+            const buildInlineHtml = (res, targetModeKey) => {
+                const { records, hitTotal, count: actualCount, winRate, activeModeLabel } = res;
+                if (!records || !records.length) return '';
+                const displayRecords = records.slice(0, Math.min(count, 15));
+                const shortLabel = (activeModeLabel || '当前模式').split(' ')[0];
+                return `
+                    <div style="background:rgba(0,212,255,0.05);border:1px solid rgba(0,212,255,0.22);border-radius:8px;padding:8px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:4px;flex-wrap:wrap;">
+                            <div style="display:flex;align-items:center;gap:4px;">
+                                <span style="font-size:10.5px;font-weight:700;color:var(--accent);">📜 ${shortLabel}·历史回看</span>
+                                <select onchange="setKlineLookbackCount(this.value)" style="font-size:9.5px;padding:1px 4px;border-radius:4px;background:rgba(0,0,0,0.35);color:var(--accent);border:1px solid rgba(0,212,255,0.3);cursor:pointer;">
+                                    ${periodOptions.map(o => `<option value="${o.val}" ${actualCount === o.val || count === o.val ? 'selected' : ''}>${o.label}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:5px;">
+                                <span style="font-size:10px;color:var(--up);font-weight:700;">${actualCount}期中${hitTotal} (${winRate}%)</span>
+                                <button type="button" class="rec-apply-btn" style="padding:1px 6px;font-size:9px;" onclick="openKlineHistoryModal(${count}, '${targetModeKey}')">大屏明细 ▸</button>
+                            </div>
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:4px;max-height:195px;overflow-y:auto;padding-right:2px;">
+                            ${displayRecords.map(r => {
+                                const spBg = r.color === 'red' ? '#ff1744' : r.color === 'blue' ? '#448aff' : '#00e676';
+                                const numsHtml = (r.topNumbers || []).slice(0, 6).map(n => n === r.special ? `<b class="rec-hit-num-highlight">${n}</b>` : n).join(' ');
+                                const hasRestHit = (r.topNumbers || []).slice(6).includes(r.special);
+                                const extraHitHtml = hasRestHit ? ` <b class="rec-hit-num-highlight">${r.special}</b>` : '';
+                                const centerText = r.modeSummaryHtml
+                                    ? r.modeSummaryHtml
+                                    : `<span style="opacity:0.8;">[${(r.topNumbers || []).length}码]</span> ${numsHtml}${extraHitHtml}${(r.topNumbers || []).length > 6 ? '...' : ''}`;
+                                return `
+                                    <div onclick="focusKlineIssueOnChart('${r.issue}')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;background:rgba(0,0,0,0.28);border:1px solid ${r.isHit ? 'rgba(0,230,118,0.28)' : 'rgba(255,255,255,0.05)'};border-radius:6px;padding:4px 6px;font-size:10px;gap:6px;" title="点击在K线图定位 ${r.issue} 期 | ${r.top10Text || ''}">
+                                        <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
+                                            <span style="color:var(--text-secondary);font-size:9.5px;min-width:36px;">${String(r.issue).slice(-3)}期</span>
+                                            <span class="${r.isHit ? 'rec-drawn-hit-ball' : ''}" style="display:inline-block;width:19px;height:19px;line-height:19px;border-radius:50%;background:${spBg};color:#fff;font-weight:700;font-size:9.5px;text-align:center;">${r.special}</span>
+                                            <span style="font-size:9.5px;color:${r.isHit ? '#ffd700' : 'var(--text-primary)'};font-weight:${r.isHit ? '700' : 'normal'};">${r.zodiac}</span>
+                                        </div>
+                                        <div style="font-size:9.5px;color:var(--text-secondary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px;">
+                                            ${centerText}
+                                        </div>
+                                        <div style="flex-shrink:0;">
+                                            <span style="display:inline-block;font-size:9px;padding:1px 5px;border-radius:3px;background:${r.isHit ? 'rgba(0,230,118,0.18)' : 'rgba(255,255,255,0.05)'};color:${r.isHit ? 'var(--up)' : 'var(--text-secondary)'};border:1px solid ${r.isHit ? 'var(--up)' : 'transparent'};font-weight:700;white-space:nowrap;">
+                                                ${r.resultType}
+                                            </span>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+            };
+
+            const curMode = normalizeLookbackMode(state.currentMode);
+            if (modeWrap) {
+                modeWrap.style.display = 'block';
+                const modeRes = getKlineLookbackRecords(count, curMode);
+                modeWrap.innerHTML = buildInlineHtml(modeRes, curMode);
+            }
+        }
+        window.renderKlineHistory5Inline = renderKlineHistory5Inline;
+
+        function focusKlineIssueOnChart(issue) {
+            if (!state.historyData || !state.historyData.length) return;
+            const targetIdx = state.historyData.findIndex(d => String(d.expect) === String(issue));
+            if (targetIdx < 0) return;
+
+            const total = state.historyData.length;
+            const size = state.pageState.pageSize === 'all' ? total : parseInt(state.pageState.pageSize, 10) || 100;
+            const revPage = Math.floor((total - 1 - targetIdx) / size);
+            const targetPage = Math.max(0, (state.pageState.totalPage - 1) - revPage);
+
+            if (state.pageState.currPage !== targetPage) {
+                state.pageState.currPage = targetPage;
+                let end = total - revPage * size;
+                let start = Math.max(0, end - size);
+                state.visibleData = state.historyData.slice(start, end);
+                const pageInfoEl = document.getElementById('pageInfo');
+                if (pageInfoEl) pageInfoEl.textContent = `${start + 1}-${Math.min(end, total)}/共${total}期`;
+                updateDynamicHotCold();
+            }
+
+            const pt = state.historyData[targetIdx];
+            draw();
+            if (pt) {
+                updateInfoPanel(pt, false);
+                if (state.canvas && typeof showKlineTooltip === 'function') {
+                    const visIdx = state.visibleData.findIndex(d => String(d.expect) === String(issue));
+                    if (visIdx >= 0) {
+                        const rect = state.canvas.getBoundingClientRect();
+                        const xRatio = state.visibleData.length > 1 ? visIdx / (state.visibleData.length - 1) : 0.5;
+                        const approxX = rect.left + 50 + xRatio * Math.max(100, rect.width - 90);
+                        const approxY = rect.top + rect.height * 0.35;
+                        showKlineTooltip(pt, approxX, approxY);
+                    }
+                }
+            }
+        }
+        window.focusKlineIssueOnChart = focusKlineIssueOnChart;
 
         // ==================== 3. 一键套用至特码自由K线 ====================
         function applyRecommendToKLine(type, numbersText) {
@@ -4540,13 +5810,13 @@
 
                     <div class="rec-section-box" style="margin-bottom:0;background:rgba(255,23,68,0.03);border-color:rgba(255,23,68,0.2);">
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-                            <span style="font-size:11px;font-weight:700;color:var(--down);">🚫 智能杀码 (极弱排除)</span>
+                            <span style="font-size:11px;font-weight:700;color:var(--down);">🚫 动态偏离杀码 (高频过载 + 极弱排除)</span>
                             <span style="font-size:9px;color:var(--text-secondary);">${killedNumbers.length}码</span>
                         </div>
                         <div style="display:flex;flex-wrap:wrap;gap:4px;">
                             ${killedNumbers.map(k => `
-                                <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(255,23,68,0.1);color:var(--down);text-decoration:line-through;">
-                                    ${k.number}
+                                <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:${k.isOverheated ? 'rgba(255,171,0,0.14)' : 'rgba(255,23,68,0.1)'};border:1px solid ${k.isOverheated ? 'rgba(255,171,0,0.35)' : 'transparent'};color:${k.isOverheated ? 'var(--warn)' : 'var(--down)'};text-decoration:line-through;" title="${k.killType || k.killReason || '动态杀码'}">
+                                    ${k.number}${k.isOverheated ? '🔥' : ''}
                                 </span>
                             `).join('')}
                         </div>
@@ -5055,7 +6325,8 @@
             updateAllDualSliders();
             updateLiveSelectionPreview();
             updateStats();
-            if (state.currentMode === 'cold_custom' && state.coldSelection) {
+            generateRecommendations();
+            if (isColdKlineMode(state.currentMode) && state.coldSelection) {
                 recalcData();
             }
         }
@@ -6203,7 +7474,7 @@
             updateColdSummary();
             recalcData();
             if (typeof showToast === 'function') {
-                showToast(`✅ 特码综合K线已成功生成（精选 ${finalNumbers.length} 码）`, 2500);
+                showToast(`✅ 特码综合K线已更新（精选 ${finalNumbers.length} 码）`, 2500);
             }
         }
 
@@ -6266,7 +7537,7 @@
             if (descEl) descEl.textContent = descMap[mode] || '';
             updateSetModeButton();
             updateLiveSelectionPreview();
-            if (state.currentMode === 'cold_custom') {
+            if (isColdKlineMode(state.currentMode)) {
                 generateColdKline();
             }
         }
@@ -6278,7 +7549,7 @@
             else state.excludeKills.zodiacs.push(zodiac);
             updateKillChipsUI();
             updateLiveSelectionPreview();
-            if (state.currentMode === 'cold_custom') generateColdKline();
+            if (isColdKlineMode(state.currentMode)) generateColdKline();
         }
 
         function toggleKillTail(tail) {
@@ -6288,7 +7559,7 @@
             else state.excludeKills.tails.push(tail);
             updateKillChipsUI();
             updateLiveSelectionPreview();
-            if (state.currentMode === 'cold_custom') generateColdKline();
+            if (isColdKlineMode(state.currentMode)) generateColdKline();
         }
 
         function toggleKillWave(wave) {
@@ -6298,14 +7569,14 @@
             else state.excludeKills.waves.push(wave);
             updateKillChipsUI();
             updateLiveSelectionPreview();
-            if (state.currentMode === 'cold_custom') generateColdKline();
+            if (isColdKlineMode(state.currentMode)) generateColdKline();
         }
 
         function toggleKillColdTop5() {
             state.excludeKills.coldTop5 = !state.excludeKills.coldTop5;
             updateKillChipsUI();
             updateLiveSelectionPreview();
-            if (state.currentMode === 'cold_custom') generateColdKline();
+            if (isColdKlineMode(state.currentMode)) generateColdKline();
         }
 
         function clearAllKills() {
@@ -6319,7 +7590,7 @@
             };
             updateKillChipsUI();
             updateLiveSelectionPreview();
-            if (state.currentMode === 'cold_custom') generateColdKline();
+            if (isColdKlineMode(state.currentMode)) generateColdKline();
         }
 
         function toggleSingleBallExclude(num) {
@@ -6328,7 +7599,7 @@
             if (idx >= 0) state.excludeKills.excludedSingles.splice(idx, 1);
             else state.excludeKills.excludedSingles.push(num);
             updateLiveSelectionPreview();
-            if (state.currentMode === 'cold_custom') generateColdKline();
+            if (isColdKlineMode(state.currentMode)) generateColdKline();
         }
 
         async function copySelectedNumbers(btn) {
@@ -6629,11 +7900,15 @@
 
             const kills = excludeKills || {};
             let top5ColdNumbers = [];
-            if (kills.coldTop5 && coldSourceData && coldSourceData.numberSnapshot) {
-                top5ColdNumbers = Object.entries(coldSourceData.numberSnapshot)
-                    .sort((a, b) => b[1] - a[1])
-                    .slice(0, 5)
-                    .map(([n]) => n.toString().padStart(2, '0'));
+            if (kills.coldTop5 && coldSourceData) {
+                if (coldSourceData.numberSnapshot) {
+                    top5ColdNumbers = Object.entries(coldSourceData.numberSnapshot)
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 5)
+                        .map(([n]) => n.toString().padStart(2, '0'));
+                } else if (Array.isArray(coldSourceData) && coldSourceData.length > 0) {
+                    top5ColdNumbers = getCold10Numbers(coldSourceData, 5);
+                }
             }
 
             const excludedNumbers = [];
@@ -6924,7 +8199,7 @@
         let coldPreviewDebounceTimer = null;
 
         function requestColdKlineUpdate(immediate = false) {
-            if (state.currentMode !== 'cold_custom') return;
+            if (!isColdKlineMode(state.currentMode)) return;
             if (immediate) {
                 if (coldKlineDebounceTimer) {
                     clearTimeout(coldKlineDebounceTimer);
@@ -7776,7 +9051,7 @@
             const box = document.getElementById('klineMetricsBox');
             if (!box) return;
             
-            const isColdCustom = state.currentMode === 'cold_custom';
+            const isColdCustom = isColdKlineMode(state.currentMode);
             if (!isColdCustom && !state.coldSelection) {
                 box.style.display = 'none';
                 return;
@@ -7984,8 +9259,16 @@
             const coldCard = document.getElementById('coldCard');
             if (coldCard) {
                 const currentCat = state.activeSidebarCategory || 'all';
-                const showInCat = (currentCat === 'all' || currentCat === 'stats');
-                coldCard.style.display = (mode === 'cold_custom' && showInCat) ? 'block' : 'none';
+                const showInCat = (currentCat === 'all' || currentCat === 'stats' || currentCat === 'trend' || currentCat === 'recommend');
+                coldCard.style.display = (isColdKlineMode(mode) && showInCat) ? 'block' : 'none';
+            }
+            if (mode === 'cold_custom') {
+                if (typeof ensureColdSelectionForLookback === 'function') {
+                    ensureColdSelectionForLookback();
+                }
+            }
+            if (typeof updateTableSectionModeBar === 'function') {
+                updateTableSectionModeBar();
             }
             if (mode === 'pingxiao_follow') {
                 const posWrap = document.getElementById('followPosWrap');
@@ -9669,13 +10952,27 @@
                         </div>
                     `;
                 }
-            } else if (currentMode === 'cold_custom') {
+            } else if (isColdKlineMode(currentMode)) {
+                const preDrawNums = data.klinePreDrawNums || [];
+                const isPreHit = preDrawNums.includes(numStr);
+                const preDrawHtml = preDrawNums.length ? `
+                    <div style="margin-top:4px; padding-top:4px; border-top:1px solid rgba(255,255,255,0.06);">
+                        <div style="display:flex; justify-content:space-between; align-items:center; font-size:10.5px; margin-bottom:3px;">
+                            <span style="color:var(--accent); font-weight:700;">🎯 本期开奖前·K线动态选号 (${preDrawNums.length}码)</span>
+                            <span style="color:${isPreHit ? 'var(--up)' : 'var(--down)'}; font-weight:700;">${isPreHit ? '★ 命中特码 (+1)' : '✗ 未命中 (-1)'}</span>
+                        </div>
+                        <div style="font-size:10px; color:var(--text-secondary); line-height:1.45; word-break:break-word;">
+                            ${preDrawNums.map(n => n === numStr ? `<b class="rec-hit-num-highlight">${n}</b>` : n).join(' ')}
+                        </div>
+                    </div>
+                ` : '';
                 modeSpecificHtml = `
                     <div style="margin-top:4px; padding-top:4px; border-top:1px solid rgba(255,255,255,0.05);">
                         <div class="tooltip-row">
                             <span class="tooltip-label">条件命中</span>
                             <span class="tooltip-value" style="color: ${data.coldMatches > 0 ? 'var(--up)' : 'var(--down)'}; font-weight:700;">${data.coldMatches || 0}/${state.coldSelection?.types.length || 0}</span>
                         </div>
+                        ${preDrawHtml}
                         ${renderColdSetsForTooltip(data.coldSets, getColdTooltipTypes(state.coldSelection))}
                     </div>
                 `;
