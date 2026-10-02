@@ -470,7 +470,9 @@
 
                 const cardKey = card.id || ('card_' + idx);
                 const isDefaultCollapsed = defaultCollapsedIds.includes(card.id) || card.classList.contains('collapsed');
-                const shouldCollapse = savedCollapse[cardKey] !== undefined ? savedCollapse[cardKey] : isDefaultCollapsed;
+                const shouldCollapse = card.id === 'modeCard'
+                    ? false
+                    : (savedCollapse[cardKey] !== undefined ? savedCollapse[cardKey] : isDefaultCollapsed);
 
                 if (shouldCollapse) {
                     card.classList.add('collapsed');
@@ -512,48 +514,151 @@
             } catch (e) {}
         }
 
-        // ==================== 数据获取 ====================
-        async function fetchData() {
-            showLoading(true);
-            const year = document.getElementById('yearSel').value;
-            state.currentYear = parseInt(year);
+        // ==================== 数据获取与本地缓存防抖机制 ====================
+        const requestCacheState = {
+            memoryYearCache: new Map(),
+            inFlightYearPromises: new Map(),
+            inFlightFetchAll: null,
+            fetchDebounceTimer: null,
+            modeSwitchTimer: null,
+            lastCrossYearCheckAt: 0,
+            DEBOUNCE_MS: 180,
+            MODE_SWITCH_DEBOUNCE_MS: 60,
+            REQ_COOLDOWN_MS: 15 * 1000
+        };
+
+        function getLocalStorageYearCache(year, allowExpired = false) {
+            const yKey = String(year);
+            if (requestCacheState.memoryYearCache.has(yKey)) {
+                const mem = requestCacheState.memoryYearCache.get(yKey);
+                if (allowExpired || Date.now() < mem.expireAt) {
+                    return mem.data;
+                }
+            }
+
+            const currentActualYear = new Date().getFullYear();
+            const isHistoricalYear = parseInt(year, 10) < currentActualYear;
+            const cacheKey = `lottery_data_${year}`;
+            const maxAge = isHistoricalYear ? Infinity : 6 * 60 * 60 * 1000;
 
             try {
-                await fetchDataInternal();
-                showLoading(false);
-                return true;
-            } catch (err) {
-                console.error('Fetch error:', err);
-                // 检查本地是否有历史缓存（加载从所选年份起的所有本地缓存年份，保证30~300期与全部的数据集一致）
-                const years = Object.keys(CONFIG.zodiacMap).map(Number).sort((a, b) => b - a);
-                const currentYearIndex = years.indexOf(state.currentYear);
-                const selectedYears = currentYearIndex >= 0 ? years.slice(currentYearIndex) : [state.currentYear];
-                const cachedAll = [];
-                state.loadedYears.clear();
-                selectedYears.forEach(y => {
-                    const cached = localStorage.getItem(`lottery_data_${y}`);
-                    if (cached) {
-                        try {
-                            const parsed = JSON.parse(cached);
-                            const result = parsed.data || parsed;
-                            if (Array.isArray(result) && result.length > 0) {
-                                cachedAll.push(...result);
-                                state.loadedYears.add(y);
-                            }
-                        } catch (e) {}
+                const cached = localStorage.getItem(cacheKey);
+                const cacheTime = localStorage.getItem(`${cacheKey}_time`);
+                if (cached) {
+                    const ts = parseInt(cacheTime || '0', 10);
+                    const age = ts > 0 ? (Date.now() - ts) : 0;
+                    if (allowExpired || (ts > 0 && age < maxAge)) {
+                        const parsed = JSON.parse(cached);
+                        const result = parsed.data || parsed;
+                        if (Array.isArray(result) && result.length > 0) {
+                            requestCacheState.memoryYearCache.set(yKey, {
+                                data: result,
+                                expireAt: isHistoricalYear ? Infinity : (ts + maxAge)
+                            });
+                            return result;
+                        }
                     }
-                });
-                if (cachedAll.length > 0) {
-                    showToast(`⚠️ 网络不畅，已载入本地缓存数据`, 3000);
-                    processData(cachedAll);
-                    showLoading(false);
+                }
+            } catch (e) {
+                console.warn('Cache parse error for year', year, e);
+            }
+            return null;
+        }
+
+        function setLocalStorageYearCache(year, rawPayload, resultArray) {
+            const yKey = String(year);
+            const now = Date.now();
+            const currentActualYear = new Date().getFullYear();
+            const isHistoricalYear = parseInt(year, 10) < currentActualYear;
+            const maxAge = isHistoricalYear ? Infinity : 6 * 60 * 60 * 1000;
+
+            requestCacheState.memoryYearCache.set(yKey, {
+                data: resultArray,
+                expireAt: isHistoricalYear ? Infinity : (now + maxAge)
+            });
+
+            try {
+                const cacheKey = `lottery_data_${year}`;
+                localStorage.setItem(cacheKey, JSON.stringify(rawPayload));
+                localStorage.setItem(`${cacheKey}_time`, now.toString());
+                localStorage.setItem(`lottery_req_debounce_${year}`, now.toString());
+            } catch (e) {
+                console.warn('LocalStorage write warning:', e);
+            }
+        }
+
+        function isYearRequestDebounced(year) {
+            try {
+                const lastReq = parseInt(localStorage.getItem(`lottery_req_debounce_${year}`) || '0', 10);
+                if (lastReq > 0 && (Date.now() - lastReq) < requestCacheState.REQ_COOLDOWN_MS) {
                     return true;
                 }
+            } catch (e) {}
+            return false;
+        }
 
-                // 若首次使用无任何缓存，展示重试与使用离线演示数据操作面板
-                showLoading(true, true, `数据请求失败: ${err.message || '网络连接超时'}。您可以重试或载入演示数据继续体验。`);
-                return false;
+        function markYearRequestAttempt(year) {
+            try {
+                localStorage.setItem(`lottery_req_debounce_${year}`, Date.now().toString());
+            } catch (e) {}
+        }
+
+        async function fetchData(forceRefresh = false) {
+            const yearEl = document.getElementById('yearSel');
+            const year = yearEl ? yearEl.value : state.currentYear;
+            const targetYear = parseInt(year, 10) || state.currentYear;
+
+            // 若非强制刷新且当前年份与数据集已就绪，直接复用缓存避免重复请求
+            if (!forceRefresh && state.currentYear === targetYear && state.processedList && state.processedList.length > 0 && state.loadedYears.has(targetYear)) {
+                recalcData();
+                return true;
             }
+
+            // 合并并发或高频触发的 fetchData 调用
+            if (requestCacheState.inFlightFetchAll && !forceRefresh) {
+                return requestCacheState.inFlightFetchAll;
+            }
+
+            showLoading(true);
+            state.currentYear = targetYear;
+
+            const fetchPromise = (async () => {
+                try {
+                    await fetchDataInternal(forceRefresh);
+                    showLoading(false);
+                    return true;
+                } catch (err) {
+                    console.error('Fetch error:', err);
+                    // 检查本地是否有历史缓存（加载从所选年份起的所有本地缓存年份，保证30~300期与全部的数据集一致）
+                    const years = Object.keys(CONFIG.zodiacMap).map(Number).sort((a, b) => b - a);
+                    const currentYearIndex = years.indexOf(state.currentYear);
+                    const selectedYears = currentYearIndex >= 0 ? years.slice(currentYearIndex) : [state.currentYear];
+                    const cachedAll = [];
+                    state.loadedYears.clear();
+                    selectedYears.forEach(y => {
+                        const cachedResult = getLocalStorageYearCache(y, true);
+                        if (cachedResult && cachedResult.length > 0) {
+                            cachedAll.push(...cachedResult);
+                            state.loadedYears.add(y);
+                        }
+                    });
+                    if (cachedAll.length > 0) {
+                        showToast(`⚠️ 网络不畅，已载入本地缓存数据`, 3000);
+                        processData(cachedAll);
+                        showLoading(false);
+                        return true;
+                    }
+
+                    // 若首次使用无任何缓存，展示重试与使用离线演示数据操作面板
+                    showLoading(true, true, `数据请求失败: ${err.message || '网络连接超时'}。您可以重试或载入演示数据继续体验。`);
+                    return false;
+                } finally {
+                    requestCacheState.inFlightFetchAll = null;
+                }
+            })();
+
+            requestCacheState.inFlightFetchAll = fetchPromise;
+            return fetchPromise;
         }
 
         function getSelectedLoadCount() {
@@ -562,86 +667,88 @@
             return pageSizeSel.value === 'all' ? Infinity : parseInt(pageSizeSel.value);
         }
 
-        async function fetchYearData(year) {
+        async function fetchYearData(year, forceRefresh = false) {
             if (!year || isNaN(year)) {
                 throw new Error('Invalid year: ' + year);
             }
-            const currentActualYear = new Date().getFullYear();
-            const isHistoricalYear = parseInt(year, 10) < currentActualYear;
-            const cacheKey = `lottery_data_${year}`;
-            const cached = localStorage.getItem(cacheKey);
-            const cacheTime = localStorage.getItem(`${cacheKey}_time`);
+            const yKey = String(year);
 
-            if (cached && cacheTime) {
-                const age = Date.now() - parseInt(cacheTime, 10);
-                const maxAge = isHistoricalYear ? Infinity : 6 * 60 * 60 * 1000;
-                if (age < maxAge) {
-                    try {
-                        const data = JSON.parse(cached);
-                        const result = data.data || data;
-                        if (Array.isArray(result) && result.length > 0) {
-                            return result;
-                        }
-                    } catch (e) {
-                        console.warn('Cache parse error for year', year, e);
+            // 1. 优先命中内存 + localStorage 有效缓存
+            if (!forceRefresh) {
+                const validCached = getLocalStorageYearCache(year, false);
+                if (validCached && validCached.length > 0) {
+                    return validCached;
+                }
+                // 2. 若处于防抖冷却窗口内且存在历史缓存副本，直接返回避免高频重复请求
+                if (isYearRequestDebounced(year)) {
+                    const fallbackCached = getLocalStorageYearCache(year, true);
+                    if (fallbackCached && fallbackCached.length > 0) {
+                        return fallbackCached;
                     }
                 }
             }
 
-            const apiUrl = `https://history.macaumarksix.com/history/macaujc2/y/${year}`;
-            const proxyUrl = `/api/proxy?year=${year}`;
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-            let response = await fetch(proxyUrl, { method: 'GET', headers: { 'Accept': 'application/json' }, signal: controller.signal }).catch(() => null);
-            if (!response || !response.ok) {
-                const fallbackController = new AbortController();
-                const fallbackTimeout = setTimeout(() => fallbackController.abort(), 10000);
-                response = await fetch(apiUrl, {
-                    method: 'GET',
-                    headers: { 'Accept': 'application/json' },
-                    signal: fallbackController.signal
-                });
-                clearTimeout(fallbackTimeout);
+            // 3. 相同年份并发请求去重复用 (In-flight Deduplication)
+            if (requestCacheState.inFlightYearPromises.has(yKey)) {
+                return requestCacheState.inFlightYearPromises.get(yKey);
             }
 
-            clearTimeout(timeoutId);
-            if (!response || !response.ok) {
-                // 网络失败时，尝试降级读取本地已有的任何缓存版本，保障离线可用性
-                if (cached) {
-                    try {
-                        const parsed = JSON.parse(cached);
-                        const result = parsed.data || parsed;
-                        if (Array.isArray(result) && result.length > 0) {
-                            showToast(`⚠️ 网络连接受限，已载入 ${year} 年本地离线数据`, 2800);
-                            return result;
-                        }
-                    } catch (e) {}
+            const reqPromise = (async () => {
+                markYearRequestAttempt(year);
+                const apiUrl = `https://history.macaumarksix.com/history/macaujc2/y/${year}`;
+                const proxyUrl = `/api/proxy?year=${year}`;
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+                let response = await fetch(proxyUrl, { method: 'GET', headers: { 'Accept': 'application/json' }, signal: controller.signal }).catch(() => null);
+                if (!response || !response.ok) {
+                    const fallbackController = new AbortController();
+                    const fallbackTimeout = setTimeout(() => fallbackController.abort(), 10000);
+                    response = await fetch(apiUrl, {
+                        method: 'GET',
+                        headers: { 'Accept': 'application/json' },
+                        signal: fallbackController.signal
+                    }).catch(() => null);
+                    clearTimeout(fallbackTimeout);
                 }
-                throw new Error(`HTTP ${response ? response.status : 'Network Failed'}`);
-            }
-            const data = await response.json();
 
-            if (data.data && Array.isArray(data.data) && data.data.length > 0) {
-                localStorage.setItem(cacheKey, JSON.stringify(data));
-                localStorage.setItem(`${cacheKey}_time`, Date.now().toString());
-                return data.data;
-            }
+                clearTimeout(timeoutId);
+                if (!response || !response.ok) {
+                    // 网络失败时，尝试降级读取本地已有的任何缓存版本，保障离线可用性
+                    const staleCached = getLocalStorageYearCache(year, true);
+                    if (staleCached && staleCached.length > 0) {
+                        showToast(`⚠️ 网络连接受限，已载入 ${year} 年本地离线数据`, 2800);
+                        return staleCached;
+                    }
+                    throw new Error(`HTTP ${response ? response.status : 'Network Failed'}`);
+                }
+                const data = await response.json();
 
-            if (Array.isArray(data) && data.length > 0) {
-                localStorage.setItem(cacheKey, JSON.stringify(data));
-                localStorage.setItem(`${cacheKey}_time`, Date.now().toString());
-                return data;
-            }
+                if (data.data && Array.isArray(data.data) && data.data.length > 0) {
+                    setLocalStorageYearCache(year, data, data.data);
+                    return data.data;
+                }
 
-            throw new Error('Invalid data format');
+                if (Array.isArray(data) && data.length > 0) {
+                    setLocalStorageYearCache(year, data, data);
+                    return data;
+                }
+
+                throw new Error('Invalid data format');
+            })();
+
+            requestCacheState.inFlightYearPromises.set(yKey, reqPromise);
+            try {
+                return await reqPromise;
+            } finally {
+                requestCacheState.inFlightYearPromises.delete(yKey);
+            }
         }
 
-        async function fetchDataInternal() {
+        async function fetchDataInternal(forceRefresh = false) {
             const year = document.getElementById('yearSel').value;
             state.currentYear = parseInt(year);
             state.loadedYears.clear();
-            const requiredCount = Infinity;
             const years = Object.keys(CONFIG.zodiacMap).map(Number).sort((a, b) => b - a);
             const currentYearIndex = years.indexOf(state.currentYear);
             const selectedYears = currentYearIndex >= 0 ? years.slice(currentYearIndex) : [state.currentYear];
@@ -650,7 +757,7 @@
             const progEl = document.getElementById('loadingProgress');
             if (progEl) progEl.textContent = '正在加载 ' + selectedYears.length + ' 年数据...';
             const yearPromises = selectedYears.map(yearToLoad =>
-                fetchYearData(yearToLoad).then(data => ({ year: yearToLoad, data })).catch(e => {
+                fetchYearData(yearToLoad, forceRefresh).then(data => ({ year: yearToLoad, data })).catch(e => {
                     console.warn('Year fetch failed', yearToLoad, e);
                     return { year: yearToLoad, data: null };
                 })
@@ -675,6 +782,12 @@
 
         async function ensureCrossYearData(requiredCount) {
             if (state.historyData.length >= requiredCount) return;
+            const now = Date.now();
+            if (now - requestCacheState.lastCrossYearCheckAt < requestCacheState.DEBOUNCE_MS) {
+                return;
+            }
+            requestCacheState.lastCrossYearCheckAt = now;
+
             const years = Object.keys(CONFIG.zodiacMap).map(Number).sort((a, b) => b - a);
             const currentYearIndex = years.indexOf(state.currentYear);
             const selectedYears = currentYearIndex >= 0 ? years.slice(currentYearIndex) : [state.currentYear];
@@ -684,7 +797,7 @@
             for (const yearToLoad of selectedYears) {
                 if (loaded.has(yearToLoad)) continue;
                 try {
-                    const yearData = await fetchYearData(yearToLoad);
+                    const yearData = await fetchYearData(yearToLoad, false);
                     if (yearData && Array.isArray(yearData) && yearData.length) {
                         combinedData.push(...yearData);
                         loaded.add(yearToLoad);
@@ -703,11 +816,14 @@
 
         function clearCacheAndRetry() {
             const years = Object.keys(CONFIG.zodiacMap);
+            requestCacheState.memoryYearCache.clear();
+            requestCacheState.inFlightYearPromises.clear();
             years.forEach(y => {
                 localStorage.removeItem(`lottery_data_${y}`);
                 localStorage.removeItem(`lottery_data_${y}_time`);
+                localStorage.removeItem(`lottery_req_debounce_${y}`);
             });
-            fetchData();
+            fetchData(true);
         }
 
         function loadMockData() {
@@ -1750,7 +1866,7 @@
                 data.forEach(d => {
                     if (!d.chartSignal || d.px == null || d.py == null) return;
                     const sig = d.chartSignal;
-                    const isAbove = sig.type === 'reversal' || sig.type === 'golden_cross';
+                    const isAbove = sig.type === 'reversal';
                     const badgeY = isAbove ? d.py - dotSize - 11 : d.py + dotSize + 11;
 
                     ctx.save();
@@ -1758,7 +1874,7 @@
                     // Draw mini glow aura
                     ctx.beginPath();
                     ctx.arc(d.px, d.py, dotSize + 3, 0, Math.PI * 2);
-                    ctx.strokeStyle = sig.type === 'reversal' ? 'rgba(0, 230, 118, 0.85)' : (sig.type === 'peak' ? 'rgba(255, 152, 0, 0.85)' : (sig.type === 'golden_cross' ? 'rgba(0, 212, 255, 0.85)' : 'rgba(255, 23, 68, 0.85)'));
+                    ctx.strokeStyle = sig.type === 'reversal' ? 'rgba(0, 230, 118, 0.85)' : (sig.type === 'peak' ? 'rgba(255, 152, 0, 0.85)' : 'rgba(255, 23, 68, 0.85)');
                     ctx.lineWidth = 1.5;
                     ctx.stroke();
 
@@ -7704,27 +7820,6 @@
                         };
                     }
                 }
-
-                if (state.maWindow > 0 && i >= 1) {
-                    const prev = data[i - 1];
-                    if (prev && prev.displayMa != null && d.displayMa != null) {
-                        if (prev.displayScore <= prev.displayMa && d.displayScore > d.displayMa && !d.chartSignal) {
-                            d.chartSignal = {
-                                type: 'golden_cross',
-                                icon: '⚡',
-                                name: '金叉突破',
-                                desc: `走势线上穿 MA${state.maWindow} 均线强势突破`
-                            };
-                        } else if (prev.displayScore >= prev.displayMa && d.displayScore < d.displayMa && !d.chartSignal) {
-                            d.chartSignal = {
-                                type: 'death_cross',
-                                icon: '🔻',
-                                name: '死叉跌破',
-                                desc: `走势线下穿 MA${state.maWindow} 均线破位`
-                            };
-                        }
-                    }
-                }
             });
         }
 
@@ -9213,9 +9308,11 @@
         }
 
         function switchTrendMode(mode) {
+            const isSameMode = state.currentMode === mode;
             state.currentMode = mode;
             try {
                 localStorage.setItem('aomen_selected_mode', mode);
+                localStorage.setItem('aomen_mode_switch_ts', Date.now().toString());
             } catch (e) {}
             const labels = {
                 zodiac: '特肖模式',
@@ -9230,8 +9327,10 @@
                 pingtail_follow: '平特尾K线',
                 pingnum_absent: '平特断号K线'
             };
-            document.getElementById('info-mode').textContent = labels[mode] || '特码综合K线';
-            document.getElementById('trendModeSel').value = mode;
+            const infoModeEl = document.getElementById('info-mode');
+            if (infoModeEl) infoModeEl.textContent = labels[mode] || '特码综合K线';
+            const trendModeSel = document.getElementById('trendModeSel');
+            if (trendModeSel) trendModeSel.value = mode;
             document.querySelectorAll('#modeQuickBar button').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.mode === mode);
             });
@@ -9252,9 +9351,6 @@
                     updateLiveSelectionPreview();
                 }
             }
-            if (typeof updateTableSectionModeBar === 'function') {
-                updateTableSectionModeBar();
-            }
             if (mode === 'pingxiao_follow') {
                 const posWrap = document.getElementById('followPosWrap');
                 const zodWrap = document.getElementById('followZodiacWrap');
@@ -9269,7 +9365,23 @@
             if (mode === 'pingtail_follow') {
                 syncTailWraps();
             }
-            recalcData();
+
+            // 若重复点击同一激活模式且已有历史计算结果，直接跳过重算
+            if (isSameMode && state.historyData && state.historyData.length > 0) {
+                return;
+            }
+
+            // 对快速连续切换分析模式进行防抖合并，避免高频触发重算与跨年数据检查
+            if (requestCacheState.modeSwitchTimer) {
+                clearTimeout(requestCacheState.modeSwitchTimer);
+            }
+            requestCacheState.modeSwitchTimer = setTimeout(() => {
+                requestCacheState.modeSwitchTimer = null;
+                if (typeof updateTableSectionModeBar === 'function') {
+                    updateTableSectionModeBar();
+                }
+                recalcData();
+            }, requestCacheState.MODE_SWITCH_DEBOUNCE_MS);
         }
 
         function changeFollowPos(val) {
@@ -11150,7 +11262,7 @@
             }
 
             content += `</div>`;
-            
+
             if (data.chartSignal) {
                 content += `
                     <div style="margin-top:6px; padding:4px 8px; border-radius:4px;" class="signal-tooltip-tag ${data.chartSignal.type}">

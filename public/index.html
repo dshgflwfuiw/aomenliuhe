@@ -91,10 +91,12 @@
         </div>
 
         <div class="sidebar-card mode-card" id="modeCard" data-category="trend">
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; margin-bottom:8px;">
-                <h3 style="margin:0;">📈 分析模式</h3>
-                <button type="button" class="rec-apply-btn" onclick="openKlineHistoryModal()" style="padding:2px 7px; font-size:10px; font-weight:normal; flex-shrink:0;" title="查看当前分析模式的逐期历史回看 (支持5期~一年365期)">📜 历史回看</button>
-            </div>
+            <h3 style="margin-bottom:8px;">
+                <span style="display:flex;align-items:center;gap:6px;">📈 分析模式</span>
+                <span class="rec-header-actions" style="display:inline-flex;gap:4px;align-items:center;">
+                    <button type="button" class="rec-apply-btn" onclick="openKlineHistoryModal()" style="padding:2px 7px; font-size:10px; font-weight:normal; flex-shrink:0;" title="查看当前分析模式的逐期历史回看 (支持5期~一年365期)">📜 历史回看</button>
+                </span>
+            </h3>
             <select id="trendModeSel" onchange="switchTrendMode(this.value)">
                 <option value="zodiac" selected>特肖遗漏分析</option>
                 <option value="oddeven">单双走势</option>
