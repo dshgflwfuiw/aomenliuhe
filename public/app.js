@@ -5362,8 +5362,9 @@
 
         function renderKlineHistory5Inline(reviewCount = null) {
             const modeWrap = document.getElementById('modeHistory5Wrap');
+            if (!modeWrap) return;
             if (!state.historyData || state.historyData.length < 2) {
-                if (modeWrap) modeWrap.style.display = 'none';
+                modeWrap.style.display = 'none';
                 return;
             }
 

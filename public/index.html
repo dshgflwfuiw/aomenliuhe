@@ -110,10 +110,6 @@
                 <option value="pingtail_follow">平特尾K线</option>
                 <option value="pingnum_absent">平特断号K线</option>
             </select>
-            <div style="display:flex; gap:6px; margin-top:8px;">
-                <button type="button" onclick="switchToKlineLookbackMode()" style="flex:1; padding:5px 6px; font-size:11px; font-weight:700; background:rgba(0,212,255,0.14); border:1px solid var(--accent); color:var(--accent); border-radius:6px; cursor:pointer;" title="保留上方K线走势图，在下方展开当前分析模式的逐期历史回看表">📜 下方展开回看表</button>
-                <button type="button" onclick="openKlineHistoryModal()" style="flex:1; padding:5px 6px; font-size:11px; font-weight:600; border-radius:6px; cursor:pointer;" title="弹窗查看当前分析模式5期~一年365期逐期复盘">🔍 弹窗全景复盘</button>
-            </div>
             <div id="followWrap" class="follow-panel collapsed" style="display: none; margin-top: 10px;">
                 <div class="follow-panel-header" onclick="toggleFollowPanel('followWrap')">
                     <span class="follow-panel-title">平特肖K线</span>
@@ -210,7 +206,6 @@
                     <div id="followNumAbsentHint" style="font-size: 11px; color: var(--accent);"></div>
                 </div>
                 </div>
-            <div id="modeHistory5Wrap" style="margin-top: 10px;"></div>
         </div>
 
         <div class="sidebar-card" id="coldCard" data-category="trend,stats,recommend" style="display: none;">
