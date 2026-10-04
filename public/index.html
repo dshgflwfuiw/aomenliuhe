@@ -924,6 +924,24 @@
                 </div>
 
                 <div class="cold-subcard-header">
+                    <span class="title-tag">🎨 波色单双 (红单/蓝单/绿单/红双/蓝双/绿双)</span>
+                    <div style="display: flex; gap: 3px; flex-wrap: wrap;">
+                        <button type="button" onclick="toggleColdSection('waveDsDan', true)" style="font-size:9px;padding:2px 5px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--accent);cursor:pointer;">全单</button>
+                        <button type="button" onclick="toggleColdSection('waveDsShuang', true)" style="font-size:9px;padding:2px 5px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--accent);cursor:pointer;">全双</button>
+                        <button type="button" onclick="toggleColdSection('waveDs', true)" style="font-size:9px;padding:2px 5px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--accent);cursor:pointer;">全选</button>
+                        <button type="button" onclick="toggleColdSection('waveDs', false)" style="font-size:9px;padding:2px 5px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--text-secondary);cursor:pointer;">清空</button>
+                    </div>
+                </div>
+                <div class="wave-ds-grid-3col" style="margin-bottom: 10px;">
+                    <label title="红波单数(01,07,13,19,23,29,35,45)"><input type="checkbox" id="waveDsOption_红单"> <span style="color:#ff1744;font-weight:600;">红单</span></label>
+                    <label title="蓝波单数(03,09,15,25,31,37,41,47)"><input type="checkbox" id="waveDsOption_蓝单"> <span style="color:#448aff;font-weight:600;">蓝单</span></label>
+                    <label title="绿波单数(05,11,17,21,27,33,39,43,49)"><input type="checkbox" id="waveDsOption_绿单"> <span style="color:#00e676;font-weight:600;">绿单</span></label>
+                    <label title="红波双数(02,08,12,18,24,30,34,40,46)"><input type="checkbox" id="waveDsOption_红双"> <span style="color:#ff1744;font-weight:600;">红双</span></label>
+                    <label title="蓝波双数(04,10,14,20,26,36,42,48)"><input type="checkbox" id="waveDsOption_蓝双"> <span style="color:#448aff;font-weight:600;">蓝双</span></label>
+                    <label title="绿波双数(06,16,22,28,32,38,44)"><input type="checkbox" id="waveDsOption_绿双"> <span style="color:#00e676;font-weight:600;">绿双</span></label>
+                </div>
+
+                <div class="cold-subcard-header">
                     <span class="title-tag">☯️ 五行选择 (金木水火土)</span>
                     <div style="display: flex; gap: 4px;">
                         <button type="button" onclick="toggleColdSection('wuxing', true)" style="font-size:9px;padding:2px 7px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--accent);cursor:pointer;">全选</button>
@@ -976,6 +994,28 @@
                 </div>
 
                 <div class="cold-subcard-header">
+                    <span class="title-tag">🎯 头数单双 (0头单 ~ 4头双)</span>
+                    <div style="display: flex; gap: 3px; flex-wrap: wrap;">
+                        <button type="button" onclick="toggleColdSection('headDsDan', true)" style="font-size:9px;padding:2px 5px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--accent);cursor:pointer;">全单</button>
+                        <button type="button" onclick="toggleColdSection('headDsShuang', true)" style="font-size:9px;padding:2px 5px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--accent);cursor:pointer;">全双</button>
+                        <button type="button" onclick="toggleColdSection('headDs', true)" style="font-size:9px;padding:2px 5px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--accent);cursor:pointer;">全选</button>
+                        <button type="button" onclick="toggleColdSection('headDs', false)" style="font-size:9px;padding:2px 5px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--text-secondary);cursor:pointer;">清空</button>
+                    </div>
+                </div>
+                <div class="head-ds-grid-5col" style="margin-bottom: 10px;">
+                    <label title="0头单数(01,03,05,07,09)"><input type="checkbox" id="headDsOption_0头单"> <span style="font-weight:600;">0头单</span></label>
+                    <label title="1头单数(11,13,15,17,19)"><input type="checkbox" id="headDsOption_1头单"> <span style="font-weight:600;">1头单</span></label>
+                    <label title="2头单数(21,23,25,27,29)"><input type="checkbox" id="headDsOption_2头单"> <span style="font-weight:600;">2头单</span></label>
+                    <label title="3头单数(31,33,35,37,39)"><input type="checkbox" id="headDsOption_3头单"> <span style="font-weight:600;">3头单</span></label>
+                    <label title="4头单数(41,43,45,47,49)"><input type="checkbox" id="headDsOption_4头单"> <span style="font-weight:600;">4头单</span></label>
+                    <label title="0头双数(02,04,06,08)"><input type="checkbox" id="headDsOption_0头双"> <span style="font-weight:600;">0头双</span></label>
+                    <label title="1头双数(10,12,14,16,18)"><input type="checkbox" id="headDsOption_1头双"> <span style="font-weight:600;">1头双</span></label>
+                    <label title="2头双数(20,22,24,26,28)"><input type="checkbox" id="headDsOption_2头双"> <span style="font-weight:600;">2头双</span></label>
+                    <label title="3头双数(30,32,34,36,38)"><input type="checkbox" id="headDsOption_3头双"> <span style="font-weight:600;">3头双</span></label>
+                    <label title="4头双数(40,42,44,46,48)"><input type="checkbox" id="headDsOption_4头双"> <span style="font-weight:600;">4头双</span></label>
+                </div>
+
+                <div class="cold-subcard-header">
                     <span class="title-tag">🎯 尾数选择 (0尾 ~ 9尾)</span>
                     <div style="display: flex; gap: 4px;">
                         <button type="button" onclick="toggleColdSection('tailSelect', true)" style="font-size:9px;padding:2px 7px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--accent);cursor:pointer;">全选</button>
@@ -1017,8 +1057,8 @@
                     <button type="button" onclick="clearColdInput()" style="font-size:9px;padding:2px 7px;border-radius:3px;background:var(--card-bg);border:1px solid var(--border);color:var(--text-secondary);cursor:pointer;">清空</button>
                 </div>
                 <div>
-                    <input type="text" id="coldOption_inputNumbers" placeholder="号码/肖/尾/头/波色/五行/五行单双/段/区/遗漏区间，如 01,05,马,3尾,2头,红波,金行,金单,一段,一区,遗漏1-10,遗漏肖1-3" style="width:100%;font-size:11px;padding:8px 10px;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:8px;color:var(--text-primary);outline:none;">
-                    <div style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.4;">支持号码01-49、生肖(马/蛇...)、前肖/后肖/天肖/地肖、边数/中数、N尾、N头、红/蓝/绿波、五行(金/木/水/火/土)、五行单双(金单/木双...)、一段~七段、一区~五区、遗漏1-10、遗漏肖1-3等，任意符号分隔，留空不启用</div>
+                    <input type="text" id="coldOption_inputNumbers" placeholder="号码/肖/尾/头/头数单双/波色/波色单双/五行/五行单双/段/区/遗漏区间，如 01,05,马,3尾,2头,0头单,1头双,红波,红单,蓝双,金行,金单,一段,一区,遗漏1-10,遗漏肖1-3" style="width:100%;font-size:11px;padding:8px 10px;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:8px;color:var(--text-primary);outline:none;">
+                    <div style="font-size:10px;color:var(--text-secondary);margin-top:4px;line-height:1.4;">支持号码01-49、生肖(马/蛇...)、前肖/后肖/天肖/地肖、边数/中数、N尾、N头、头数单双(0头单/1头双...)、红/蓝/绿波、波色单双(红单/红双/蓝单/蓝双/绿单/绿双)、五行(金/木/水/火/土)、五行单双(金单/木双...)、一段~七段、一区~五区、遗漏1-10、遗漏肖1-3等，任意符号分隔，留空不启用</div>
                 </div>
             </div>
 

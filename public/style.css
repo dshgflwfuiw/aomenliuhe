@@ -3033,13 +3033,13 @@
             border-color: var(--accent);
             background: rgba(0, 212, 255, 0.06);
         }
-        .wave-grid-3col {
+        .wave-grid-3col, .wave-ds-grid-3col {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 4px;
             font-size: 11px;
         }
-        .wave-grid-3col label {
+        .wave-grid-3col label, .wave-ds-grid-3col label {
             display: flex;
             align-items: center;
             justify-content: center;
@@ -3053,7 +3053,7 @@
             font-weight: 600;
             font-size: 11px;
         }
-        .wave-grid-3col label:hover {
+        .wave-grid-3col label:hover, .wave-ds-grid-3col label:hover {
             border-color: rgba(255, 255, 255, 0.2);
         }
         .wuxing-grid-5col {
@@ -3080,7 +3080,7 @@
         .wuxing-grid-5col label:hover {
             border-color: rgba(255, 255, 255, 0.2);
         }
-        .wuxing-ds-grid-5col {
+        .wuxing-ds-grid-5col, .head-ds-grid-5col {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
             gap: 3px;
@@ -3088,7 +3088,7 @@
             width: 100%;
             box-sizing: border-box;
         }
-        .wuxing-ds-grid-5col label {
+        .wuxing-ds-grid-5col label, .head-ds-grid-5col label {
             display: flex;
             align-items: center;
             justify-content: center;
@@ -3105,19 +3105,19 @@
             min-width: 0;
             overflow: hidden;
         }
-        .wuxing-ds-grid-5col label input[type="checkbox"] {
+        .wuxing-ds-grid-5col label input[type="checkbox"], .head-ds-grid-5col label input[type="checkbox"] {
             margin: 0;
             cursor: pointer;
             flex-shrink: 0;
             width: 13px;
             height: 13px;
         }
-        .wuxing-ds-grid-5col label span {
+        .wuxing-ds-grid-5col label span, .head-ds-grid-5col label span {
             white-space: nowrap;
             overflow: hidden;
             text-overflow: clip;
         }
-        .wuxing-ds-grid-5col label:hover {
+        .wuxing-ds-grid-5col label:hover, .head-ds-grid-5col label:hover {
             border-color: var(--accent);
             background: rgba(0, 212, 255, 0.06);
         }
@@ -3269,8 +3269,10 @@
             border-color: #e2e8f0;
         }
         body.light-theme .wave-grid-3col label,
+        body.light-theme .wave-ds-grid-3col label,
         body.light-theme .wuxing-grid-5col label,
-        body.light-theme .wuxing-ds-grid-5col label {
+        body.light-theme .wuxing-ds-grid-5col label,
+        body.light-theme .head-ds-grid-5col label {
             background: #f8fafc;
             border-color: #e2e8f0;
         }

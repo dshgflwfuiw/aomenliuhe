@@ -1044,12 +1044,14 @@
                             inputTerms: cold.inputTerms,
                             selectZodiacs: cold.selectedZodiacs,
                             selectedWaves: cold.selectedWaves,
+                            selectedWaveDs: cold.selectedWaveDs,
                             selectedWuxings: cold.selectedWuxings,
                             selectedWuxingDs: cold.selectedWuxingDs,
                             selectedMorphs: cold.selectedMorphs,
                             selectedHeNumbers: cold.selectedHeNumbers,
                             selectedHeTails: cold.selectedHeTails,
                             selectedHeads: cold.selectedHeads,
+                            selectedHeadDs: cold.selectedHeadDs,
                             selectedTails: cold.selectedTails,
                             selectedSegments: cold.selectedSegments
                         }, itemYear);
@@ -1093,12 +1095,14 @@
                             inputTerms: cold.inputTerms,
                             selectZodiacs: cold.selectedZodiacs,
                             selectedWaves: cold.selectedWaves,
+                            selectedWaveDs: cold.selectedWaveDs,
                             selectedWuxings: cold.selectedWuxings,
                             selectedWuxingDs: cold.selectedWuxingDs,
                             selectedMorphs: cold.selectedMorphs,
                             selectedHeNumbers: cold.selectedHeNumbers,
                             selectedHeTails: cold.selectedHeTails,
                             selectedHeads: cold.selectedHeads,
+                            selectedHeadDs: cold.selectedHeadDs,
                             selectedTails: cold.selectedTails,
                             selectedSegments: cold.selectedSegments
                         }, itemYear);
@@ -1113,6 +1117,7 @@
                         if (cold.inputTerms) coldHitSetsForPoint.inputNumbers = formatInputTerms(cold.inputTerms);
                         if (cold.selectedZodiacs && cold.selectedZodiacs.length) coldHitSetsForPoint.selectZodiacs = cold.selectedZodiacs;
                         if (cold.selectedWaves && cold.selectedWaves.length) coldHitSetsForPoint.selectedWaves = cold.selectedWaves;
+                        if (cold.selectedWaveDs && cold.selectedWaveDs.length) coldHitSetsForPoint.selectedWaveDs = cold.selectedWaveDs;
                         if (cold.selectedWuxings && cold.selectedWuxings.length) coldHitSetsForPoint.selectedWuxings = cold.selectedWuxings;
                         if (cold.selectedWuxingDs && cold.selectedWuxingDs.length) coldHitSetsForPoint.selectedWuxingDs = cold.selectedWuxingDs;
                         if (cold.selectedMorphs && cold.selectedMorphs.length) coldHitSetsForPoint.selectedMorphs = cold.selectedMorphs;
@@ -1120,6 +1125,7 @@
                         if (cold.selectedHeTails && cold.selectedHeTails.length) coldHitSetsForPoint.selectedHeTails = cold.selectedHeTails;
                         if (cold.selectedHeheads && cold.selectedHeheads.length) coldHitSetsForPoint.selectedHeheads = cold.selectedHeheads;
                         if (cold.selectedHeads && cold.selectedHeads.length) coldHitSetsForPoint.selectedHeads = cold.selectedHeheads || cold.selectedHeads;
+                        if (cold.selectedHeadDs && cold.selectedHeadDs.length) coldHitSetsForPoint.selectedHeadDs = cold.selectedHeadDs;
                         if (cold.selectedTails && cold.selectedTails.length) coldHitSetsForPoint.selectedTails = cold.selectedTails;
                         if (cold.selectedSegments && cold.selectedSegments.length) coldHitSetsForPoint.selectedSegments = cold.selectedSegments;
                         if (nums.length >= 1) {
@@ -1155,8 +1161,10 @@
                         matches = countColdConditionMatches(cold, rollingColdSets, {
                             numStr, winZ, winNum, color, cList,
                             headKey, tailKey, halfWaveKey, halfHeadKey, segment, regionKey, regionShort, jiaYe,
+                            waveDsKey: halfWaveKey,
                             wuxingKey: getWuxingKey(winNum, itemYear),
-                            wuxingDsKey: getWuxingDsKey(winNum, itemYear)
+                            wuxingDsKey: getWuxingDsKey(winNum, itemYear),
+                            headDsKey: getHeadDsKey(winNum)
                         });
 
                         step = matches > 0 ? 1 : -1;
@@ -1365,8 +1373,10 @@
                             regionKey: getRegionKey(winNum),
                             regionShort: getRegionShortKey(winNum),
                             jiaYe: getJiaYe(winZ),
+                            waveDsKey: getHalfWaveKey(cList[6]),
                             wuxingKey: getWuxingKey(winNum, itemYear),
-                            wuxingDsKey: getWuxingDsKey(winNum, itemYear)
+                            wuxingDsKey: getWuxingDsKey(winNum, itemYear),
+                            headDsKey: getHeadDsKey(winNum)
                         });
                         overlayScores['cold_' + si] = (overlayScores['cold_' + si] || 0) + (m > 0 ? 1 : -1);
                     });
@@ -1468,12 +1478,14 @@
                         inputTerms: cold.inputTerms,
                         selectZodiacs: cold.selectedZodiacs,
                         selectedWaves: cold.selectedWaves,
+                        selectedWaveDs: cold.selectedWaveDs,
                         selectedWuxings: cold.selectedWuxings,
                         selectedWuxingDs: cold.selectedWuxingDs,
                         selectedMorphs: cold.selectedMorphs,
                         selectedHeNumbers: cold.selectedHeNumbers,
                         selectedHeTails: cold.selectedHeTails,
                         selectedHeads: cold.selectedHeads,
+                        selectedHeadDs: cold.selectedHeadDs,
                         selectedTails: cold.selectedTails,
                         selectedSegments: cold.selectedSegments
                     });
@@ -3833,12 +3845,14 @@
                         counts: detail.counts || {},
                         selectedZodiacs: detail.selectedZodiacs || [],
                         selectedWaves: detail.selectedWaves || [],
+                        selectedWaveDs: detail.selectedWaveDs || [],
                         selectedWuxings: detail.selectedWuxings || [],
                         selectedWuxingDs: detail.selectedWuxingDs || [],
                         selectedMorphs: detail.selectedMorphs || [],
                         selectedHeNumbers: detail.selectedHeNumbers || [],
                         selectedHeTails: detail.selectedHeTails || [],
                         selectedHeads: detail.selectedHeads || [],
+                        selectedHeadDs: detail.selectedHeadDs || [],
                         selectedTails: detail.selectedTails || [],
                         selectedSegments: detail.selectedSegments || [],
                         selectedNumbers: detail.selectedNumbers || [],
@@ -3860,12 +3874,14 @@
                 counts: {},
                 selectedZodiacs: [],
                 selectedWaves: [],
+                selectedWaveDs: [],
                 selectedWuxings: [],
                 selectedWuxingDs: [],
                 selectedMorphs: [],
                 selectedHeNumbers: [],
                 selectedHeTails: [],
                 selectedHeads: [],
+                selectedHeadDs: [],
                 selectedTails: [],
                 selectedSegments: [],
                 selectedNumbers: [],
@@ -4187,12 +4203,14 @@
                         inputTerms: coldCfg.inputTerms,
                         selectZodiacs: coldCfg.selectedZodiacs,
                         selectedWaves: coldCfg.selectedWaves,
+                        selectedWaveDs: coldCfg.selectedWaveDs,
                         selectedWuxings: coldCfg.selectedWuxings,
                         selectedWuxingDs: coldCfg.selectedWuxingDs,
                         selectedMorphs: coldCfg.selectedMorphs,
                         selectedHeNumbers: coldCfg.selectedHeNumbers,
                         selectedHeTails: coldCfg.selectedHeTails,
                         selectedHeads: coldCfg.selectedHeads,
+                        selectedHeadDs: coldCfg.selectedHeadDs,
                         selectedTails: coldCfg.selectedTails,
                         selectedSegments: coldCfg.selectedSegments
                     }, itemYear);
@@ -5109,6 +5127,7 @@
                     counts: refreshed.counts,
                     selectedZodiacs: refreshed.selectedZodiacs,
                     selectedWaves: refreshed.selectedWaves,
+                    selectedWaveDs: refreshed.selectedWaveDs,
                     selectedWuxings: refreshed.selectedWuxings,
                     selectedWuxingDs: refreshed.selectedWuxingDs,
                     selectedMorphs: refreshed.selectedMorphs,
@@ -5116,6 +5135,7 @@
                     selectedHeTails: refreshed.selectedHeTails,
                     selectedHeheads: refreshed.selectedHeads,
                     selectedHeads: refreshed.selectedHeads,
+                    selectedHeadDs: refreshed.selectedHeadDs,
                     selectedTails: refreshed.selectedTails,
                     selectedSegments: refreshed.selectedSegments,
                     selectedNumbers: refreshed.selectedNumbers,
@@ -6243,6 +6263,14 @@
             return NUMBER_TO_WUXING[n] || '未知';
         }
 
+        const WAVE_DS_LIST = ['红单', '蓝单', '绿单', '红双', '蓝双', '绿双'];
+
+        function getWaveDsKey(num) {
+            const n = typeof num === 'number' ? num : parseInt(num, 10);
+            if (isNaN(n) || n < 1 || n > 49) return '未知';
+            return getHalfWaveKey(n.toString().padStart(2, '0'));
+        }
+
         const WUXING_DS_LIST = ['金单', '木单', '水单', '火单', '土单', '金双', '木双', '水双', '火双', '土双'];
 
         function getWuxingDsKey(num, year) {
@@ -6250,6 +6278,16 @@
             if (wx === '未知') return '未知';
             const n = typeof num === 'number' ? num : parseInt(num, 10);
             return `${wx}${n % 2 !== 0 ? '单' : '双'}`;
+        }
+
+        const HEAD_DS_LIST = ['0头单', '1头单', '2头单', '3头单', '4头单', '0头双', '1头双', '2头双', '3头双', '4头双'];
+
+        function getHeadDsKey(num) {
+            const n = typeof num === 'number' ? num : parseInt(num, 10);
+            if (isNaN(n) || n < 1 || n > 49) return '未知';
+            const head = Math.floor(n / 10);
+            const ds = (n % 2 !== 0) ? '单' : '双';
+            return `${head}头${ds}`;
         }
 
         // 动态更新冷热与自选面板中五行与五行单双的号码提示
@@ -6752,8 +6790,10 @@
 
         function countColdConditionMatches(cold, rollingColdSets, ctx) {
             const { numStr, winZ, winNum, color, headKey, tailKey, halfWaveKey, halfHeadKey, segment, regionKey, regionShort, jiaYe } = ctx;
+            const waveDsKey = ctx.waveDsKey || halfWaveKey || getWaveDsKey(winNum);
             const wuxingKey = ctx.wuxingKey || getWuxingKey(winNum);
             const wuxingDsKey = ctx.wuxingDsKey || getWuxingDsKey(winNum);
+            const headDsKey = ctx.headDsKey || getHeadDsKey(winNum);
             let matches = 0;
             if (cold.types.includes('numbers') && rollingColdSets.numbers.includes(numStr)) matches++;
             if (cold.types.includes('zodiacs') && rollingColdSets.zodiacs.includes(winZ)) matches++;
@@ -6771,8 +6811,10 @@
             if (cold.types.includes('allHotZodiacRange') && rollingColdSets.allHotZodiacRange && rollingColdSets.allHotZodiacRange.includes(winZ)) matches++;
             if (cold.types.includes('selectZodiacs') && cold.selectedZodiacs && cold.selectedZodiacs.includes(winZ)) matches++;
             if (cold.types.includes('selectedWaves') && cold.selectedWaves && cold.selectedWaves.includes(color)) matches++;
+            if (cold.types.includes('selectedWaveDs') && cold.selectedWaveDs && cold.selectedWaveDs.includes(waveDsKey)) matches++;
             if (cold.types.includes('selectedWuxings') && cold.selectedWuxings && cold.selectedWuxings.includes(wuxingKey)) matches++;
             if (cold.types.includes('selectedWuxingDs') && cold.selectedWuxingDs && cold.selectedWuxingDs.includes(wuxingDsKey)) matches++;
+            if (cold.types.includes('selectedHeadDs') && cold.selectedHeadDs && cold.selectedHeadDs.includes(headDsKey)) matches++;
             if (cold.types.includes('selectedRegions') && cold.selectedRegions && (cold.selectedRegions.includes(regionKey) || cold.selectedRegions.includes(regionShort))) matches++;
             if (cold.types.includes('selectedMorphs') && cold.selectedMorphs && cold.selectedMorphs.length) {
                 const mDanShuang = cold.selectedMorphs.filter(m => m === 'heDan' || m === 'heShuang');
@@ -6815,6 +6857,8 @@
                     t.zodiacs.includes(winZ) ||
                     (t.wuxings && t.wuxings.includes(wuxingKey)) ||
                     (t.wuxingDs && t.wuxingDs.includes(wuxingDsKey)) ||
+                    (t.waveDs && t.waveDs.includes(waveDsKey)) ||
+                    (t.headDs && t.headDs.includes(headDsKey)) ||
                     t.tails.includes(winNum % 10) ||
                     t.heads.includes(Math.floor(winNum / 10)) ||
                     t.waves.includes(color) ||
@@ -7010,8 +7054,10 @@
             if (sets.allHotZodiacRange) sets.allHotZodiacRange.forEach(zodiac => addNumbersByFilter(num => getZodiac(parseInt(num, 10)) === zodiac));
             if (sets.selectZodiacs) sets.selectZodiacs.forEach(zodiac => addNumbersByFilter(num => getZodiac(parseInt(num, 10)) === zodiac));
             if (sets.selectedWaves) sets.selectedWaves.forEach(wave => addNumbersByFilter(num => getColor(num) === wave));
+            if (sets.selectedWaveDs) sets.selectedWaveDs.forEach(wds => addNumbersByFilter(num => getWaveDsKey(num) === wds));
             if (sets.selectedWuxings) sets.selectedWuxings.forEach(wx => addNumbersByFilter(num => getWuxingKey(num) === wx));
             if (sets.selectedWuxingDs) sets.selectedWuxingDs.forEach(wxds => addNumbersByFilter(num => getWuxingDsKey(num) === wxds));
+            if (sets.selectedHeadDs) sets.selectedHeadDs.forEach(hds => addNumbersByFilter(num => getHeadDsKey(num) === hds));
             if (sets.selectedRegions) sets.selectedRegions.forEach(reg => addNumbersByFilter(num => getRegionKey(parseInt(num, 10)) === reg || getRegionShortKey(parseInt(num, 10)) === reg));
             if (sets.selectedMorphs) {
                 sets.selectedMorphs.forEach(m => {
@@ -7065,8 +7111,10 @@
                 it.tails.forEach(t => addNumbersByFilter(num => parseInt(num, 10) % 10 === t));
                 it.heads.forEach(h => addNumbersByFilter(num => Math.floor(parseInt(num, 10) / 10) === h));
                 it.waves.forEach(w => addNumbersByFilter(num => getColor(num) === w));
+                if (it.waveDs) it.waveDs.forEach(wds => addNumbersByFilter(num => getWaveDsKey(num) === wds));
                 if (it.wuxings) it.wuxings.forEach(wx => addNumbersByFilter(num => getWuxingKey(num) === wx));
                 if (it.wuxingDs) it.wuxingDs.forEach(wxds => addNumbersByFilter(num => getWuxingDsKey(num) === wxds));
+                if (it.headDs) it.headDs.forEach(hds => addNumbersByFilter(num => getHeadDsKey(num) === hds));
                 it.segments.forEach(s => addNumbersByFilter(num => Math.ceil(parseInt(num, 10) / 7) === s));
                 if (it.regions) it.regions.forEach(r => addNumbersByFilter(num => getRegionShortKey(parseInt(num, 10)) === r));
                 if (it.morphs) it.morphs.forEach(m => {
@@ -7113,7 +7161,7 @@
             }
 
             // Show inline selection results next to each checked option (skip zodiac types - self-explanatory)
-            const skipTypes = ['zodiacs', 'hotZodiacs', 'coldZodiacs', 'allHotZodiacs', 'allColdZodiacs', 'hotZodiacRange', 'allHotZodiacRange', 'selectZodiacs', 'selectedWaves', 'selectedWuxings', 'selectedWuxingDs', 'selectedMorphs', 'selectedHeNumbers', 'selectedHeTails', 'selectedHeheads', 'selectedHeheads', 'selectedHeads', 'selectedTails', 'selectedSegments'];
+            const skipTypes = ['zodiacs', 'hotZodiacs', 'coldZodiacs', 'allHotZodiacs', 'allColdZodiacs', 'hotZodiacRange', 'allHotZodiacRange', 'selectZodiacs', 'selectedWaves', 'selectedWaveDs', 'selectedWuxings', 'selectedWuxingDs', 'selectedMorphs', 'selectedHeNumbers', 'selectedHeTails', 'selectedHeheads', 'selectedHeads', 'selectedHeadDs', 'selectedTails', 'selectedSegments'];
             const displayValueMap = { red: '红波', blue: '蓝波', green: '绿波', jia: '家肖', ye: '野肖' };
             document.querySelectorAll('.cold-inline-result').forEach(el => el.remove());
             Object.keys(sets).forEach(type => {
@@ -7142,10 +7190,21 @@
         }
 
         function parseInputTerms(text) {
-            const terms = { numbers: [], zodiacs: [], wuxings: [], wuxingDs: [], tails: [], heads: [], waves: [], segments: [], regions: [], omissionRanges: [], omissionZodiacRanges: [], pingOmissionRanges: [], pingOmissionZodiacRanges: [], hotNumberRanges: [], allHotNumberRanges: [], hotZodiacRanges: [], allHotZodiacRanges: [], morphs: [], heNumbers: [], heTails: [] };
+            const terms = { numbers: [], zodiacs: [], wuxings: [], wuxingDs: [], waveDs: [], headDs: [], tails: [], heads: [], waves: [], segments: [], regions: [], omissionRanges: [], omissionZodiacRanges: [], pingOmissionRanges: [], pingOmissionZodiacRanges: [], hotNumberRanges: [], allHotNumberRanges: [], hotZodiacRanges: [], allHotZodiacRanges: [], morphs: [], heNumbers: [], heTails: [] };
             if (!text) return terms;
             const zodiacNames = new Set(['鼠', '牛', '虎', '兔', '龙', '蛇', '马', '羊', '猴', '鸡', '狗', '猪']);
             const waveMap = { '红': 'red', '蓝': 'blue', '绿': 'green', '红波': 'red', '蓝波': 'blue', '绿波': 'green' };
+            const waveDsTokenMap = {
+                '红单': '红单', '红双': '红双',
+                '蓝单': '蓝单', '蓝双': '蓝双',
+                '绿单': '绿单', '绿双': '绿双',
+                '红波单': '红单', '红波双': '红双',
+                '蓝波单': '蓝单', '蓝波双': '蓝双',
+                '绿波单': '绿单', '绿波双': '绿双',
+                '红单数': '红单', '红双数': '红双',
+                '蓝单数': '蓝单', '蓝双数': '蓝双',
+                '绿单数': '绿单', '绿双数': '绿双'
+            };
             const wuxingDsTokenMap = {
                 '金单': '金单', '金双': '金双',
                 '木单': '木单', '木双': '木双',
@@ -7175,6 +7234,11 @@
             };
             const tokens = text.split(/[*^&%$#@!~,，;；、\s\-\+|｜]+/).map(s => s.trim()).filter(Boolean);
             tokens.forEach(token => {
+                if (waveDsTokenMap[token]) {
+                    const wds = waveDsTokenMap[token];
+                    if (!terms.waveDs.includes(wds)) terms.waveDs.push(wds);
+                    return;
+                }
                 if (wuxingDsTokenMap[token]) {
                     const wxds = wuxingDsTokenMap[token];
                     if (!terms.wuxingDs.includes(wxds)) terms.wuxingDs.push(wxds);
@@ -7297,6 +7361,12 @@
                 if (m) { const h = parseInt(m[1], 10); if (!terms.heads.includes(h)) terms.heads.push(h); return; }
                 m = token.match(/^头([0-4])$/);
                 if (m) { const h = parseInt(m[1], 10); if (!terms.heads.includes(h)) terms.heads.push(h); return; }
+                let mHeadDs = token.match(/^([0-4])(?:头)?([单双])$/);
+                if (mHeadDs) {
+                    const hds = `${mHeadDs[1]}头${mHeadDs[2]}`;
+                    if (!terms.headDs.includes(hds)) terms.headDs.push(hds);
+                    return;
+                }
                 if (zodiacNames.has(token)) { if (!terms.zodiacs.includes(token)) terms.zodiacs.push(token); return; }
                 if (/^\d{1,2}$/.test(token)) {
                     const n = parseInt(token, 10);
@@ -7321,8 +7391,10 @@
             if (t.tails && t.tails.length) parts.push(...t.tails.map(x => x + '尾'));
             if (t.heads && t.heads.length) parts.push(...t.heads.map(x => x + '头'));
             if (t.waves && t.waves.length) parts.push(...t.waves.map(w => waveNames[w]));
+            if (t.waveDs && t.waveDs.length) parts.push(...t.waveDs);
             if (t.wuxings && t.wuxings.length) parts.push(...t.wuxings.map(wx => wx + '行'));
             if (t.wuxingDs && t.wuxingDs.length) parts.push(...t.wuxingDs);
+            if (t.headDs && t.headDs.length) parts.push(...t.headDs);
             if (t.segments && t.segments.length) parts.push(...t.segments.map(s => s + '段'));
             if (t.regions && t.regions.length) parts.push(...t.regions.map(r => regionNames[r] || r));
             if (t.morphs && t.morphs.length) {
@@ -7352,13 +7424,15 @@
             const inputText = document.getElementById('coldOption_inputNumbers')?.value.trim() || '';
             const inputTerms = parseInputTerms(inputText);
             const selectedNumbers = inputTerms.numbers || [];
-            const hasInput = selectedNumbers.length || (inputTerms.zodiacs && inputTerms.zodiacs.length) || (inputTerms.tails && inputTerms.tails.length) || (inputTerms.heads && inputTerms.heads.length) || (inputTerms.waves && inputTerms.waves.length) || (inputTerms.wuxings && inputTerms.wuxings.length) || (inputTerms.wuxingDs && inputTerms.wuxingDs.length) || (inputTerms.segments && inputTerms.segments.length) || (inputTerms.regions && inputTerms.regions.length) || (inputTerms.omissionRanges && inputTerms.omissionRanges.length) || (inputTerms.omissionZodiacRanges && inputTerms.omissionZodiacRanges.length) || (inputTerms.pingOmissionRanges && inputTerms.pingOmissionRanges.length) || (inputTerms.pingOmissionZodiacRanges && inputTerms.pingOmissionZodiacRanges.length) || (inputTerms.hotNumberRanges && inputTerms.hotNumberRanges.length) || (inputTerms.allHotNumberRanges && inputTerms.allHotNumberRanges.length) || (inputTerms.hotZodiacRanges && inputTerms.hotZodiacRanges.length) || (inputTerms.allHotZodiacRanges && inputTerms.allHotZodiacRanges.length) || (inputTerms.morphs && inputTerms.morphs.length) || (inputTerms.heNumbers && inputTerms.heNumbers.length) || (inputTerms.heTails && inputTerms.heTails.length);
+            const hasInput = selectedNumbers.length || (inputTerms.zodiacs && inputTerms.zodiacs.length) || (inputTerms.tails && inputTerms.tails.length) || (inputTerms.heads && inputTerms.heads.length) || (inputTerms.headDs && inputTerms.headDs.length) || (inputTerms.waves && inputTerms.waves.length) || (inputTerms.waveDs && inputTerms.waveDs.length) || (inputTerms.wuxings && inputTerms.wuxings.length) || (inputTerms.wuxingDs && inputTerms.wuxingDs.length) || (inputTerms.segments && inputTerms.segments.length) || (inputTerms.regions && inputTerms.regions.length) || (inputTerms.omissionRanges && inputTerms.omissionRanges.length) || (inputTerms.omissionZodiacRanges && inputTerms.omissionZodiacRanges.length) || (inputTerms.pingOmissionRanges && inputTerms.pingOmissionRanges.length) || (inputTerms.pingOmissionZodiacRanges && inputTerms.pingOmissionZodiacRanges.length) || (inputTerms.hotNumberRanges && inputTerms.hotNumberRanges.length) || (inputTerms.allHotNumberRanges && inputTerms.allHotNumberRanges.length) || (inputTerms.hotZodiacRanges && inputTerms.hotZodiacRanges.length) || (inputTerms.allHotZodiacRanges && inputTerms.allHotZodiacRanges.length) || (inputTerms.morphs && inputTerms.morphs.length) || (inputTerms.heNumbers && inputTerms.heNumbers.length) || (inputTerms.heTails && inputTerms.heTails.length);
             if (hasInput) types.push('inputNumbers');
             const selectedZodiacs = (CONFIG.zodiacMap[state.currentYear] || [])
                 .filter(z => document.getElementById(`zodiacOption_${z}`)?.checked);
             if (selectedZodiacs.length) types.push('selectZodiacs');
             const selectedWaves = ['red', 'blue', 'green'].filter(w => document.getElementById('waveOption_' + w)?.checked);
             if (selectedWaves.length) types.push('selectedWaves');
+            const selectedWaveDs = WAVE_DS_LIST.filter(wds => document.getElementById('waveDsOption_' + wds)?.checked);
+            if (selectedWaveDs.length) types.push('selectedWaveDs');
             const selectedWuxings = ['金', '木', '水', '火', '土'].filter(wx => document.getElementById('wuxingOption_' + wx)?.checked);
             if (selectedWuxings.length) types.push('selectedWuxings');
             const selectedWuxingDs = WUXING_DS_LIST.filter(wxds => document.getElementById('wuxingDsOption_' + wxds)?.checked);
@@ -7379,6 +7453,9 @@
             const selectedHeads = Array.from({ length: 5 }, (_, i) => i)
                 .filter(h => document.getElementById(`headOption_${h}`)?.checked);
             if (selectedHeads.length) types.push('selectedHeads');
+
+            const selectedHeadDs = HEAD_DS_LIST.filter(hds => document.getElementById('headDsOption_' + hds)?.checked);
+            if (selectedHeadDs.length) types.push('selectedHeadDs');
 
             const selectedTails = Array.from({ length: 10 }, (_, i) => i)
                 .filter(t => document.getElementById(`tailOption_${t}`)?.checked);
@@ -7409,6 +7486,7 @@
                         counts: {},
                         selectedZodiacs: [],
                         selectedWaves: [],
+                        selectedWaveDs: [],
                         selectedWuxings: [],
                         selectedWuxingDs: [],
                         selectedMorphs: [],
@@ -7416,6 +7494,7 @@
                         selectedHeTails: [],
                         selectedHeheads: [],
                         selectedHeads: [],
+                        selectedHeadDs: [],
                         selectedTails: [],
                         selectedSegments: [],
                         selectedNumbers: [],
@@ -7475,6 +7554,7 @@
             if (types.includes('base49')) sets.base49 = true;
             if (selectedZodiacs.length) sets.selectZodiacs = selectedZodiacs;
             if (selectedWaves.length) sets.selectedWaves = selectedWaves;
+            if (selectedWaveDs.length) sets.selectedWaveDs = selectedWaveDs;
             if (selectedWuxings.length) sets.selectedWuxings = selectedWuxings;
             if (selectedWuxingDs.length) sets.selectedWuxingDs = selectedWuxingDs;
             if (selectedMorphs.length) sets.selectedMorphs = selectedMorphs;
@@ -7482,6 +7562,7 @@
             if (selectedHeTails.length) sets.selectedHeTails = selectedHeTails;
             if (selectedHeads.length) sets.selectedHeheads = selectedHeads;
             if (selectedHeads.length) sets.selectedHeads = selectedHeads;
+            if (selectedHeadDs.length) sets.selectedHeadDs = selectedHeadDs;
             if (selectedTails.length) sets.selectedTails = selectedTails;
             if (selectedSegments.length) sets.selectedSegments = selectedSegments;
             if (selectedNumbers.length) sets.inputNumbers = selectedNumbers;
@@ -7505,6 +7586,7 @@
                 counts,
                 selectedZodiacs,
                 selectedWaves,
+                selectedWaveDs,
                 selectedWuxings,
                 selectedWuxingDs,
                 selectedMorphs,
@@ -7512,6 +7594,7 @@
                 selectedHeTails,
                 selectedHeheads: selectedHeads,
                 selectedHeads,
+                selectedHeadDs,
                 selectedTails,
                 selectedSegments,
                 selectedNumbers,
@@ -7521,7 +7604,7 @@
 
         function generateColdKline() {
             const detail = calculateColdSelectionDetail();
-            const { types, finalNumbers, counts, selectedZodiacs, selectedWaves, selectedWuxings, selectedWuxingDs, selectedMorphs, selectedHeNumbers, selectedHeTails, selectedHeads, selectedTails, selectedSegments, selectedNumbers, inputTerms } = detail;
+            const { types, finalNumbers, counts, selectedZodiacs, selectedWaves, selectedWaveDs, selectedWuxings, selectedWuxingDs, selectedMorphs, selectedHeNumbers, selectedHeTails, selectedHeads, selectedHeadDs, selectedTails, selectedSegments, selectedNumbers, inputTerms } = detail;
             
             if (!types.length) {
                 if (typeof showToast === 'function') showToast('⚠️ 请先勾选至少一个特码综合K线选项', 3000);
@@ -7549,13 +7632,16 @@
                 counts,
                 selectedZodiacs,
                 selectedWaves,
+                selectedWaveDs,
                 selectedWuxings,
                 selectedWuxingDs,
                 selectedMorphs,
                 selectedHeNumbers,
                 selectedHeTails,
                 selectedHeheads: selectedHeads,
+                selectedHeheads: selectedHeads,
                 selectedHeads,
+                selectedHeadDs,
                 selectedTails,
                 selectedSegments,
                 selectedNumbers,
@@ -7845,8 +7931,10 @@
             add(sets.allHotZodiacRange, num => sets.allHotZodiacRange.includes(getZodiac(parseInt(num, 10), y)));
             add(sets.selectZodiacs, num => sets.selectZodiacs.includes(getZodiac(parseInt(num, 10), y)));
             add(sets.selectedWaves, num => sets.selectedWaves.includes(getColor(num)));
+            add(sets.selectedWaveDs, num => sets.selectedWaveDs.includes(getWaveDsKey(num)));
             add(sets.selectedWuxings, num => sets.selectedWuxings.includes(getWuxingKey(num, y)));
             add(sets.selectedWuxingDs, num => sets.selectedWuxingDs.includes(getWuxingDsKey(num, y)));
+            add(sets.selectedHeadDs, num => sets.selectedHeadDs.includes(getHeadDsKey(num)));
             add(sets.selectedRegions, num => sets.selectedRegions.includes(getRegionKey(parseInt(num, 10))) || sets.selectedRegions.includes(getRegionShortKey(parseInt(num, 10))));
             add(sets.omissionRange, num => sets.omissionRange.includes(num));
             add(sets.omissionZodiacRange, num => sets.omissionZodiacRange.includes(getZodiac(parseInt(num, 10), y)));
@@ -7928,8 +8016,10 @@
                 if (it.tails && it.tails.length) out.push(allNumbers.filter(n => it.tails.includes(parseInt(n, 10) % 10)));
                 if (it.heads && it.heads.length) out.push(allNumbers.filter(n => it.heads.includes(Math.floor(parseInt(n, 10) / 10))));
                 if (it.waves && it.waves.length) out.push(allNumbers.filter(n => it.waves.includes(getColor(n))));
+                if (it.waveDs && it.waveDs.length) out.push(allNumbers.filter(n => it.waveDs.includes(getWaveDsKey(n))));
                 if (it.wuxings && it.wuxings.length) out.push(allNumbers.filter(n => it.wuxings.includes(getWuxingKey(n, y))));
                 if (it.wuxingDs && it.wuxingDs.length) out.push(allNumbers.filter(n => it.wuxingDs.includes(getWuxingDsKey(n, y))));
+                if (it.headDs && it.headDs.length) out.push(allNumbers.filter(n => it.headDs.includes(getHeadDsKey(n))));
                 if (it.segments && it.segments.length) out.push(allNumbers.filter(n => it.segments.includes(Math.ceil(parseInt(n, 10) / 7))));
                 if (it.regions && it.regions.length) out.push(allNumbers.filter(n => it.regions.includes(getRegionShortKey(parseInt(n, 10)))));
                 if (it.morphs && it.morphs.length) {
@@ -8069,6 +8159,10 @@
                 const el = document.getElementById('waveOption_' + w);
                 if (el) el.checked = false;
             });
+            WAVE_DS_LIST.forEach(wds => {
+                const el = document.getElementById('waveDsOption_' + wds);
+                if (el) el.checked = false;
+            });
             ['金', '木', '水', '火', '土'].forEach(wx => {
                 const el = document.getElementById('wuxingOption_' + wx);
                 if (el) el.checked = false;
@@ -8093,6 +8187,10 @@
                 const el = document.getElementById(`headOption_${i}`);
                 if (el) el.checked = false;
             }
+            HEAD_DS_LIST.forEach(hds => {
+                const el = document.getElementById('headDsOption_' + hds);
+                if (el) el.checked = false;
+            });
             for (let i = 0; i <= 9; i++) {
                 const el = document.getElementById(`tailOption_${i}`);
                 if (el) el.checked = false;
@@ -8122,6 +8220,27 @@
                 waveIds.forEach(w => {
                     const el = document.getElementById('waveOption_' + w);
                     if (el) el.checked = selectAll;
+                });
+            } else if (section === 'waveDs') {
+                WAVE_DS_LIST.forEach(wds => {
+                    const el = document.getElementById('waveDsOption_' + wds);
+                    if (el) el.checked = selectAll;
+                });
+            } else if (section === 'waveDsDan') {
+                WAVE_DS_LIST.forEach(wds => {
+                    const el = document.getElementById('waveDsOption_' + wds);
+                    if (el) {
+                        if (wds.endsWith('单')) el.checked = selectAll;
+                        else el.checked = false;
+                    }
+                });
+            } else if (section === 'waveDsShuang') {
+                WAVE_DS_LIST.forEach(wds => {
+                    const el = document.getElementById('waveDsOption_' + wds);
+                    if (el) {
+                        if (wds.endsWith('双')) el.checked = selectAll;
+                        else el.checked = false;
+                    }
                 });
             } else if (section === 'wuxing') {
                 ['金', '木', '水', '火', '土'].forEach(wx => {
@@ -8175,6 +8294,27 @@
                     const el = document.getElementById('headOption_' + i);
                     if (el) el.checked = selectAll;
                 }
+            } else if (section === 'headDs') {
+                HEAD_DS_LIST.forEach(hds => {
+                    const el = document.getElementById('headDsOption_' + hds);
+                    if (el) el.checked = selectAll;
+                });
+            } else if (section === 'headDsDan') {
+                HEAD_DS_LIST.forEach(hds => {
+                    const el = document.getElementById('headDsOption_' + hds);
+                    if (el) {
+                        if (hds.endsWith('单')) el.checked = selectAll;
+                        else el.checked = false;
+                    }
+                });
+            } else if (section === 'headDsShuang') {
+                HEAD_DS_LIST.forEach(hds => {
+                    const el = document.getElementById('headDsOption_' + hds);
+                    if (el) {
+                        if (hds.endsWith('双')) el.checked = selectAll;
+                        else el.checked = false;
+                    }
+                });
             } else if (section === 'tailSelect') {
                 for (let i = 0; i <= 9; i++) {
                     const el = document.getElementById('tailOption_' + i);
@@ -8843,6 +8983,11 @@
                 if (document.getElementById('waveOption_' + w)?.checked) config.waves.push(w);
             });
 
+            config.waveDs = [];
+            WAVE_DS_LIST.forEach(wds => {
+                if (document.getElementById('waveDsOption_' + wds)?.checked) config.waveDs.push(wds);
+            });
+
             config.wuxings = [];
             ['金', '木', '水', '火', '土'].forEach(wx => {
                 if (document.getElementById('wuxingOption_' + wx)?.checked) config.wuxings.push(wx);
@@ -8869,6 +9014,10 @@
             for (let i = 0; i <= 4; i++) {
                 if (document.getElementById(`headOption_${i}`)?.checked) config.heads.push(i);
             }
+            config.headDs = [];
+            HEAD_DS_LIST.forEach(hds => {
+                if (document.getElementById('headDsOption_' + hds)?.checked) config.headDs.push(hds);
+            });
             config.tails = [];
             for (let i = 0; i <= 9; i++) {
                 if (document.getElementById(`tailOption_${i}`)?.checked) config.tails.push(i);
@@ -8945,6 +9094,12 @@
                     if (el) el.checked = true;
                 });
             }
+            if (config.waveDs && Array.isArray(config.waveDs)) {
+                config.waveDs.forEach(wds => {
+                    const el = document.getElementById(`waveDsOption_${wds}`);
+                    if (el) el.checked = true;
+                });
+            }
             if (config.wuxings && Array.isArray(config.wuxings)) {
                 config.wuxings.forEach(wx => {
                     const el = document.getElementById(`wuxingOption_${wx}`);
@@ -8978,6 +9133,12 @@
             if (config.heads && Array.isArray(config.heads)) {
                 config.heads.forEach(h => {
                     const el = document.getElementById(`headOption_${h}`);
+                    if (el) el.checked = true;
+                });
+            }
+            if (config.headDs && Array.isArray(config.headDs)) {
+                config.headDs.forEach(hds => {
+                    const el = document.getElementById(`headDsOption_${hds}`);
                     if (el) el.checked = true;
                 });
             }
@@ -9943,6 +10104,7 @@
                 counts: { ...(state.coldSelection.counts || {}) },
                 selectedZodiacs: [...(state.coldSelection.selectedZodiacs || [])],
                 selectedWaves: [...(state.coldSelection.selectedWaves || [])],
+                selectedWaveDs: [...(state.coldSelection.selectedWaveDs || [])],
                 selectedWuxings: [...(state.coldSelection.selectedWuxings || [])],
                 selectedWuxingDs: [...(state.coldSelection.selectedWuxingDs || [])],
                 selectedMorphs: [...(state.coldSelection.selectedMorphs || [])],
@@ -9950,6 +10112,7 @@
                 selectedHeTails: [...(state.coldSelection.selectedHeTails || [])],
                 selectedHeheads: [...((state.coldSelection.selectedHeheads || state.coldSelection.selectedHeads) || [])],
                 selectedHeads: [...(state.coldSelection.selectedHeads || [])],
+                selectedHeadDs: [...(state.coldSelection.selectedHeadDs || [])],
                 selectedTails: [...(state.coldSelection.selectedTails || [])],
                 selectedSegments: [...(state.coldSelection.selectedSegments || [])],
                 inputTerms: state.coldSelection.inputTerms ? JSON.parse(JSON.stringify(state.coldSelection.inputTerms)) : null,
@@ -10876,12 +11039,14 @@
                 allHotZodiacRange: '特码热肖区间',
                 selectedRegions: '选择区域',
                 selectedWaves: '选择波色',
+                selectedWaveDs: '波色单双',
                 selectedWuxings: '选择五行',
                 selectedWuxingDs: '五行单双',
                 selectedMorphs: '特态特征',
                 selectedHeNumbers: '合数选择',
                 selectedHeTails: '合尾选择',
                 selectedHeads: '头数选择',
+                selectedHeadDs: '头数单双',
                 selectedTails: '尾数选择',
                 selectedSegments: '段数选择',
                 inputNumbers: '输入条件',
@@ -10917,6 +11082,8 @@
                     if (type === 'hotZodiacRange') label = `平特热肖（${values.length}肖）`;
                     if (type === 'allHotZodiacRange') label = `特码热肖（${values.length}肖）`;
                     if (type === 'region') label = `遗漏最多${values.length}区域`;
+                    if (type === 'selectedWaves') label = `选择波色（${values.length}项）`;
+                    if (type === 'selectedWaveDs') label = `波色单双（${values.length}项）`;
                     if (type === 'selectedWuxings') label = `选择五行（${values.length}项）`;
                     if (type === 'selectedWuxingDs') label = `五行单双（${values.length}项）`;
                     if (type === 'wuxingCold') label = `遗漏最多${values.length}五行`;
@@ -10924,6 +11091,7 @@
                     if (type === 'selectedHeNumbers') label = `选择合数（${values.length}项）`;
                     if (type === 'selectedHeTails') label = `选择合尾（${values.length}项）`;
                     if (type === 'selectedHeads') label = `选择头数（${values.length}项）`;
+                    if (type === 'selectedHeadDs') label = `头数单双（${values.length}项）`;
                     if (type === 'selectedTails') label = `选择尾数（${values.length}项）`;
                     if (type === 'selectedSegments') label = `选择段数（${values.length}项）`;
                     const formattedValues = values.map(v => {
