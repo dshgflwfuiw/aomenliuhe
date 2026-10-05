@@ -1692,20 +1692,41 @@
                 </div>
             </div>
 
+            <div class="omission-action-bar" id="omissionActionBar">
+                <div class="omission-select-status">
+                    <span style="font-size:12px;font-weight:700;color:var(--text-primary);">已扣选：</span>
+                    <span id="omissionSelectedBadge" class="omission-count-badge">0 项 (0 码)</span>
+                    <div id="omissionSelectedChips" class="omission-chips-container"></div>
+                </div>
+                <div class="omission-action-buttons">
+                    <button type="button" class="om-btn-quick" onclick="selectAllCurrentOmissionItems()">全选本页</button>
+                    <button type="button" class="om-btn-quick" onclick="invertSelectCurrentOmissionItems()">反选</button>
+                    <button type="button" class="om-btn-quick" onclick="clearOmissionSelections()">清空扣选</button>
+                    <button type="button" class="om-btn-confirm" id="btnConfirmAddToCold" onclick="confirmAddOmissionToColdKline()" title="将所有扣选的项目转换并加入到特码综合K线中，自动生成K线并跳转">
+                        🚀 确认增加到特码综合K线 (<span id="btnConfirmSelectedCount">0</span>)
+                    </button>
+                </div>
+            </div>
+
             <div class="omission-content">
                 <div class="omission-table-wrapper" id="generalOmissionWrapper">
                     <table class="omission-table">
                         <thead>
                             <tr>
-                                <th width="12%" onclick="toggleHeaderSort('name')" style="cursor: pointer;">项目 / 名称 <span id="thSort_name"></span></th>
+                                <th width="14%">
+                                    <div style="display:flex;align-items:center;justify-content:center;gap:6px;">
+                                        <input type="checkbox" id="omissionSelectAllCb" onchange="toggleSelectAllOmissionItems(this.checked)" title="全选 / 取消全选当前列表" style="cursor:pointer;width:15px;height:15px;accent-color:var(--accent);">
+                                        <span onclick="toggleHeaderSort('name')" style="cursor: pointer;" title="点击排序">项目 / 扣选 <span id="thSort_name"></span></span>
+                                    </div>
+                                </th>
                                 <th width="11%" onclick="toggleHeaderSort('currentOmission')" style="cursor: pointer;">当前遗漏 <span id="thSort_currentOmission">▼</span></th>
                                 <th width="9%" onclick="toggleHeaderSort('maxOmission')" style="cursor: pointer;">最大遗漏 <span id="thSort_maxOmission"></span></th>
                                 <th width="9%" onclick="toggleHeaderSort('avgOmission')" style="cursor: pointer;">平均遗漏 <span id="thSort_avgOmission"></span></th>
                                 <th width="9%" onclick="toggleHeaderSort('count')" style="cursor: pointer;">出现次数 <span id="thSort_count"></span></th>
-                                <th width="11%" onclick="toggleHeaderSort('rate')" style="cursor: pointer;">出现概率 <span id="thSort_rate"></span></th>
+                                <th width="10%" onclick="toggleHeaderSort('rate')" style="cursor: pointer;">出现概率 <span id="thSort_rate"></span></th>
                                 <th width="15%">遗漏走势</th>
                                 <th width="8%" onclick="toggleHeaderSort('status')" style="cursor: pointer;">状态 <span id="thSort_status"></span></th>
-                                <th width="16%">包含号码</th>
+                                <th width="15%">包含号码</th>
                             </tr>
                         </thead>
                         <tbody id="generalOmissionBody"></tbody>
@@ -1737,6 +1758,11 @@
                 <div class="summary-item">
                     <span class="label">最热(出现最多)：</span>
                     <span class="value hot" id="omissionStatMaxHot">-</span>
+                </div>
+                <div class="summary-item" style="border-left: 1px solid var(--border); padding-left: 12px;">
+                    <button type="button" class="om-btn-confirm-mini" onclick="confirmAddOmissionToColdKline()" title="确认将所有扣选项目加入特码综合K线">
+                        🚀 确认增加到综合K线 (<span id="btnConfirmSelectedCountBottom">0</span>)
+                    </button>
                 </div>
             </div>
         </div>

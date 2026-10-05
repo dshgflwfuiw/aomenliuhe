@@ -11684,6 +11684,7 @@
         let currentOmissionTab = 'pingZodiac';
         let omissionSort = { key: 'currentOmission', direction: 'desc' };
         let omissionData = { items: [] };
+        let omissionSelectedItems = new Map();
 
         const OMISSION_DIMENSIONS = {
             pingZodiac: {
@@ -12274,8 +12275,11 @@
             const tbody = document.getElementById('generalOmissionBody');
             if (!tbody) return;
 
+            omissionData = stats || { items: [] };
+
             if (!stats || !stats.items || stats.items.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 30px; color: var(--text-secondary);">暂无开奖遗漏数据</td></tr>';
+                updateOmissionSelectionUI();
                 return;
             }
 
@@ -12318,6 +12322,9 @@
                 const barWidth = Math.min(Math.round((item.currentOmission / (item.maxOmission || 1)) * 100), 100);
                 const statusLabel = item.status === 'hot' ? '🔥 热' : item.status === 'cold' ? '❄️ 冷' : '➡️ 稳';
                 const statusClass = `status-${item.status}`;
+                const selectKey = `${currentOmissionTab}_${item.key}`;
+                const isChecked = omissionSelectedItems.has(selectKey);
+                const rowClass = isChecked ? 'selected-row' : '';
 
                 let itemHtml = '';
                 if (currentOmissionTab === 'pingNum' || currentOmissionTab === 'teNum') {
@@ -12369,8 +12376,13 @@
                 }
 
                 return `
-                <tr>
-                    <td>${itemHtml}</td>
+                <tr class="${rowClass}">
+                    <td class="omission-item-col" onclick="toggleOmissionItemSelect('${item.key}', event)">
+                        <div class="omission-item-select-wrap">
+                            <input type="checkbox" class="omission-row-checkbox" id="omCb_${item.key}" data-key="${item.key}" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation();onOmissionCheckboxChange('${item.key}', this.checked)">
+                            <span class="omission-item-content">${itemHtml}</span>
+                        </div>
+                    </td>
                     <td class="omission-current ${item.status}">${item.currentOmission}</td>
                     <td style="color:var(--text-secondary);font-weight:600;">${item.maxOmission}</td>
                     <td style="color:var(--text-secondary);">${item.avgOmission}</td>
@@ -12397,7 +12409,277 @@
                     <td style="padding: 6px 4px;">${numbersHtml}</td>
                 </tr>`;
             }).join('');
+
+            updateOmissionSelectionUI();
         }
+
+        function toggleOmissionItemSelect(key, event) {
+            if (event && event.target && (event.target.tagName === 'INPUT' || event.target.closest('.om-tag-del'))) {
+                return;
+            }
+            const selectKey = `${currentOmissionTab}_${key}`;
+            const willCheck = !omissionSelectedItems.has(selectKey);
+            onOmissionCheckboxChange(key, willCheck);
+        }
+
+        function onOmissionCheckboxChange(key, checked) {
+            const selectKey = `${currentOmissionTab}_${key}`;
+            if (checked) {
+                const it = (omissionData && omissionData.items) ? omissionData.items.find(x => x.key === key) : null;
+                omissionSelectedItems.set(selectKey, {
+                    dimensionId: currentOmissionTab,
+                    dimensionLabel: (OMISSION_DIMENSIONS[currentOmissionTab] && OMISSION_DIMENSIONS[currentOmissionTab].label) || currentOmissionTab,
+                    key: key,
+                    name: it ? it.name : key,
+                    numbers: it ? (it.numbers || []) : []
+                });
+            } else {
+                omissionSelectedItems.delete(selectKey);
+            }
+            updateOmissionRowHighlight(key, checked);
+            updateOmissionSelectionUI();
+        }
+
+        function updateOmissionRowHighlight(key, checked) {
+            const cb = document.getElementById(`omCb_${key}`);
+            if (cb) cb.checked = checked;
+            const row = cb ? cb.closest('tr') : null;
+            if (row) {
+                row.classList.toggle('selected-row', checked);
+            }
+        }
+
+        function selectAllCurrentOmissionItems() {
+            if (!omissionData || !omissionData.items) return;
+            omissionData.items.forEach(it => {
+                const selectKey = `${currentOmissionTab}_${it.key}`;
+                omissionSelectedItems.set(selectKey, {
+                    dimensionId: currentOmissionTab,
+                    dimensionLabel: (OMISSION_DIMENSIONS[currentOmissionTab] && OMISSION_DIMENSIONS[currentOmissionTab].label) || currentOmissionTab,
+                    key: it.key,
+                    name: it.name,
+                    numbers: it.numbers || []
+                });
+                updateOmissionRowHighlight(it.key, true);
+            });
+            updateOmissionSelectionUI();
+        }
+
+        function invertSelectCurrentOmissionItems() {
+            if (!omissionData || !omissionData.items) return;
+            omissionData.items.forEach(it => {
+                const selectKey = `${currentOmissionTab}_${it.key}`;
+                if (omissionSelectedItems.has(selectKey)) {
+                    omissionSelectedItems.delete(selectKey);
+                    updateOmissionRowHighlight(it.key, false);
+                } else {
+                    omissionSelectedItems.set(selectKey, {
+                        dimensionId: currentOmissionTab,
+                        dimensionLabel: (OMISSION_DIMENSIONS[currentOmissionTab] && OMISSION_DIMENSIONS[currentOmissionTab].label) || currentOmissionTab,
+                        key: it.key,
+                        name: it.name,
+                        numbers: it.numbers || []
+                    });
+                    updateOmissionRowHighlight(it.key, true);
+                }
+            });
+            updateOmissionSelectionUI();
+        }
+
+        function clearOmissionSelections() {
+            omissionSelectedItems.clear();
+            document.querySelectorAll('.omission-row-checkbox').forEach(cb => { cb.checked = false; });
+            document.querySelectorAll('#generalOmissionBody tr').forEach(tr => tr.classList.remove('selected-row'));
+            updateOmissionSelectionUI();
+        }
+
+        function removeOmissionSelectedItem(selectKey) {
+            omissionSelectedItems.delete(selectKey);
+            const parts = selectKey.split('_');
+            const tab = parts[0];
+            const key = parts.slice(1).join('_');
+            if (tab === currentOmissionTab) {
+                updateOmissionRowHighlight(key, false);
+            }
+            updateOmissionSelectionUI();
+        }
+
+        function toggleSelectAllOmissionItems(checked) {
+            if (checked) {
+                selectAllCurrentOmissionItems();
+            } else {
+                if (!omissionData || !omissionData.items) return;
+                omissionData.items.forEach(it => {
+                    const selectKey = `${currentOmissionTab}_${it.key}`;
+                    omissionSelectedItems.delete(selectKey);
+                    updateOmissionRowHighlight(it.key, false);
+                });
+                updateOmissionSelectionUI();
+            }
+        }
+
+        function updateOmissionSelectionUI() {
+            const totalCount = omissionSelectedItems.size;
+            const allNumbersSet = new Set();
+            omissionSelectedItems.forEach(it => {
+                (it.numbers || []).forEach(n => allNumbersSet.add(n.toString().padStart(2, '0')));
+            });
+
+            const badge = document.getElementById('omissionSelectedBadge');
+            if (badge) {
+                badge.textContent = `${totalCount} 项 (${allNumbersSet.size} 码)`;
+            }
+
+            const btnCount = document.getElementById('btnConfirmSelectedCount');
+            if (btnCount) btnCount.textContent = totalCount;
+            const btnCountBottom = document.getElementById('btnConfirmSelectedCountBottom');
+            if (btnCountBottom) btnCountBottom.textContent = totalCount;
+
+            const selectAllCb = document.getElementById('omissionSelectAllCb');
+            if (selectAllCb && omissionData && omissionData.items && omissionData.items.length) {
+                const currentItems = omissionData.items;
+                const selectedOnCurrentTab = currentItems.filter(it => omissionSelectedItems.has(`${currentOmissionTab}_${it.key}`)).length;
+                selectAllCb.checked = (selectedOnCurrentTab === currentItems.length && currentItems.length > 0);
+                selectAllCb.indeterminate = (selectedOnCurrentTab > 0 && selectedOnCurrentTab < currentItems.length);
+            }
+
+            const chipsContainer = document.getElementById('omissionSelectedChips');
+            if (chipsContainer) {
+                if (totalCount === 0) {
+                    chipsContainer.innerHTML = '<span style="font-size:11px;color:var(--text-secondary);padding-left:4px;">(暂未扣选项目)</span>';
+                } else {
+                    const chips = Array.from(omissionSelectedItems.entries()).map(([sKey, it]) => {
+                        return `<span class="omission-item-tag" title="包含号码: ${(it.numbers || []).join(' ')}">${it.dimensionLabel}:${it.name}<span class="om-tag-del" onclick="removeOmissionSelectedItem('${sKey}')">✕</span></span>`;
+                    }).slice(0, 10);
+                    if (totalCount > 10) {
+                        chips.push(`<span style="font-size:10px;color:var(--accent);">+${totalCount - 10}项</span>`);
+                    }
+                    chipsContainer.innerHTML = chips.join('');
+                }
+            }
+        }
+
+        function confirmAddOmissionToColdKline() {
+            if (!omissionSelectedItems || omissionSelectedItems.size === 0) {
+                if (typeof showToast === 'function') {
+                    showToast('⚠️ 请先在遗漏列表中勾选（扣选）需要加入特码综合K线的项目', 2500);
+                } else {
+                    alert('请先在遗漏列表中勾选（扣选）需要加入特码综合K线的项目');
+                }
+                return;
+            }
+
+            const items = Array.from(omissionSelectedItems.values());
+            const allNumbersSet = new Set();
+            const tokenList = [];
+
+            items.forEach(it => {
+                (it.numbers || []).forEach(n => allNumbersSet.add(n.toString().padStart(2, '0')));
+
+                if (it.dimensionId === 'zodiac' || it.dimensionId === 'pingZodiac') {
+                    const cb = document.getElementById('zodiacOption_' + it.key);
+                    if (cb) cb.checked = true;
+                    tokenList.push(it.name);
+                } else if (it.dimensionId === 'color') {
+                    const cb = document.getElementById('waveOption_' + it.key);
+                    if (cb) cb.checked = true;
+                    tokenList.push(it.name);
+                } else if (it.dimensionId === 'halfWave') {
+                    const cb = document.getElementById('waveDsOption_' + it.key);
+                    if (cb) cb.checked = true;
+                    tokenList.push(it.name);
+                } else if (it.dimensionId === 'wuxing') {
+                    const cb = document.getElementById('wuxingOption_' + it.key);
+                    if (cb) cb.checked = true;
+                    tokenList.push(it.key + '行');
+                } else if (it.dimensionId === 'head') {
+                    const h = it.key.replace('头', '');
+                    const cb = document.getElementById('headOption_' + h);
+                    if (cb) cb.checked = true;
+                    tokenList.push(it.key);
+                } else if (it.dimensionId === 'halfHead') {
+                    const cb = document.getElementById('headDsOption_' + it.key);
+                    if (cb) cb.checked = true;
+                    tokenList.push(it.key);
+                } else if (it.dimensionId === 'tail') {
+                    const t = it.key.replace('尾', '');
+                    const cb = document.getElementById('tailOption_' + t);
+                    if (cb) cb.checked = true;
+                    tokenList.push(it.key);
+                } else if (it.dimensionId === 'segment') {
+                    const sMatch = it.name.match(/^0?(\d+)/);
+                    const segNum = sMatch ? Math.ceil(parseInt(sMatch[1], 10) / 7) : null;
+                    if (segNum) {
+                        const cb = document.getElementById('segmentOption_' + segNum);
+                        if (cb) cb.checked = true;
+                    }
+                    tokenList.push(it.key);
+                } else if (it.dimensionId === 'heNum') {
+                    const h = parseInt(it.key, 10);
+                    const cb = document.getElementById('heOption_' + h);
+                    if (cb) cb.checked = true;
+                    tokenList.push(it.key);
+                } else if (it.dimensionId === 'heTail') {
+                    const ht = parseInt(it.key, 10);
+                    const cb = document.getElementById('heTailOption_' + ht);
+                    if (cb) cb.checked = true;
+                    tokenList.push(it.key);
+                } else if (it.dimensionId === 'teNum' || it.dimensionId === 'pingNum') {
+                    tokenList.push(it.name);
+                } else if (it.dimensionId === 'oddEven' || it.dimensionId === 'bigSmall') {
+                    tokenList.push(...(it.numbers || []));
+                } else {
+                    tokenList.push(it.name);
+                }
+            });
+
+            const uniqueNumbers = Array.from(allNumbersSet).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+
+            // Append tokens into coldOption_inputNumbers
+            const inputEl = document.getElementById('coldOption_inputNumbers');
+            if (inputEl) {
+                const existingVal = inputEl.value.trim();
+                const existingTokens = existingVal ? existingVal.split(/[,，\s]+/).filter(Boolean) : [];
+                const merged = Array.from(new Set([...existingTokens, ...tokenList]));
+                inputEl.value = merged.join(',');
+            }
+
+            // Generate cold Kline
+            if (typeof generateColdKline === 'function') {
+                generateColdKline();
+            }
+
+            // Guarantee state.coldSelection setNumbers are intact
+            if (state.coldSelection && uniqueNumbers.length) {
+                if (!state.coldSelection.setNumbers || state.coldSelection.setNumbers.length === 0) {
+                    state.coldSelection.setNumbers = uniqueNumbers;
+                    state.coldSelection.sets = state.coldSelection.sets || {};
+                    state.coldSelection.sets.setNumbers = uniqueNumbers;
+                }
+            }
+
+            // Switch view back to chart
+            hideOmissionPage();
+
+            if (typeof showToast === 'function') {
+                showToast(`✅ 已将扣选的 ${items.length} 项（共 ${uniqueNumbers.length} 个特码）成功增加到特码综合K线！`, 3200);
+            }
+        }
+
+        window.toggleOmissionItemSelect = toggleOmissionItemSelect;
+        window.onOmissionCheckboxChange = onOmissionCheckboxChange;
+        window.selectAllCurrentOmissionItems = selectAllCurrentOmissionItems;
+        window.invertSelectCurrentOmissionItems = invertSelectCurrentOmissionItems;
+        window.clearOmissionSelections = clearOmissionSelections;
+        window.removeOmissionSelectedItem = removeOmissionSelectedItem;
+        window.toggleSelectAllOmissionItems = toggleSelectAllOmissionItems;
+        window.confirmAddOmissionToColdKline = confirmAddOmissionToColdKline;
+        window.switchOmissionTab = switchOmissionTab;
+        window.updateOmissionStats = updateOmissionStats;
+        window.showOmissionPage = showOmissionPage;
+        window.hideOmissionPage = hideOmissionPage;
+        window.setOmissionSort = setOmissionSort;
+        window.toggleHeaderSort = toggleHeaderSort;
 
         function getOmissionStatus(current, average) {
             if (current <= average * 0.5) return 'hot';
