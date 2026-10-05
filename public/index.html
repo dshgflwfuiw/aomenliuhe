@@ -9,6 +9,7 @@
     <meta name="apple-mobile-web-app-title" content="六合趋势Pro">
     <meta name="format-detection" content="telephone=no">
     <meta name="theme-color" content="#0a0c10">
+    <meta name="description" content="六合趋势分析与走势图表工具，支持特肖遗漏分析、单双大小走势、波色、冷热K线与10期倍投追号计算器等多维度分析">
     <title>六合趋势全自动联动终端</title>
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -1647,195 +1648,93 @@
         <div class="omission-section" id="omissionSection" style="display: none;">
             <div class="omission-header">
                 <div class="omission-title">
-                    <h3>📋 平特肖遗漏 & 号码遗漏统计</h3>
+                    <h3>📋 六合多维遗漏统计与排序（平特 & 特码）</h3>
                     <button class="close-btn" onclick="hideOmissionPage()">✕</button>
                 </div>
                 <div class="omission-controls">
-                    <div class="period-selector" id="periodSelectorWrapper" style="display: none;">
-                        <label>统计期数：</label>
-                        <select id="omissionPeriodSel" onchange="updateOmissionStats()">
-                            <option value="50">最近50期</option>
-                            <option value="100" selected>最近100期</option>
-                            <option value="200">最近200期</option>
-                            <option value="300">最近300期</option>
-                        </select>
+                    <div class="omission-control-row">
+                        <div class="period-selector" id="periodSelectorWrapper">
+                            <label>统计期数：</label>
+                            <select id="omissionPeriodSel" onchange="updateOmissionStats()">
+                                <option value="30">最近30期</option>
+                                <option value="50">最近50期</option>
+                                <option value="100" selected>最近100期</option>
+                                <option value="200">最近200期</option>
+                                <option value="300">最近300期</option>
+                                <option value="all">全部历史</option>
+                            </select>
+                        </div>
+                        <div class="omission-sort-controls">
+                            <span class="sort-label">遗漏排序：</span>
+                            <button class="sort-btn active" id="sortBtn_om_desc" onclick="setOmissionSort('currentOmission', 'desc')">🔥 遗漏大到小(冷)</button>
+                            <button class="sort-btn" id="sortBtn_om_asc" onclick="setOmissionSort('currentOmission', 'asc')">⚡ 遗漏小到大(热)</button>
+                            <button class="sort-btn" id="sortBtn_count_desc" onclick="setOmissionSort('count', 'desc')">📊 出现次数</button>
+                            <button class="sort-btn" id="sortBtn_default" onclick="setOmissionSort('default', 'asc')">🔢 默认顺序</button>
+                        </div>
                     </div>
                     <div class="omission-tabs">
-                        <button class="tab-btn active" onclick="switchOmissionTab('zodiac')"
-                            data-tab="zodiac">平特肖</button>
-                        <button class="tab-btn" onclick="switchOmissionTab('number')" data-tab="number">号码</button>
+                        <button class="tab-btn active" onclick="switchOmissionTab('pingZodiac')" data-tab="pingZodiac">平特肖</button>
+                        <button class="tab-btn" onclick="switchOmissionTab('pingNum')" data-tab="pingNum">平特号码</button>
+                        <button class="tab-btn" onclick="switchOmissionTab('teNum')" data-tab="teNum">特码</button>
                         <button class="tab-btn" onclick="switchOmissionTab('color')" data-tab="color">波色</button>
-                        <button class="tab-btn" onclick="switchOmissionTab('size')" data-tab="size">大小</button>
-                        <button class="tab-btn" onclick="switchOmissionTab('special')" data-tab="special">特肖统计</button>
-                        <button class="tab-btn" onclick="loadMockDataAndRefresh()" title="如果没有数据,点击加载演示数据"
-                            style="background: var(--warn); color: #000; border-color: var(--warn);">📊 演示</button>
+                        <button class="tab-btn" onclick="switchOmissionTab('head')" data-tab="head">头数</button>
+                        <button class="tab-btn" onclick="switchOmissionTab('tail')" data-tab="tail">尾数</button>
+                        <button class="tab-btn" onclick="switchOmissionTab('wuxing')" data-tab="wuxing">五行</button>
+                        <button class="tab-btn" onclick="switchOmissionTab('zodiac')" data-tab="zodiac">生肖(特)</button>
+                        <button class="tab-btn" onclick="switchOmissionTab('halfWave')" data-tab="halfWave">半波</button>
+                        <button class="tab-btn" onclick="switchOmissionTab('halfHead')" data-tab="halfHead">半头</button>
+                        <button class="tab-btn" onclick="switchOmissionTab('segment')" data-tab="segment">段数</button>
+                        <button class="tab-btn" onclick="switchOmissionTab('heNum')" data-tab="heNum">合数</button>
+                        <button class="tab-btn" onclick="switchOmissionTab('heTail')" data-tab="heTail">合尾</button>
                     </div>
                 </div>
             </div>
 
             <div class="omission-content">
-                <div class="omission-table-wrapper" id="zodiacOmissionTable">
+                <div class="omission-table-wrapper" id="generalOmissionWrapper">
                     <table class="omission-table">
                         <thead>
                             <tr>
-                                <th width="12%">生肖</th>
-                                <th width="12%">当前遗漏</th>
-                                <th width="12%">最大遗漏</th>
-                                <th width="12%">平均遗漏</th>
-                                <th width="12%">出现次数</th>
-                                <th width="20%">遗漏走势</th>
-                                <th width="10%">状态</th>
-                                <th width="10%">号码</th>
+                                <th width="12%" onclick="toggleHeaderSort('name')" style="cursor: pointer;">项目 / 名称 <span id="thSort_name"></span></th>
+                                <th width="11%" onclick="toggleHeaderSort('currentOmission')" style="cursor: pointer;">当前遗漏 <span id="thSort_currentOmission">▼</span></th>
+                                <th width="9%" onclick="toggleHeaderSort('maxOmission')" style="cursor: pointer;">最大遗漏 <span id="thSort_maxOmission"></span></th>
+                                <th width="9%" onclick="toggleHeaderSort('avgOmission')" style="cursor: pointer;">平均遗漏 <span id="thSort_avgOmission"></span></th>
+                                <th width="9%" onclick="toggleHeaderSort('count')" style="cursor: pointer;">出现次数 <span id="thSort_count"></span></th>
+                                <th width="11%" onclick="toggleHeaderSort('rate')" style="cursor: pointer;">出现概率 <span id="thSort_rate"></span></th>
+                                <th width="15%">遗漏走势</th>
+                                <th width="8%" onclick="toggleHeaderSort('status')" style="cursor: pointer;">状态 <span id="thSort_status"></span></th>
+                                <th width="16%">包含号码</th>
                             </tr>
                         </thead>
-                        <tbody id="zodiacOmissionBody"></tbody>
-                    </table>
-                </div>
-
-                <div class="omission-table-wrapper" id="numberOmissionTable" style="display: none;">
-                    <table class="omission-table">
-                        <thead>
-                            <tr>
-                                <th width="10%">号码</th>
-                                <th width="10%">生肖</th>
-                                <th width="12%">当前遗漏</th>
-                                <th width="12%">最大遗漏</th>
-                                <th width="12%">平均遗漏</th>
-                                <th width="12%">出现次数</th>
-                                <th width="18%">遗漏走势</th>
-                                <th width="10%">状态</th>
-                                <th width="6%">波色</th>
-                            </tr>
-                        </thead>
-                        <tbody id="numberOmissionBody"></tbody>
-                    </table>
-                </div>
-
-                <div id="colorOmissionChart" style="display: none;">
-                    <div style="padding: 16px;">
-                        <h4 style="color: var(--accent); margin-bottom: 16px; font-size: 14px;">🔴🔵🟢 波色遗漏分布</h4>
-
-                        <div id="colorChartContainer" style="display: flex; flex-direction: column; gap: 12px;">
-                            <div>
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                                    <span style="color: #ff1744; font-weight: 600;">红波</span>
-                                    <span style="font-size: 12px; color: var(--text-secondary);">当前:<span
-                                            id="colorChartRedCurrent" style="color: #ff1744; font-weight: 700;">0</span>
-                                        最大:<span id="colorChartRedMax" style="color: var(--accent);">0</span></span>
-                                </div>
-                                <div style="background: #0d1117; height: 20px; border-radius: 10px; overflow: hidden;">
-                                    <div id="colorChartRedBar"
-                                        style="height: 100%; width: 0%; background: linear-gradient(90deg, #ff1744, #ff5252); border-radius: 10px;">
-                                    </div>
-                                </div>
-                            </div>
-                            <div>
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                                    <span style="color: #448aff; font-weight: 600;">蓝波</span>
-                                    <span style="font-size: 12px; color: var(--text-secondary);">当前:<span
-                                            id="colorChartBlueCurrent"
-                                            style="color: #448aff; font-weight: 700;">0</span> 最大:<span
-                                            id="colorChartBlueMax" style="color: var(--accent);">0</span></span>
-                                </div>
-                                <div style="background: #0d1117; height: 20px; border-radius: 10px; overflow: hidden;">
-                                    <div id="colorChartBlueBar"
-                                        style="height: 100%; width: 0%; background: linear-gradient(90deg, #448aff, #82b1ff); border-radius: 10px;">
-                                    </div>
-                                </div>
-                            </div>
-                            <div>
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                                    <span style="color: #00e676; font-weight: 600;">绿波</span>
-                                    <span style="font-size: 12px; color: var(--text-secondary);">当前:<span
-                                            id="colorChartGreenCurrent"
-                                            style="color: #00e676; font-weight: 700;">0</span> 最大:<span
-                                            id="colorChartGreenMax" style="color: var(--accent);">0</span></span>
-                                </div>
-                                <div style="background: #0d1117; height: 20px; border-radius: 10px; overflow: hidden;">
-                                    <div id="colorChartGreenBar"
-                                        style="height: 100%; width: 0%; background: linear-gradient(90deg, #00e676, #69f0ae); border-radius: 10px;">
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
-                            <h5 style="color: var(--text-secondary); font-size: 12px; margin-bottom: 8px;">号码分布</h5>
-                            <div id="colorNumbersDisplay"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="sizeOmissionChart" style="display: none;">
-                    <div style="padding: 16px;">
-                        <h4 style="color: var(--accent); margin-bottom: 16px; font-size: 14px;">📊 大小遗漏分布</h4>
-
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                            <div
-                                style="background: var(--card-bg); padding: 12px; border-radius: 8px; border: 1px solid var(--border); text-align: center;">
-                                <div style="font-size: 28px; font-weight: 700; color: #00e676;"
-                                    id="sizeChartBigCurrent">0</div>
-                                <div style="font-size: 11px; color: var(--text-secondary);">遗漏期数</div>
-                                <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">最大: <span
-                                        id="sizeChartBigMax">0</span></div>
-                                <div
-                                    style="background: #0d1117; height: 16px; border-radius: 8px; overflow: hidden; margin-top: 8px;">
-                                    <div id="sizeChartBigBar"
-                                        style="height: 100%; width: 0%; background: linear-gradient(90deg, #00e676, #00c853); border-radius: 8px;">
-                                    </div>
-                                </div>
-                                <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">大数(25-49)
-                                </div>
-                            </div>
-
-                            <div
-                                style="background: var(--card-bg); padding: 12px; border-radius: 8px; border: 1px solid var(--border); text-align: center;">
-                                <div style="font-size: 28px; font-weight: 700; color: #00d4ff;"
-                                    id="sizeChartSmallCurrent">0</div>
-                                <div style="font-size: 11px; color: var(--text-secondary);">遗漏期数</div>
-                                <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">最大: <span
-                                        id="sizeChartSmallMax">0</span></div>
-                                <div
-                                    style="background: #0d1117; height: 16px; border-radius: 8px; overflow: hidden; margin-top: 8px;">
-                                    <div id="sizeChartSmallBar"
-                                        style="height: 100%; width: 0%; background: linear-gradient(90deg, #00d4ff, #0091ea); border-radius: 8px;">
-                                    </div>
-                                </div>
-                                <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">小数(1-24)
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="specialOmissionTable" style="display: none;">
-                    <table class="omission-table">
-                        <thead>
-                            <tr>
-                                <th width="12%">生肖</th>
-                                <th width="12%">出现次数</th>
-                                <th width="12%">出现率</th>
-                                <th width="12%">理论</th>
-                                <th width="12%">偏差</th>
-                                <th width="20%">趋势</th>
-                                <th width="10%">状态</th>
-                                <th width="10%">波色</th>
-                            </tr>
-                        </thead>
-                        <tbody id="specialOmissionBody"></tbody>
+                        <tbody id="generalOmissionBody"></tbody>
                     </table>
                 </div>
             </div>
 
-            <div class="omission-summary">
-
+            <div class="omission-summary" id="omissionSummary">
                 <div class="summary-item">
-                    <span class="label">热号数量：</span>
+                    <span class="label">分析维度：</span>
+                    <span class="value" id="omissionStatDimension" style="color: var(--accent);">特码</span>
+                </div>
+                <div class="summary-item">
+                    <span class="label">统计期数：</span>
+                    <span class="value" id="omissionStatPeriods">100期</span>
+                </div>
+                <div class="summary-item">
+                    <span class="label">热态项：</span>
                     <span class="value hot" id="omissionStatHot">0</span>
                 </div>
                 <div class="summary-item">
-                    <span class="label">冷号数量：</span>
+                    <span class="label">冷态项：</span>
                     <span class="value cold" id="omissionStatCold">0</span>
+                </div>
+                <div class="summary-item">
+                    <span class="label">最冷(遗漏最大)：</span>
+                    <span class="value cold" id="omissionStatMaxCold">-</span>
+                </div>
+                <div class="summary-item">
+                    <span class="label">最热(出现最多)：</span>
+                    <span class="value hot" id="omissionStatMaxHot">-</span>
                 </div>
             </div>
         </div>

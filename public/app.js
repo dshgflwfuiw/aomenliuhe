@@ -11681,8 +11681,324 @@
             document.querySelector(`.mobile-nav-item[data-page="${active}"]`)?.classList.add('active');
         }
 
-        let currentOmissionTab = 'zodiac';
-        let omissionData = { zodiac: [], number:[] };
+        let currentOmissionTab = 'pingZodiac';
+        let omissionSort = { key: 'currentOmission', direction: 'desc' };
+        let omissionData = { items: [] };
+
+        const OMISSION_DIMENSIONS = {
+            pingZodiac: {
+                id: 'pingZodiac',
+                label: '平特肖',
+                title: '平特肖遗漏排序 (每期全7码开出生肖)',
+                theoreticalCount: 12 / 5.48,
+                theoRateCustom: 45.6,
+                getItems: (year) => {
+                    const zodiacs = (CONFIG.zodiacMap && (CONFIG.zodiacMap[year] || CONFIG.zodiacMap[state.currentYear])) || [];
+                    return zodiacs.map(z => {
+                        const nums = [];
+                        for (let i = 1; i <= 49; i++) {
+                            if (getZodiac(i, year) === z) nums.push(i.toString().padStart(2, '0'));
+                        }
+                        return {
+                            key: z,
+                            name: z,
+                            numbers: nums,
+                            matcher: (winNum, c, y, winZ, allZodiacs) => allZodiacs && allZodiacs.has(z)
+                        };
+                    });
+                }
+            },
+            pingNum: {
+                id: 'pingNum',
+                label: '平特号码',
+                title: '平特号码(01-49)遗漏排序 (每期全7码开出统计)',
+                theoreticalCount: 49 / 7,
+                theoRateCustom: 14.3,
+                getItems: (year) => {
+                    const items = [];
+                    for (let i = 1; i <= 49; i++) {
+                        const numStr = i.toString().padStart(2, '0');
+                        items.push({
+                            key: numStr,
+                            name: numStr,
+                            numbers: [numStr],
+                            color: getColor(numStr),
+                            zodiac: getZodiac(i, year),
+                            wuxing: getWuxingKey(i, year),
+                            matcher: (winNum, c, y, winZ, allZodiacs, allNumbers) => allNumbers && (allNumbers.has(numStr) || allNumbers.has(String(i)))
+                        });
+                    }
+                    return items;
+                }
+            },
+            teNum: {
+                id: 'teNum',
+                label: '特码',
+                title: '特码(01-49)遗漏排序',
+                theoreticalCount: 49,
+                getItems: (year) => {
+                    const items = [];
+                    for (let i = 1; i <= 49; i++) {
+                        const numStr = i.toString().padStart(2, '0');
+                        items.push({
+                            key: numStr,
+                            name: numStr,
+                            numbers: [numStr],
+                            color: getColor(numStr),
+                            zodiac: getZodiac(i, year),
+                            wuxing: getWuxingKey(i, year),
+                            matcher: (winNum) => winNum === i
+                        });
+                    }
+                    return items;
+                }
+            },
+            color: {
+                id: 'color',
+                label: '波色',
+                title: '波色(红/蓝/绿)遗漏排序',
+                theoreticalCount: 3,
+                getItems: () => [
+                    { key: 'red', name: '红波', numbers: (CONFIG.colors && CONFIG.colors.red) || [], color: 'red', matcher: (winNum, c) => c === 'red' },
+                    { key: 'blue', name: '蓝波', numbers: (CONFIG.colors && CONFIG.colors.blue) || [], color: 'blue', matcher: (winNum, c) => c === 'blue' },
+                    { key: 'green', name: '绿波', numbers: (CONFIG.colors && CONFIG.colors.green) || [], color: 'green', matcher: (winNum, c) => c === 'green' }
+                ]
+            },
+            head: {
+                id: 'head',
+                label: '头数',
+                title: '头数(0-4头)遗漏排序',
+                theoreticalCount: 5,
+                getItems: () => {
+                    return [0, 1, 2, 3, 4].map(h => {
+                        const nums = [];
+                        for (let i = 1; i <= 49; i++) {
+                            if (Math.floor(i / 10) === h) nums.push(i.toString().padStart(2, '0'));
+                        }
+                        return {
+                            key: `${h}头`,
+                            name: `${h}头`,
+                            numbers: nums,
+                            matcher: (winNum) => Math.floor(winNum / 10) === h
+                        };
+                    });
+                }
+            },
+            tail: {
+                id: 'tail',
+                label: '尾数',
+                title: '尾数(0-9尾)遗漏排序',
+                theoreticalCount: 10,
+                getItems: () => {
+                    return [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(t => {
+                        const nums = [];
+                        for (let i = 1; i <= 49; i++) {
+                            if (i % 10 === t) nums.push(i.toString().padStart(2, '0'));
+                        }
+                        return {
+                            key: `${t}尾`,
+                            name: `${t}尾`,
+                            numbers: nums,
+                            matcher: (winNum) => (winNum % 10) === t
+                        };
+                    });
+                }
+            },
+            wuxing: {
+                id: 'wuxing',
+                label: '五行',
+                title: '五行(金木水火土)遗漏排序',
+                theoreticalCount: 5,
+                getItems: (year) => {
+                    return ['金', '木', '水', '火', '土'].map(wx => {
+                        const nums = [];
+                        for (let i = 1; i <= 49; i++) {
+                            if (getWuxingKey(i, year) === wx) nums.push(i.toString().padStart(2, '0'));
+                        }
+                        return {
+                            key: wx,
+                            name: `${wx}行`,
+                            numbers: nums,
+                            matcher: (winNum, c, y) => getWuxingKey(winNum, y) === wx
+                        };
+                    });
+                }
+            },
+            zodiac: {
+                id: 'zodiac',
+                label: '生肖',
+                title: '特码生肖(特肖)遗漏排序',
+                theoreticalCount: 12,
+                getItems: (year) => {
+                    const zodiacs = (CONFIG.zodiacMap && (CONFIG.zodiacMap[year] || CONFIG.zodiacMap[state.currentYear])) || [];
+                    return zodiacs.map(z => {
+                        const nums = [];
+                        for (let i = 1; i <= 49; i++) {
+                            if (getZodiac(i, year) === z) nums.push(i.toString().padStart(2, '0'));
+                        }
+                        return {
+                            key: z,
+                            name: z,
+                            numbers: nums,
+                            matcher: (winNum, c, y, winZ) => winZ === z || getZodiac(winNum, y) === z
+                        };
+                    });
+                }
+            },
+            halfWave: {
+                id: 'halfWave',
+                label: '半波',
+                title: '半波(波色单双)遗漏排序',
+                theoreticalCount: 6,
+                getItems: () => {
+                    return ['红单', '红双', '蓝单', '蓝双', '绿单', '绿双'].map(hw => {
+                        const nums = [];
+                        for (let i = 1; i <= 49; i++) {
+                            const numStr = i.toString().padStart(2, '0');
+                            if (getWaveDsKey(i) === hw || getHalfWaveKey(numStr) === hw) nums.push(numStr);
+                        }
+                        return {
+                            key: hw,
+                            name: hw,
+                            numbers: nums,
+                            color: hw.startsWith('红') ? 'red' : hw.startsWith('蓝') ? 'blue' : 'green',
+                            matcher: (winNum) => getWaveDsKey(winNum) === hw
+                        };
+                    });
+                }
+            },
+            halfHead: {
+                id: 'halfHead',
+                label: '半头',
+                title: '半头(头数单双)遗漏排序',
+                theoreticalCount: 10,
+                getItems: () => {
+                    return ['0头单', '0头双', '1头单', '1头双', '2头单', '2头双', '3头单', '3头双', '4头单', '4头双'].map(hh => {
+                        const nums = [];
+                        for (let i = 1; i <= 49; i++) {
+                            if (getHeadDsKey(i) === hh) nums.push(i.toString().padStart(2, '0'));
+                        }
+                        return {
+                            key: hh,
+                            name: hh,
+                            numbers: nums,
+                            matcher: (winNum) => getHeadDsKey(winNum) === hh
+                        };
+                    });
+                }
+            },
+            segment: {
+                id: 'segment',
+                label: '段数',
+                title: '七段数(01-49分段)遗漏排序',
+                theoreticalCount: 7,
+                getItems: () => {
+                    return ['01-07段', '08-14段', '15-21段', '22-28段', '29-35段', '36-42段', '43-49段'].map(seg => {
+                        const nums = [];
+                        for (let i = 1; i <= 49; i++) {
+                            if (getSegmentKey(i) === seg) nums.push(i.toString().padStart(2, '0'));
+                        }
+                        return {
+                            key: seg,
+                            name: seg,
+                            numbers: nums,
+                            matcher: (winNum) => getSegmentKey(winNum) === seg
+                        };
+                    });
+                }
+            },
+            heNum: {
+                id: 'heNum',
+                label: '合数',
+                title: '合数(1-13合)遗漏排序',
+                theoreticalCount: 13,
+                getItems: () => {
+                    const list = [];
+                    for (let h = 1; h <= 13; h++) {
+                        const nums = [];
+                        for (let i = 1; i <= 49; i++) {
+                            if (getNumHe(i) === h) nums.push(i.toString().padStart(2, '0'));
+                        }
+                        list.push({
+                            key: `${h}合`,
+                            name: `${h}合`,
+                            numbers: nums,
+                            matcher: (winNum) => getNumHe(winNum) === h
+                        });
+                    }
+                    return list;
+                }
+            },
+            heTail: {
+                id: 'heTail',
+                label: '合尾',
+                title: '合尾(0-9合尾)遗漏排序',
+                theoreticalCount: 10,
+                getItems: () => {
+                    const list = [];
+                    for (let ht = 0; ht <= 9; ht++) {
+                        const nums = [];
+                        for (let i = 1; i <= 49; i++) {
+                            if (getNumHeTail(i) === ht) nums.push(i.toString().padStart(2, '0'));
+                        }
+                        list.push({
+                            key: `${ht}合尾`,
+                            name: `${ht}合尾`,
+                            numbers: nums,
+                            matcher: (winNum) => getNumHeTail(winNum) === ht
+                        });
+                    }
+                    return list;
+                }
+            }
+        };
+
+        function setOmissionSort(key, direction) {
+            omissionSort.key = key;
+            omissionSort.direction = direction;
+            updateSortUI();
+            updateOmissionStats();
+        }
+
+        function toggleHeaderSort(key) {
+            if (omissionSort.key === key) {
+                omissionSort.direction = omissionSort.direction === 'desc' ? 'asc' : 'desc';
+            } else {
+                omissionSort.key = key;
+                omissionSort.direction = 'desc';
+            }
+            updateSortUI();
+            updateOmissionStats();
+        }
+
+        function updateSortUI() {
+            ['om_desc', 'om_asc', 'count_desc', 'default'].forEach(id => {
+                const btn = document.getElementById(`sortBtn_${id}`);
+                if (btn) btn.classList.remove('active');
+            });
+
+            if (omissionSort.key === 'currentOmission' && omissionSort.direction === 'desc') {
+                document.getElementById('sortBtn_om_desc')?.classList.add('active');
+            } else if (omissionSort.key === 'currentOmission' && omissionSort.direction === 'asc') {
+                document.getElementById('sortBtn_om_asc')?.classList.add('active');
+            } else if (omissionSort.key === 'count' && omissionSort.direction === 'desc') {
+                document.getElementById('sortBtn_count_desc')?.classList.add('active');
+            } else if (omissionSort.key === 'default') {
+                document.getElementById('sortBtn_default')?.classList.add('active');
+            }
+
+            ['name', 'currentOmission', 'maxOmission', 'avgOmission', 'count', 'rate', 'status'].forEach(col => {
+                const el = document.getElementById(`thSort_${col}`);
+                if (el) {
+                    if (omissionSort.key === col) {
+                        el.textContent = omissionSort.direction === 'desc' ? '▼' : '▲';
+                        el.style.color = 'var(--accent)';
+                    } else {
+                        el.textContent = '';
+                    }
+                }
+            });
+        }
 
         function showOmissionPage() {
             if (!state.historyData || state.historyData.length === 0) {
@@ -11708,6 +12024,7 @@
             omissionSection.style.display = 'flex';
 
             if (mobileNav) mobileNav.style.display = 'none';
+            updateSortUI();
             updateOmissionStats();
             closeSidebar();
         }
@@ -11749,482 +12066,288 @@
         function switchToOmission() { showOmissionPage(); }
 
         function switchOmissionTab(tab) {
+            if (!OMISSION_DIMENSIONS[tab]) tab = 'teNum';
             currentOmissionTab = tab;
-            const wrapper = document.getElementById('periodSelectorWrapper');
-            if (wrapper) wrapper.style.display = tab === 'special' ? '' : 'none';
             document.querySelectorAll('.omission-tabs .tab-btn').forEach(btn => {
                 btn.classList.remove('active');
                 if (btn.dataset.tab === tab) btn.classList.add('active');
             });
-
-            document.getElementById('zodiacOmissionTable').style.display = tab === 'zodiac' ? 'block' : 'none';
-            document.getElementById('numberOmissionTable').style.display = tab === 'number' ? 'block' : 'none';
-            document.getElementById('colorOmissionChart').style.display = tab === 'color' ? 'block' : 'none';
-            document.getElementById('sizeOmissionChart').style.display = tab === 'size' ? 'block' : 'none';
-            document.getElementById('specialOmissionTable').style.display = tab === 'special' ? 'block' : 'none';
-
             updateOmissionStats();
         }
 
-        function calculateOmissionStats(periods) {
+        function calculateOmissionStats(periods, tabKey) {
             const data = state.historyData;
             if (!data || data.length === 0) return null;
 
-            const recentData = data.slice(-periods);
+            const dimensionKey = tabKey || currentOmissionTab || 'teNum';
+            const dimension = OMISSION_DIMENSIONS[dimensionKey] || OMISSION_DIMENSIONS.teNum;
+
+            const recentData = (typeof periods === 'number' && isFinite(periods) && periods > 0)
+                ? data.slice(-periods)
+                : data.slice();
             const totalPeriods = recentData.length;
+            if (totalPeriods === 0) return null;
 
-            const zodiacStats = {};
-            const numberStats = {};
+            const items = dimension.getItems(state.currentYear);
+            const statsMap = {};
 
-            const zodiacs = CONFIG.zodiacMap[state.currentYear];
-
-            zodiacs.forEach((z, idx) => {
-                zodiacStats[z] = {
-                    name: z,
+            items.forEach((it, idx) => {
+                statsMap[it.key] = {
+                    key: it.key,
+                    name: it.name,
+                    numbers: it.numbers || [],
+                    color: it.color || null,
+                    zodiac: it.zodiac || null,
+                    wuxing: it.wuxing || null,
+                    orderIndex: idx,
                     currentOmission: 0,
                     maxOmission: 0,
                     totalOmission: 0,
-                    count: 0,
-                    omissionHistory:[],
-                    numbers: [idx + 1, idx + 13, idx + 25, idx + 37].filter(n => n <= 49).map(n => n.toString().padStart(2, '0'))
+                    count: 0
                 };
             });
 
-            for (let i = 1; i <= 49; i++) {
-                const numStr = i.toString().padStart(2, '0');
-                try {
-                    numberStats[numStr] = {
-                        number: numStr,
-                        zodiac: getZodiac(i),
-                        color: getColor(numStr),
-                        currentOmission: 0,
-                        maxOmission: 0,
-                        totalOmission: 0,
-                        count: 0,
-                        omissionHistory:[]
-                    };
-                } catch (e) { }
-            }
+            recentData.forEach(item => {
+                const winNum = typeof item.winNum === 'number' ? item.winNum : parseInt(item.winNum || (item.codes && item.codes[6] ? item.codes[6].num : '0'), 10);
+                if (isNaN(winNum) || winNum < 1 || winNum > 49) return;
+                const winColor = item.currentColor || (item.codes && item.codes[6] ? item.codes[6].wave : getColor(winNum));
+                const winYear = parseInt(String(item.expect).slice(0, 4), 10) || state.currentYear;
+                const winZ = item.win || getZodiac(winNum, winYear);
 
-            recentData.forEach((item, idx) => {
-                if (!item.codes || !item.pingXiao || !item.win) return; 
+                const pingZList = item.pingXiao ? item.pingXiao.split(' ') : (item.zodiac ? item.zodiac.split(',') : []);
+                const allZodiacs = new Set([...pingZList, winZ].filter(Boolean));
 
-                const pingXiaoList = item.pingXiao.split(' ');
-                const allZodiacs = [...pingXiaoList, item.win];  
-                const hitZodiacs = new Set(allZodiacs);
-                const hitNumbers = new Set(item.codes.map(c => c.num));  
+                let allNumbersList = [];
+                if (item.codes && item.codes.length) {
+                    allNumbersList = item.codes.map(c => c.num.padStart(2, '0'));
+                } else if (item.openCode) {
+                    allNumbersList = item.openCode.split(',').map(n => n.padStart(2, '0'));
+                } else {
+                    allNumbersList = [winNum.toString().padStart(2, '0')];
+                }
+                const allNumbers = new Set(allNumbersList);
 
-                zodiacs.forEach(z => {
-                    if (zodiacStats[z]) {
-                        if (hitZodiacs.has(z)) {
-                            zodiacStats[z].currentOmission = 0;
-                            zodiacStats[z].count++;
-                            zodiacStats[z].omissionHistory.push({ period: item.expect, hit: true });
-                        } else {
-                            zodiacStats[z].currentOmission++;
-                            zodiacStats[z].totalOmission++;
-                            zodiacStats[z].maxOmission = Math.max(zodiacStats[z].maxOmission, zodiacStats[z].currentOmission);
-                            zodiacStats[z].omissionHistory.push({ period: item.expect, hit: false });
+                items.forEach(it => {
+                    const isHit = it.matcher(winNum, winColor, winYear, winZ, allZodiacs, allNumbers);
+                    const stat = statsMap[it.key];
+                    if (!stat) return;
+                    if (isHit) {
+                        stat.currentOmission = 0;
+                        stat.count++;
+                    } else {
+                        stat.currentOmission++;
+                        stat.totalOmission++;
+                        if (stat.currentOmission > stat.maxOmission) {
+                            stat.maxOmission = stat.currentOmission;
                         }
                     }
                 });
+            });
 
-                for (let i = 1; i <= 49; i++) {
-                    const numStr = i.toString().padStart(2, '0');
-                    if (numberStats[numStr]) {
-                        if (hitNumbers.has(numStr)) {
-                            numberStats[numStr].currentOmission = 0;
-                            numberStats[numStr].count++;
-                            numberStats[numStr].omissionHistory.push({ period: item.expect, hit: true });
-                        } else {
-                            numberStats[numStr].currentOmission++;
-                            numberStats[numStr].totalOmission++;
-                            numberStats[numStr].maxOmission = Math.max(numberStats[numStr].maxOmission, numberStats[numStr].currentOmission);
-                            numberStats[numStr].omissionHistory.push({ period: item.expect, hit: false });
-                        }
-                    }
+            const theoCount = totalPeriods / dimension.theoreticalCount;
+            const theoRate = dimension.theoRateCustom ? dimension.theoRateCustom.toFixed(1) : (100 / dimension.theoreticalCount).toFixed(1);
+
+            const list = items.map(it => {
+                const stat = statsMap[it.key];
+                const avgOmission = stat.count > 0 ? (stat.totalOmission / stat.count).toFixed(1) : stat.totalOmission.toFixed(1);
+                const rate = totalPeriods > 0 ? ((stat.count / totalPeriods) * 100).toFixed(1) : '0.0';
+                const deviation = theoCount > 0 ? (((stat.count - theoCount) / theoCount) * 100).toFixed(1) : '0.0';
+
+                let status = 'normal';
+                if (stat.currentOmission <= parseFloat(avgOmission) * 0.5 || parseFloat(deviation) >= 25) {
+                    status = 'hot';
+                } else if (stat.currentOmission >= parseFloat(avgOmission) * 1.5 || parseFloat(deviation) <= -25) {
+                    status = 'cold';
                 }
+
+                return {
+                    ...stat,
+                    avgOmission: parseFloat(avgOmission),
+                    rate: parseFloat(rate),
+                    theoRate: parseFloat(theoRate),
+                    deviation: parseFloat(deviation),
+                    status: status
+                };
             });
 
             return {
-                zodiac: Object.values(zodiacStats),
-                number: Object.values(numberStats),
+                dimension,
+                items: list,
                 totalPeriods
             };
         }
 
         function updateOmissionStats() {
-            const periods = currentOmissionTab === 'special' && document.getElementById('omissionPeriodSel') ? parseInt(document.getElementById('omissionPeriodSel').value) : Infinity;
-            const stats = calculateOmissionStats(periods);
+            const periodSel = document.getElementById('omissionPeriodSel');
+            const periods = periodSel ? (periodSel.value === 'all' ? Infinity : parseInt(periodSel.value, 10)) : 100;
+            const stats = calculateOmissionStats(periods, currentOmissionTab);
+
+            const tbody = document.getElementById('generalOmissionBody');
             if (!stats) {
-                const zodiacBody = document.getElementById('zodiacOmissionBody');
-                const numberBody = document.getElementById('numberOmissionBody');
-                const specialBody = document.getElementById('specialOmissionBody');
-                if (zodiacBody) zodiacBody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px;">正在加载数据...</td></tr>';
-                if (numberBody) numberBody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px;">正在加载数据...</td></tr>';
-                if (specialBody) specialBody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px;">正在加载数据...</td></tr>';
-                
-                fetchData().then(() => { updateOmissionStats(); }).catch((err) => {
-                    if (zodiacBody) zodiacBody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px; color: var(--down);">数据加载失败</td></tr>';
-                    if (numberBody) numberBody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: var(--down);">数据加载失败</td></tr>';
-                    if (specialBody) specialBody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px; color: var(--down);">数据加载失败</td></tr>';
+                if (tbody) tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 24px; color: var(--text-secondary);">正在加载特码遗漏数据...</td></tr>';
+                fetchData().then(() => { updateOmissionStats(); }).catch(() => {
+                    if (tbody) tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 24px; color: var(--down);">数据加载失败，请重试</td></tr>';
                 });
                 return;
             }
 
             omissionData = stats;
 
-
             let hotCount = 0;
             let coldCount = 0;
+            let maxColdItem = null;
+            let maxHotItem = null;
 
-            if (currentOmissionTab === 'special') {
-                const theoreticalRate = 100 / 12; 
-                stats.zodiac.forEach(item => {
-                    const rate = item.count > 0 ? (item.count / stats.totalPeriods * 100) : 0;
-                    if (rate >= theoreticalRate * 1.15) hotCount++; 
-                    if (rate <= theoreticalRate * 0.85) coldCount++; 
-                });
-            } else {
-                const currentData = currentOmissionTab === 'zodiac' ? stats.zodiac : stats.number;
-                currentData.forEach(item => {
-                    const avgOmission = item.count > 0 ? item.totalOmission / item.count : item.currentOmission;
-                    if (item.currentOmission <= avgOmission * 0.5) hotCount++;
-                    if (item.currentOmission >= avgOmission * 1.5) coldCount++;
-                });
-            }
+            stats.items.forEach(it => {
+                if (it.status === 'hot') hotCount++;
+                if (it.status === 'cold') coldCount++;
+                if (!maxColdItem || it.currentOmission > maxColdItem.currentOmission) {
+                    maxColdItem = it;
+                }
+                if (!maxHotItem || it.count > maxHotItem.count) {
+                    maxHotItem = it;
+                }
+            });
 
-            document.getElementById('omissionStatHot').textContent = hotCount;
-            document.getElementById('omissionStatCold').textContent = coldCount;
+            const dimEl = document.getElementById('omissionStatDimension');
+            if (dimEl) dimEl.textContent = `${stats.dimension.label} (${stats.items.length}项)`;
 
-            if (currentOmissionTab === 'zodiac') renderZodiacOmissionTable(stats.zodiac);
-            else if (currentOmissionTab === 'number') renderNumberOmissionTable(stats.number);
-            else if (currentOmissionTab === 'color') renderColorOmissionChart(stats);
-            else if (currentOmissionTab === 'size') renderSizeOmissionChart(stats);
-            else if (currentOmissionTab === 'special') renderSpecialOmissionTable(stats);
+            const periodsEl = document.getElementById('omissionStatPeriods');
+            if (periodsEl) periodsEl.textContent = `${stats.totalPeriods}期`;
+
+            const hotEl = document.getElementById('omissionStatHot');
+            if (hotEl) hotEl.textContent = hotCount;
+
+            const coldEl = document.getElementById('omissionStatCold');
+            if (coldEl) coldEl.textContent = coldCount;
+
+            const maxColdEl = document.getElementById('omissionStatMaxCold');
+            if (maxColdEl) maxColdEl.textContent = maxColdItem ? `${maxColdItem.name}(漏${maxColdItem.currentOmission}期)` : '-';
+
+            const maxHotEl = document.getElementById('omissionStatMaxHot');
+            if (maxHotEl) maxHotEl.textContent = maxHotItem ? `${maxHotItem.name}(开${maxHotItem.count}次)` : '-';
+
+            renderGeneralOmissionTable(stats);
         }
 
-        function renderColorOmissionChart(stats) {
-            const recentData = state.historyData;
+        function renderGeneralOmissionTable(stats) {
+            const tbody = document.getElementById('generalOmissionBody');
+            if (!tbody) return;
 
-            if (!recentData || recentData.length === 0) {
-                document.getElementById('colorChartContainer').innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 40px;">暂无数据</div>';
+            if (!stats || !stats.items || stats.items.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 30px; color: var(--text-secondary);">暂无开奖遗漏数据</td></tr>';
                 return;
             }
 
-            const colorOm = { red: 0, blue: 0, green: 0 };
-            const colorMaxOm = { red: 0, blue: 0, green: 0 };
+            const sorted = [...stats.items].sort((a, b) => {
+                const key = omissionSort.key;
+                const isDesc = omissionSort.direction === 'desc';
 
-            recentData.forEach(item => {
-                const lastColor = item.currentColor || getColor(item.winNum);
-                ['red', 'blue', 'green'].forEach(c => {
-                    if (c === lastColor) colorOm[c] = 0;
-                    else {
-                        colorOm[c]++;
-                        colorMaxOm[c] = Math.max(colorMaxOm[c], colorOm[c]);
+                if (key === 'currentOmission') {
+                    if (a.currentOmission !== b.currentOmission) {
+                        return isDesc ? b.currentOmission - a.currentOmission : a.currentOmission - b.currentOmission;
                     }
-                });
-            });
-
-            const maxOm = Math.max(colorOm.red, colorOm.blue, colorOm.green, 10);
-
-            document.getElementById('colorChartRedCurrent').textContent = colorOm.red;
-            document.getElementById('colorChartRedMax').textContent = colorMaxOm.red;
-            document.getElementById('colorChartRedBar').style.width = `${(colorOm.red / maxOm) * 100}%`;
-
-            document.getElementById('colorChartBlueCurrent').textContent = colorOm.blue;
-            document.getElementById('colorChartBlueMax').textContent = colorMaxOm.blue;
-            document.getElementById('colorChartBlueBar').style.width = `${(colorOm.blue / maxOm) * 100}%`;
-
-            document.getElementById('colorChartGreenCurrent').textContent = colorOm.green;
-            document.getElementById('colorChartGreenMax').textContent = colorMaxOm.green;
-            document.getElementById('colorChartGreenBar').style.width = `${(colorOm.green / maxOm) * 100}%`;
-
-            const colorNumbersDisplay = document.getElementById('colorNumbersDisplay');
-            if (colorNumbersDisplay) {
-                const redNums = CONFIG.colors.red.map(n => `<span class="ball red" style="width: 20px; height: 20px; font-size: 9px;">${n}</span>`).join('');
-                const blueNums = CONFIG.colors.blue.map(n => `<span class="ball blue" style="width: 20px; height: 20px; font-size: 9px;">${n}</span>`).join('');
-                const greenNums = CONFIG.colors.green.map(n => `<span class="ball green" style="width: 20px; height: 20px; font-size: 9px;">${n}</span>`).join('');
-
-                colorNumbersDisplay.innerHTML = `
-                    <div style="width: 100%; margin-bottom: 8px;"><span style="color: #ff1744; font-size: 11px;">红波: </span>${redNums}</div>
-                    <div style="width: 100%; margin-bottom: 8px;"><span style="color: #448aff; font-size: 11px;">蓝波: </span>${blueNums}</div>
-                    <div style="width: 100%;"><span style="color: #00e676; font-size: 11px;">绿波: </span>${greenNums}</div>
-                `;
-            }
-        }
-
-        function renderSizeOmissionChart(stats) {
-            const recentData = state.historyData;
-
-            if (!recentData || recentData.length === 0) {
-                const chartEl = document.getElementById('sizeOmissionChart');
-                if (chartEl) chartEl.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 40px;">暂无数据</div>';
-                return;
-            }
-
-            const sizeOm = { big: 0, small: 0 };
-            const sizeMaxOm = { big: 0, small: 0 };
-
-            recentData.forEach(item => {
-                const lastSize = item.currentSize || (item.winNum >= 25 ? 'big' : 'small');
-                ['big', 'small'].forEach(s => {
-                    if (s === lastSize) sizeOm[s] = 0;
-                    else {
-                        sizeOm[s]++;
-                        sizeMaxOm[s] = Math.max(sizeMaxOm[s], sizeOm[s]);
+                    return b.count - a.count;
+                }
+                if (key === 'maxOmission') {
+                    return isDesc ? b.maxOmission - a.maxOmission : a.maxOmission - b.maxOmission;
+                }
+                if (key === 'avgOmission') {
+                    return isDesc ? b.avgOmission - a.avgOmission : a.avgOmission - b.avgOmission;
+                }
+                if (key === 'count') {
+                    if (a.count !== b.count) {
+                        return isDesc ? b.count - a.count : a.count - b.count;
                     }
-                });
+                    return a.currentOmission - b.currentOmission;
+                }
+                if (key === 'rate') {
+                    return isDesc ? b.rate - a.rate : a.rate - b.rate;
+                }
+                if (key === 'name') {
+                    return isDesc ? b.name.localeCompare(a.name) : a.name.localeCompare(b.name);
+                }
+                if (key === 'status') {
+                    const statusOrder = { hot: 1, normal: 2, cold: 3 };
+                    return isDesc ? statusOrder[b.status] - statusOrder[a.status] : statusOrder[a.status] - statusOrder[b.status];
+                }
+                return a.orderIndex - b.orderIndex;
             });
 
-            const maxOm = Math.max(sizeOm.big, sizeOm.small, 10);
+            tbody.innerHTML = sorted.map(item => {
+                const barWidth = Math.min(Math.round((item.currentOmission / (item.maxOmission || 1)) * 100), 100);
+                const statusLabel = item.status === 'hot' ? '🔥 热' : item.status === 'cold' ? '❄️ 冷' : '➡️ 稳';
+                const statusClass = `status-${item.status}`;
 
-            const bigCurrent = document.getElementById('sizeChartBigCurrent');
-            const bigMax = document.getElementById('sizeChartBigMax');
-            const bigBar = document.getElementById('sizeChartBigBar');
+                let itemHtml = '';
+                if (currentOmissionTab === 'pingNum' || currentOmissionTab === 'teNum') {
+                    itemHtml = `
+                        <div style="display:flex;align-items:center;justify-content:center;gap:6px;">
+                            <span class="number-cell ${item.color}" style="width:26px;height:26px;font-size:12px;">${item.name}</span>
+                            <span style="font-weight:600;font-size:12px;color:var(--text-primary);">${item.zodiac || ''}</span>
+                        </div>`;
+                } else if (currentOmissionTab === 'color') {
+                    const cColor = item.key === 'red' ? '#ff1744' : item.key === 'blue' ? '#448aff' : '#00e676';
+                    itemHtml = `<span style="font-size:14px;font-weight:700;color:${cColor};">${item.name}</span>`;
+                } else if (currentOmissionTab === 'pingZodiac' || currentOmissionTab === 'zodiac') {
+                    const zc = {
+                        '鼠': '#448aff', '牛': '#00e676', '虎': '#00e676', '兔': '#00e676',
+                        '龙': '#ff1744', '蛇': '#ff1744', '马': '#ff1744', '羊': '#ff1744',
+                        '猴': '#448aff', '鸡': '#448aff', '狗': '#448aff', '猪': '#448aff'
+                    }[item.name] || '#ff1744';
+                    itemHtml = `<span style="font-size:14px;font-weight:700;color:${zc};">${item.name}</span>`;
+                } else if (currentOmissionTab === 'halfWave') {
+                    const cColor = item.color === 'red' ? '#ff1744' : item.color === 'blue' ? '#448aff' : '#00e676';
+                    const bg = item.color === 'red' ? 'rgba(255,23,68,0.12)' : item.color === 'blue' ? 'rgba(68,138,255,0.12)' : 'rgba(0,230,118,0.12)';
+                    itemHtml = `<span style="display:inline-block;padding:2px 8px;border-radius:4px;background:${bg};color:${cColor};font-weight:700;font-size:13px;">${item.name}</span>`;
+                } else {
+                    itemHtml = `<span style="font-weight:700;font-size:13px;color:var(--accent);">${item.name}</span>`;
+                }
 
-            if (bigCurrent) bigCurrent.textContent = sizeOm.big;
-            if (bigMax) bigMax.textContent = sizeMaxOm.big;
-            if (bigBar) {
-                bigBar.style.width = `${(sizeOm.big / maxOm) * 100}%`;
-                bigBar.style.background = sizeOm.big >= 10 ? 'linear-gradient(180deg, #ff1744, #d50000)' : 'linear-gradient(180deg, #00e676, #00c853)';
-            }
-
-            const smallCurrent = document.getElementById('sizeChartSmallCurrent');
-            const smallMax = document.getElementById('sizeChartSmallMax');
-            const smallBar = document.getElementById('sizeChartSmallBar');
-
-            if (smallCurrent) smallCurrent.textContent = sizeOm.small;
-            if (smallMax) smallMax.textContent = sizeMaxOm.small;
-            if (smallBar) {
-                smallBar.style.width = `${(sizeOm.small / maxOm) * 100}%`;
-                smallBar.style.background = sizeOm.small >= 10 ? 'linear-gradient(180deg, #ff1744, #d50000)' : 'linear-gradient(180deg, #00d4ff, #0091ea)';
-            }
-
-            const compareBar = document.getElementById('sizeChartCompareBar');
-            const compareBarSmall = document.getElementById('sizeChartCompareBarSmall');
-
-            const total = sizeOm.big + sizeOm.small;
-            if (total > 0) {
-                if (compareBar) compareBar.style.width = `${(sizeOm.big / total) * 100}%`;
-                if (compareBarSmall) compareBarSmall.style.width = `${(sizeOm.small / total) * 100}%`;
-            } else {
-                if (compareBar) compareBar.style.width = '50%';
-                if (compareBarSmall) compareBarSmall.style.width = '50%';
-            }
-        }
-
-        function renderSpecialOmissionTable(stats) {
-            const tbody = document.getElementById('specialOmissionBody');
-            const periodSel = document.getElementById('omissionPeriodSel');
-            const periods = periodSel ? parseInt(periodSel.value) : Infinity;
-
-
-            if (!state.historyData || state.historyData.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px;">暂无数据</td></tr>';
-                return;
-            }
-
-            const recentData = state.historyData.slice(-periods);
-            const totalPeriods = recentData.length;
-            const theoreticalCount = totalPeriods / 12;
-
-            const zodiacs = CONFIG.zodiacMap[state.currentYear];
-            const specialStats = {};
-            zodiacs.forEach(z => {
-                specialStats[z] = { name: z, count: 0, lastAppear: null, currentOmission: 0 };
-            });
-
-            let omissionCounter = {};
-            zodiacs.forEach(z => omissionCounter[z] = 0);
-
-            for (let i = recentData.length - 1; i >= 0; i--) {
-                const item = recentData[i];
-                const winZodiac = item.win;
-
-                zodiacs.forEach(z => {
-                    if (z === winZodiac) {
-                        specialStats[z].currentOmission = omissionCounter[z];
-                        omissionCounter[z] = 0;
+                let numbersHtml = '';
+                if (currentOmissionTab === 'pingNum' || currentOmissionTab === 'teNum') {
+                    numbersHtml = `<span style="font-size:11px;color:var(--text-secondary);">${item.zodiac || ''}肖 · ${item.wuxing || ''}行 · ${item.color === 'red' ? '红波' : item.color === 'blue' ? '蓝波' : '绿波'}</span>`;
+                } else {
+                    const nums = item.numbers || [];
+                    if (nums.length <= 10) {
+                        numbersHtml = `<div style="display:flex;flex-wrap:wrap;gap:2px;justify-content:center;">` +
+                            nums.map(n => `<span class="ball ${getColor(n)}" style="width:20px;height:20px;font-size:9.5px;display:inline-flex;align-items:center;justify-content:center;">${n}</span>`).join('') +
+                            `</div>`;
                     } else {
-                        omissionCounter[z]++;
+                        numbersHtml = `<div style="display:flex;flex-wrap:wrap;gap:2px;justify-content:center;max-width:240px;margin:0 auto;">` +
+                            nums.map(n => `<span class="ball ${getColor(n)}" style="width:18px;height:18px;font-size:8.5px;display:inline-flex;align-items:center;justify-content:center;">${n}</span>`).join('') +
+                            `</div>`;
                     }
-                });
-
-                specialStats[winZodiac].count++;
-                if (!specialStats[winZodiac].lastAppear) specialStats[winZodiac].lastAppear = item.expect;
-            }
-
-            const zodiacStats = Object.values(specialStats).map(z => {
-                const rate = ((z.count / totalPeriods) * 100).toFixed(1);
-                const deviation = ((z.count - theoreticalCount) / theoreticalCount * 100).toFixed(1);
-                const avgCycle = z.count > 0 ? (totalPeriods / z.count).toFixed(1) : '-';
-
-                return {
-                    name: z.name, count: z.count, rate: rate,
-                    theoretical: theoreticalCount.toFixed(1),
-                    deviation: deviation, avgCycle: avgCycle,
-                    lastAppear: z.lastAppear, currentOmission: z.currentOmission
-                };
-            });
-
-            const sortedData = [...zodiacStats].sort((a, b) => b.count - a.count);
-
-            tbody.innerHTML = sortedData.map(item => {
-                const deviation = parseFloat(item.deviation);
-                const isHot = deviation > 10;
-                const isCold = deviation < -10;
-                const rate = parseFloat(item.rate);
-
-                const zodiacColorMap = {
-                    '鼠': 'blue', '牛': 'green', '虎': 'green', '兔': 'green',
-                    '龙': 'red', '蛇': 'red', '马': 'red', '羊': 'red',
-                    '猴': 'blue', '鸡': 'blue', '狗': 'blue', '猪': 'blue'
-                };
-                const color = zodiacColorMap[item.name] || 'red';
-                const colorCode = color === 'red' ? '#ff1744' : color === 'blue' ? '#448aff' : '#00e676';
-
-                const maxRate = Math.max(...sortedData.map(s => parseFloat(s.rate)), 20);
-                const barWidth = (rate / maxRate) * 100;
+                }
 
                 return `
                 <tr>
-                    <td class="zodiac-cell">
-                        <span style="font-size: 14px; font-weight: 700; color: ${colorCode};">${item.name}</span>
-                    </td>
-                    <td style="font-weight: 700; font-size: 15px;">${item.count}</td>
+                    <td>${itemHtml}</td>
+                    <td class="omission-current ${item.status}">${item.currentOmission}</td>
+                    <td style="color:var(--text-secondary);font-weight:600;">${item.maxOmission}</td>
+                    <td style="color:var(--text-secondary);">${item.avgOmission}</td>
+                    <td style="font-weight:700;color:var(--text-primary);font-size:14px;">${item.count}</td>
                     <td>
-                        <div style="display: flex; align-items: center; gap: 6px;">
-                            <span style="font-weight: 600; ${rate > 8.5 ? 'color: var(--up)' : rate < 7 ? 'color: var(--down)' : ''}">${item.rate}%</span>
-                        </div>
+                        <div style="font-weight:600;color:${item.rate >= item.theoRate ? 'var(--up)' : 'var(--down)'};font-size:12px;">${item.rate}%</div>
+                        <div style="font-size:10px;color:var(--text-secondary);">理论${item.theoRate}%</div>
                     </td>
-                    <td style="color: var(--text-secondary);">${item.theoretical}</td>
-                    <td style="color: ${deviation > 0 ? 'var(--up)' : deviation < 0 ? 'var(--down)' : 'var(--text-secondary)'}; font-weight: 600;">
-                        ${deviation > 0 ? '+' : ''}${item.deviation}%
-                    </td>
-                    <td style="min-width: 100px;">
+                    <td style="min-width: 90px;">
                         <div style="display: flex; align-items: center; gap: 6px;">
-                            <div style="flex: 1; height: 12px; background: #0d1117; border-radius: 6px; overflow: hidden;">
+                            <div style="flex: 1; height: 10px; background: #0d1117; border-radius: 5px; overflow: hidden;">
                                 <div style="
                                     height: 100%;
                                     width: ${barWidth}%;
-                                    background: ${isHot ? 'linear-gradient(90deg, #00e676, #00c853)' : isCold ? 'linear-gradient(90deg, #ff1744, #d50000)' : 'linear-gradient(90deg, #00d4ff, #0091ea)'};
-                                    border-radius: 6px;
+                                    background: ${item.status === 'hot' ? 'linear-gradient(90deg, #00e676, #00c853)' : item.status === 'cold' ? 'linear-gradient(90deg, #ff1744, #d50000)' : 'linear-gradient(90deg, #00d4ff, #0091ea)'};
+                                    border-radius: 5px;
                                     transition: width 0.3s ease;
                                 "></div>
                             </div>
+                            <span style="font-size: 10px; color: var(--text-secondary); min-width: 26px; text-align: right;">${item.currentOmission}</span>
                         </div>
                     </td>
-                    <td class="status-${isHot ? 'hot' : isCold ? 'cold' : 'normal'}" style="font-weight: 600;">
-                        ${isHot ? '🔥 热' : isCold ? '❄️ 冷' : '➡️ 稳'}
-                    </td>
-                    <td>
-                        <span class="ball ${color}" style="width: 18px; height: 18px; font-size: 10px;"></span>
-                    </td>
-                </tr>
-            `;
-            }).join('');
-
-
-        }
-
-        function renderZodiacOmissionTable(data) {
-            const tbody = document.getElementById('zodiacOmissionBody');
-
-            if (!data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px;">暂无数据</td></tr>';
-                return;
-            }
-
-            const sortedData = [...data].sort((a, b) => a.currentOmission - b.currentOmission);
-
-            tbody.innerHTML = sortedData.map(item => {
-                const avgOmission = item.count > 0 ? (item.totalOmission / item.count).toFixed(1) : item.currentOmission;
-                const status = getOmissionStatus(item.currentOmission, parseFloat(avgOmission));
-                const barWidth = Math.min((item.currentOmission / (item.maxOmission || 1)) * 100, 100);
-
-                const zodiacColorMap = {
-                    '鼠': 'blue', '牛': 'green', '虎': 'green', '兔': 'green',
-                    '龙': 'red', '蛇': 'red', '马': 'red', '羊': 'red',
-                    '猴': 'blue', '鸡': 'blue', '狗': 'blue', '猪': 'blue'
-                };
-                const zodiacColor = zodiacColorMap[item.name] || 'red';
-
-                return `
-                <tr>
-                    <td class="zodiac-cell">
-                        <span style="color: ${zodiacColor === 'red' ? '#ff1744' : zodiacColor === 'blue' ? '#448aff' : '#00e676'}; font-weight: 700;">${item.name}</span>
-                    </td>
-                    <td class="omission-current ${status}">${item.currentOmission}</td>
-                    <td style="color: var(--text-secondary);">${item.maxOmission}</td>
-                    <td style="color: var(--text-secondary);">${avgOmission}</td>
-                    <td>${item.count}</td>
-                    <td style="min-width: 100px;">
-                        <div style="display: flex; align-items: center; gap: 6px;">
-                            <div style="flex: 1; height: 12px; background: #0d1117; border-radius: 6px; overflow: hidden;">
-                                <div style="
-                                    height: 100%;
-                                    width: ${barWidth}%;
-                                    background: ${status === 'hot' ? 'linear-gradient(90deg, #00e676, #00c853)' : status === 'cold' ? 'linear-gradient(90deg, #ff1744, #d50000)' : 'linear-gradient(90deg, #00d4ff, #0091ea)'};
-                                    border-radius: 6px;
-                                    transition: width 0.3s ease;
-                                "></div>
-                            </div>
-                            <span style="font-size: 10px; color: var(--text-secondary); min-width: 28px; text-align: right;">${barWidth.toFixed(0)}%</span>
-                        </div>
-                    </td>
-                    <td class="status-${status}" style="font-weight: 600;">${status === 'hot' ? '🔥 热' : status === 'cold' ? '❄️ 冷' : '➡️ 稳'}</td>
-                    <td class="numbers-list" style="font-size: 9px;">${item.numbers.join(' ')}</td>
-                </tr>
-            `;
-            }).join('');
-        }
-
-        function renderNumberOmissionTable(data) {
-            const tbody = document.getElementById('numberOmissionBody');
-
-            if (!data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px;">暂无数据</td></tr>';
-                return;
-            }
-
-            const sortedData = [...data].sort((a, b) => a.currentOmission - b.currentOmission);
-
-            tbody.innerHTML = sortedData.map(item => {
-                const avgOmission = item.count > 0 ? (item.totalOmission / item.count).toFixed(1) : item.currentOmission;
-                const status = getOmissionStatus(item.currentOmission, parseFloat(avgOmission));
-                const barWidth = Math.min((item.currentOmission / (item.maxOmission || 1)) * 100, 100);
-
-                return `
-                <tr>
-                    <td>
-                        <span class="number-cell ${item.color}" style="width: 24px; height: 24px; font-size: 11px;">${item.number}</span>
-                    </td>
-                    <td class="zodiac-cell" style="font-weight: 600;">${item.zodiac}</td>
-                    <td class="omission-current ${status}">${item.currentOmission}</td>
-                    <td style="color: var(--text-secondary);">${item.maxOmission}</td>
-                    <td style="color: var(--text-secondary);">${avgOmission}</td>
-                    <td>${item.count}</td>
-                    <td style="min-width: 100px;">
-                        <div style="display: flex; align-items: center; gap: 6px;">
-                            <div style="flex: 1; height: 12px; background: #0d1117; border-radius: 6px; overflow: hidden;">
-                                <div style="
-                                    height: 100%;
-                                    width: ${barWidth}%;
-                                    background: ${status === 'hot' ? 'linear-gradient(90deg, #00e676, #00c853)' : status === 'cold' ? 'linear-gradient(90deg, #ff1744, #d50000)' : 'linear-gradient(90deg, #00d4ff, #0091ea)'};
-                                    border-radius: 6px;
-                                    transition: width 0.3s ease;
-                                "></div>
-                            </div>
-                            <span style="font-size: 10px; color: var(--text-secondary); min-width: 28px; text-align: right;">${barWidth.toFixed(0)}%</span>
-                        </div>
-                    </td>
-                    <td class="status-${status}" style="font-weight: 600;">${status === 'hot' ? '🔥' : status === 'cold' ? '❄' : '➡️'}</td>
-                    <td>
-                        <span class="ball ${item.color}" style="width: 18px; height: 18px; font-size: 10px;"></span>
-                    </td>
-                </tr>
-            `;
+                    <td class="${statusClass}" style="font-weight: 700; font-size: 12px;">${statusLabel}</td>
+                    <td style="padding: 6px 4px;">${numbersHtml}</td>
+                </tr>`;
             }).join('');
         }
 
