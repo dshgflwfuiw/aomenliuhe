@@ -11764,6 +11764,46 @@
                     { key: 'green', name: '绿波', numbers: (CONFIG.colors && CONFIG.colors.green) || [], color: 'green', matcher: (winNum, c) => c === 'green' }
                 ]
             },
+            oddEven: {
+                id: 'oddEven',
+                label: '单双',
+                title: '特码单双遗漏排序',
+                theoreticalCount: 2,
+                theoRateCustom: 50.0,
+                getItems: () => {
+                    const oddNums = [];
+                    const evenNums = [];
+                    for (let i = 1; i <= 49; i++) {
+                        const numStr = i.toString().padStart(2, '0');
+                        if (i % 2 !== 0) oddNums.push(numStr);
+                        else evenNums.push(numStr);
+                    }
+                    return [
+                        { key: 'odd', name: '单数', numbers: oddNums, matcher: (winNum) => (winNum % 2 !== 0) },
+                        { key: 'even', name: '双数', numbers: evenNums, matcher: (winNum) => (winNum % 2 === 0) }
+                    ];
+                }
+            },
+            bigSmall: {
+                id: 'bigSmall',
+                label: '大小',
+                title: '特码大小遗漏排序',
+                theoreticalCount: 2,
+                theoRateCustom: 50.0,
+                getItems: () => {
+                    const bigNums = [];
+                    const smallNums = [];
+                    for (let i = 1; i <= 49; i++) {
+                        const numStr = i.toString().padStart(2, '0');
+                        if (i >= 25) bigNums.push(numStr);
+                        else smallNums.push(numStr);
+                    }
+                    return [
+                        { key: 'big', name: '大数', numbers: bigNums, matcher: (winNum) => (winNum >= 25) },
+                        { key: 'small', name: '小数', numbers: smallNums, matcher: (winNum) => (winNum <= 24) }
+                    ];
+                }
+            },
             head: {
                 id: 'head',
                 label: '头数',
@@ -12289,6 +12329,14 @@
                 } else if (currentOmissionTab === 'color') {
                     const cColor = item.key === 'red' ? '#ff1744' : item.key === 'blue' ? '#448aff' : '#00e676';
                     itemHtml = `<span style="font-size:14px;font-weight:700;color:${cColor};">${item.name}</span>`;
+                } else if (currentOmissionTab === 'oddEven') {
+                    const oColor = item.key === 'odd' ? '#ff1744' : '#448aff';
+                    const oBg = item.key === 'odd' ? 'rgba(255,23,68,0.12)' : 'rgba(68,138,255,0.12)';
+                    itemHtml = `<span style="display:inline-block;padding:2px 10px;border-radius:4px;background:${oBg};color:${oColor};font-weight:700;font-size:13px;">${item.name}</span>`;
+                } else if (currentOmissionTab === 'bigSmall') {
+                    const bColor = item.key === 'big' ? '#00e676' : '#00d4ff';
+                    const bBg = item.key === 'big' ? 'rgba(0,230,118,0.12)' : 'rgba(0,212,255,0.12)';
+                    itemHtml = `<span style="display:inline-block;padding:2px 10px;border-radius:4px;background:${bBg};color:${bColor};font-weight:700;font-size:13px;">${item.name}</span>`;
                 } else if (currentOmissionTab === 'pingZodiac' || currentOmissionTab === 'zodiac') {
                     const zc = {
                         '鼠': '#448aff', '牛': '#00e676', '虎': '#00e676', '兔': '#00e676',
