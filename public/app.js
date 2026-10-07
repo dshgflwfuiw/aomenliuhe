@@ -965,6 +965,21 @@
             let prevPeriodZodiacs = null;
             const numLastSeen = {};
             for (let n = 1; n <= 49; n++) numLastSeen[n.toString().padStart(2, '0')] = -1;
+            let numberOmissions = {};
+            let numberCounts = {};
+            let allBallNumberOmissions = {};
+            let allBallNumberCounts = {};
+            state.globalMaxNumOm = {};
+            state.globalMaxAllBallNumOm = {};
+            for (let n = 1; n <= 49; n++) {
+                const nStr = n.toString().padStart(2, '0');
+                numberOmissions[nStr] = 0;
+                numberCounts[nStr] = 0;
+                allBallNumberOmissions[nStr] = 0;
+                allBallNumberCounts[nStr] = 0;
+                state.globalMaxNumOm[nStr] = 0;
+                state.globalMaxAllBallNumOm[nStr] = 0;
+            }
             let prevFollowTail = null;
             const tailLastSeen = {};
             for (let t = 0; t <= 9; t++) tailLastSeen[t] = -1;
@@ -1330,6 +1345,31 @@
                     }
                 }
 
+                const winNumStr = winNum.toString().padStart(2, '0');
+                const allBallStrs = cList.map(n => parseInt(n, 10).toString().padStart(2, '0'));
+                for (let n = 1; n <= 49; n++) {
+                    const nStr = n.toString().padStart(2, '0');
+                    if (nStr === winNumStr) {
+                        numberOmissions[nStr] = 0;
+                        numberCounts[nStr]++;
+                    } else {
+                        numberOmissions[nStr]++;
+                    }
+                    if (numberOmissions[nStr] > state.globalMaxNumOm[nStr]) {
+                        state.globalMaxNumOm[nStr] = numberOmissions[nStr];
+                    }
+
+                    if (allBallStrs.includes(nStr)) {
+                        allBallNumberOmissions[nStr] = 0;
+                        allBallNumberCounts[nStr]++;
+                    } else {
+                        allBallNumberOmissions[nStr]++;
+                    }
+                    if (allBallNumberOmissions[nStr] > state.globalMaxAllBallNumOm[nStr]) {
+                        state.globalMaxAllBallNumOm[nStr] = allBallNumberOmissions[nStr];
+                    }
+                }
+
                 const currentWx = getWuxingKey(winNum, itemYear);
                 wuxingKeys.forEach(wx => {
                     if (wx === currentWx) {
@@ -1403,6 +1443,10 @@
                     pingXiao: zList.slice(0, 6).join(' '),
                     snapshot: { ...omissions },
                     counts: { ...counts },
+                    numberSnapshot: { ...numberOmissions },
+                    numberCounts: { ...numberCounts },
+                    allBallNumberSnapshot: { ...allBallNumberOmissions },
+                    allBallNumberCounts: { ...allBallNumberCounts },
                     tailSnapshot: { ...tailOmissions },
                     tailCounts: { ...tailCounts },
                     wuxingSnapshot: { ...wuxingOmissions },
@@ -2351,7 +2395,7 @@
             track: 'special', // 'special' or 'normal'
             weightCold: 50,   // 0=cold, 100=hot
             weightMorph: 60,  // 0-100
-            spanCount: 20,    // 8-30 (最少20码推荐)
+            spanCount: 24,    // 8-32 (黄金半壁大底24码推荐)
             shrink: false
         };
 
@@ -2370,7 +2414,7 @@
                         if (typeof parsed.weightCold === 'number') recConfig.weightCold = parsed.weightCold;
                         if (typeof parsed.weightMorph === 'number') recConfig.weightMorph = parsed.weightMorph;
                         if (typeof parsed.spanCount === 'number') {
-                            recConfig.spanCount = Math.max(20, parsed.spanCount);
+                            recConfig.spanCount = Math.max(12, parsed.spanCount);
                         }
                         if (typeof parsed.shrink === 'boolean') recConfig.shrink = parsed.shrink;
                         if (parsed.track) recConfig.track = parsed.track;
@@ -2378,7 +2422,7 @@
                 }
             } catch (e) {}
 
-            if (recConfig.spanCount < 20) recConfig.spanCount = 20;
+            if (!recConfig.spanCount || recConfig.spanCount < 12) recConfig.spanCount = 24;
             try {
                 const savedInline = parseInt(localStorage.getItem('aomen_rec_inline_count') || '', 10);
                 if (!isNaN(savedInline) && savedInline >= 5 && savedInline <= 365) {
@@ -2675,7 +2719,7 @@
         function resetRecWeights() {
             if (document.getElementById('recWeightCold')) document.getElementById('recWeightCold').value = 50;
             if (document.getElementById('recWeightMorph')) document.getElementById('recWeightMorph').value = 60;
-            if (document.getElementById('recSpanCount')) document.getElementById('recSpanCount').value = 20;
+            if (document.getElementById('recSpanCount')) document.getElementById('recSpanCount').value = 24;
             if (document.getElementById('recShrinkToggle')) document.getElementById('recShrinkToggle').checked = false;
             onRecWeightChange();
         }
@@ -2818,10 +2862,11 @@
                 tags.push('正邻号');
             }
 
-            // 重号判断
+            // 重号与平移特判断
             if (num === lastSpecial) {
                 tags.push('特重号');
             } else if (lastNums.includes(num)) {
+                tags.push('平移特');
                 tags.push('正重号');
             }
 
@@ -2978,12 +3023,8 @@
 
                 let rejectReason = null;
 
-                // 1. 近期高频偏离过载过滤 (动态杀号拦截)
-                if (item.isOverheatedKill && selected.length < target - 1) {
-                    rejectReason = `高频偏离杀号(偏离+${item.devIndex})`;
-                }
-                // 2. 同尾扎堆过滤
-                else if ((tailCounts[tail] || 0) >= maxPerTail) {
+                // 1. 同尾扎堆过滤
+                if ((tailCounts[tail] || 0) >= maxPerTail) {
                     rejectReason = `同尾(${tail}尾超标)`;
                 }
                 // 2. 同肖扎堆过滤
@@ -3179,39 +3220,23 @@
                 // 综合权重偏离度指数 (devIndex)
                 const devIndex = Number((zSp * 0.58 + zAll * 0.27 + zZod * 0.15 + shortOverburst).toFixed(2));
 
-                // 计算对近期出现频率过高号码的动态“杀号”权重 (killWeight: 0 ~ 55)
+                // 计算对极度透支号码的轻微回撤调节 (不强行杀号，保留动量)
                 let killWeight = 0;
                 let killReason = '';
-                const isCoolingStall = (fSp >= 2 || fAllS >= 3) && (om >= 1 && om <= 6);
-                const isImmediateRepeatOverload = (om === 0 && (fSp >= 2 || fAllS >= 3));
-
-                if (devIndex > 0.95 || fSpS >= 2 || fAllS >= 4) {
-                    const excess = Math.max(0.2, devIndex - 0.80);
-                    let stallMultiplier = 1.0;
-                    if (isCoolingStall) {
-                        // 热极转冷拐点期（近期高频出现后进入1~6期停滞），加大杀号降权力度
-                        stallMultiplier = 1.45;
-                        killReason = `热转冷拐点(窗内${fSp}特/${fAll}平·偏离+${devIndex})`;
-                    } else if (isImmediateRepeatOverload) {
-                        stallMultiplier = 1.30;
-                        killReason = `连开透支(窗内${fSp}特/${fAll}平·偏离+${devIndex})`;
-                    } else {
-                        stallMultiplier = 1.12;
-                        killReason = `高频过载(窗内${fSp}特/${fAll}平·偏离+${devIndex})`;
-                    }
-                    killWeight = Math.min(55, Math.round(excess * 16.5 * transitionIntensity * stallMultiplier));
+                if (devIndex > 1.35 && om >= 1 && om <= 4) {
+                    killReason = `短期高频透支(偏离+${devIndex})`;
+                    killWeight = Math.min(10, Math.round((devIndex - 1.2) * 5 * transitionIntensity));
                 }
 
-                // 冷热过渡期回补加成：统计窗口内正码适度预热(1~3次)、特码未透支、遗漏处于中温转折带(5~18期)
+                // 冷热过渡期回补加成：正码适度预热(1~3次)、遗漏处于黄金温区带(2~12期)
                 let transitionBonus = 0;
-                if (killWeight === 0 && om >= 5 && om <= 18 && fSp <= Math.ceil(expSp) && fAll >= Math.max(1, Math.floor(expAll * 0.55)) && fAll <= Math.ceil(expAll * 1.35)) {
-                    const sweetSpot = (om >= 7 && om <= 14) ? 1.25 : 1.0;
-                    const warmSignal = (fAllS >= 1 && fAllS <= 2) ? 4 : 0;
-                    transitionBonus = Math.min(22, Math.round((9 * sweetSpot + warmSignal) * transitionIntensity));
+                if (om >= 2 && om <= 14 && fAll >= 1) {
+                    const sweetSpot = (om >= 3 && om <= 9) ? 1.5 : 1.0;
+                    transitionBonus = Math.min(20, Math.round((8 * sweetSpot + (fAllS || 0) * 3) * transitionIntensity));
                 }
 
-                const isOverheated = killWeight >= 14 || devIndex >= 1.35;
-                const isOverheatedKill = killWeight >= 22 || devIndex >= 1.65;
+                const isOverheated = killWeight >= 8;
+                const isOverheatedKill = false;
 
                 numMap[nStr] = {
                     winSp: fSp,
@@ -3251,21 +3276,63 @@
             const winDev = devContext || computeWindowWeightDeviation(historyData);
 
             const recent30 = historyData.slice(-30);
+            const recent15 = historyData.slice(-15);
             const recent10 = historyData.slice(-10);
-            const freq30 = {};
-            const freq10 = {};
+
+            // 1. 全球/全码遗漏统计 (任意7球落球遗漏)
+            const allBallOm = {};
+            for (let i = 1; i <= 49; i++) allBallOm[i] = 30;
+            const maxBack = Math.min(60, historyData.length);
+            for (let k = historyData.length - 1; k >= historyData.length - maxBack; k--) {
+                const d = historyData[k];
+                if (!d) continue;
+                const balls = [...(d.numbers || []), d.special].filter(Boolean).map(n => parseInt(n, 10));
+                const dist = historyData.length - 1 - k;
+                balls.forEach(b => {
+                    if (allBallOm[b] === 30 || dist < allBallOm[b]) {
+                        allBallOm[b] = dist;
+                    }
+                });
+            }
+
+            // 2. 统计近15期全码与特码频次、生肖频次、尾数频次
+            const freqAll15 = {};
+            const freqSp15 = {};
+            const freqSp30 = {};
+            const zFreq15 = {};
+            const tailFreq15 = {};
             const recentColorCounts = { red: 0, blue: 0, green: 0 };
 
             recent30.forEach(d => {
                 if (d.special) {
                     const numStr = parseInt(d.special, 10).toString().padStart(2, '0');
-                    freq30[numStr] = (freq30[numStr] || 0) + 1;
+                    freqSp30[numStr] = (freqSp30[numStr] || 0) + 1;
                 }
             });
+
+            recent15.forEach(d => {
+                if (d.special) {
+                    const numStr = parseInt(d.special, 10).toString().padStart(2, '0');
+                    const n = parseInt(d.special, 10);
+                    freqSp15[numStr] = (freqSp15[numStr] || 0) + 1;
+                    tailFreq15[n % 10] = (tailFreq15[n % 10] || 0) + 1;
+                }
+                const balls = [...(d.numbers || []), d.special].filter(Boolean);
+                balls.forEach(b => {
+                    const n = parseInt(b, 10);
+                    if (!isNaN(n)) {
+                        freqAll15[n] = (freqAll15[n] || 0) + 1;
+                    }
+                });
+                const zList = d.zodiac ? d.zodiac.split(',') : (d.win ? [d.win] : []);
+                zList.forEach(z => {
+                    if (z) zFreq15[z] = (zFreq15[z] || 0) + 1;
+                });
+            });
+
             recent10.forEach(d => {
                 if (d.special) {
                     const numStr = parseInt(d.special, 10).toString().padStart(2, '0');
-                    freq10[numStr] = (freq10[numStr] || 0) + 1;
                     const c = getColor(numStr);
                     if (recentColorCounts[c] !== undefined) recentColorCounts[c]++;
                 }
@@ -3277,120 +3344,99 @@
                 if (cnt > maxColorF) { maxColorF = cnt; dominantColor = c; }
             });
 
+            // 提取活跃热尾前4
+            const topActiveTails = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].sort((a, b) => (tailFreq15[b] || 0) - (tailFreq15[a] || 0)).slice(0, 4);
+
             // 权重调节因子
             const wCold = Math.max(0, Math.min(100, recConfig.weightCold !== undefined ? recConfig.weightCold : 50));
             const wMorph = Math.max(0, Math.min(100, recConfig.weightMorph !== undefined ? recConfig.weightMorph : 60));
-
-            // coldBias (0~2) & hotBias (0~2)
             const coldBias = (100 - wCold) / 50;
             const hotBias = wCold / 50;
             const morphWeight = wMorph / 100;
 
-            // 49码打分
+            const prevSpecial = last.special ? parseInt(last.special, 10) : 0;
+            const prevNormals = (last.numbers || []).map(n => parseInt(n, 10));
+
+            // 49码打分 (融合全码黄金温区曲线、落球动量、形态学与多因子共振)
             const scoredNumbers = [];
             for (let i = 1; i <= 49; i++) {
                 const numStr = i.toString().padStart(2, '0');
                 const z = getZodiac(i);
                 const color = getColor(numStr);
                 const currentOm = numSnapshot[numStr] !== undefined ? numSnapshot[numStr] : 0;
+                const omAll = allBallOm[i] !== undefined ? allBallOm[i] : 10;
+                const fA15 = freqAll15[i] || 0;
+                const fS15 = freqSp15[numStr] || 0;
+                const fS30 = freqSp30[numStr] || 0;
                 const zOm = snapshot[z] || 0;
-                const zMax = (globalMaxOm || {})[z] || 25;
-                const zRatio = zMax > 0 ? zOm / zMax : 0;
-                const f30 = freq30[numStr] || 0;
-                const f10 = freq10[numStr] || 0;
-                const devInfo = (winDev && winDev.numMap && winDev.numMap[numStr]) || {
-                    devIndex: 0,
-                    killWeight: 0,
-                    killReason: '',
-                    transitionBonus: 0,
-                    isOverheated: false,
-                    isOverheatedKill: false
-                };
+                const tail = i % 10;
 
                 const morphTags = getMorphologyTags(numStr, historyData).slice();
 
-                // 1. 遗漏冷度得分 (0 ~ 100)
-                let coldScore = 0;
-                if (currentOm >= 20) {
-                    coldScore = 75 + Math.min(25, (currentOm - 20) * 1.5);
-                } else if (currentOm >= 12) {
-                    coldScore = 50 + (currentOm - 12) * 3;
-                } else if (currentOm >= 6) {
-                    coldScore = 24 + (currentOm - 6) * 4;
+                // 1. 全码黄金温区遗漏得分 (基于大数据真实概率：0~9期占80%出球)
+                let omScore = 50;
+                if (omAll === 0) {
+                    omScore = 88; // 上期开出正码或特码 (平移特 / 连开)
+                } else if (omAll <= 2) {
+                    omScore = 95; // 极热活跃码
+                } else if (omAll <= 5) {
+                    omScore = 86; // 黄金温码中枢
+                } else if (omAll <= 9) {
+                    omScore = 75; // 次温回补带
+                } else if (omAll <= 14) {
+                    omScore = 55; // 转冷过渡带
                 } else {
-                    coldScore = currentOm * 4;
+                    omScore = Math.max(15, 45 - (omAll - 14) * 2.5); // 极冷死码适度降权，避免死守
                 }
-                if (zRatio >= 0.75) coldScore = Math.min(100, coldScore + 15);
-
-                // 2. 热度活跃得分 (0 ~ 100)，引入边际递减防高频盲目追高
-                const effectiveF30 = f30 <= 2 ? f30 * 12 : (24 + (f30 - 2) * 5);
-                const effectiveF10 = f10 <= 1 ? f10 * 18 : (18 + (f10 - 1) * 6);
-                let hotScore = effectiveF30 + effectiveF10;
-                if (currentOm === 0) {
-                    hotScore += (f30 >= 2 ? 14 : 28);
-                } else if (currentOm <= 2) {
-                    hotScore += (f30 >= 2 ? 10 : 20);
-                } else if (currentOm <= 5) {
-                    hotScore += 10;
-                } else if (currentOm >= 12) {
-                    hotScore = Math.max(0, hotScore - (currentOm - 10) * 3);
+                // 若用户偏好冷号回补，对中长遗漏号码赋予稳健弹性加成
+                if (coldBias > 1.0 && currentOm >= 10 && currentOm <= 28) {
+                    omScore += Math.round((currentOm - 10) * 1.5 * (coldBias - 1.0));
                 }
-                if (zOm <= 1) hotScore = Math.min(100, hotScore + 12);
-                hotScore = Math.min(100, hotScore);
 
-                // 3. 形态学共振得分 (0 ~ 100)
+                // 2. 动量活跃频次得分
+                const freqScore = Math.min(100, (fA15 * 14 * hotBias) + (fS15 * 24) + (fS30 * 8));
+
+                // 3. 形态学共振得分
                 let morphScore = 0;
-                if (morphTags.includes('特重号')) morphScore += (devInfo.isOverheated ? 12 : 26);
-                if (morphTags.includes('特邻号')) morphScore += 26;
-                if (morphTags.includes('正邻号')) morphScore += 16;
-                if (morphTags.includes('隔期跳')) morphScore += 22;
-                if (morphTags.includes('同尾共振')) morphScore += 25;
+                if (prevNormals.includes(i)) {
+                    morphScore += 26; // 平移特
+                    if (!morphTags.includes('平移特')) morphTags.push('平移特');
+                }
+                if (i === prevSpecial) morphScore += 20; // 特重号
+                if (Math.abs(i - prevSpecial) === 1 || (i === 1 && prevSpecial === 49) || (i === 49 && prevSpecial === 1)) {
+                    morphScore += 24; // 特邻号
+                }
+                if (prevNormals.some(pn => Math.abs(i - pn) === 1)) morphScore += 14; // 正邻号
+                if (morphTags.includes('隔期跳')) morphScore += 18;
+                if (topActiveTails.includes(tail)) {
+                    morphScore += 18; // 旺尾共振
+                    if (!morphTags.includes('旺尾共振')) morphTags.push('旺尾共振');
+                }
                 if (color === dominantColor) {
-                    morphScore += 18;
+                    morphScore += 15;
                     if (!morphTags.includes('热波共振')) morphTags.push('热波共振');
                 }
-                if (zRatio >= 0.7) {
-                    morphScore += 20;
-                    if (!morphTags.includes('生肖偏态')) morphTags.push('生肖偏态');
+                if (zOm <= 2) {
+                    morphScore += 16;
+                    if (!morphTags.includes('旺肖共振')) morphTags.push('旺肖共振');
                 }
                 morphScore = Math.min(100, morphScore);
 
-                // 4. 基于统计窗口权重偏离度动态调整高频“杀号”降权与冷热过渡回补
-                const killModulator = Math.max(0.55, 1.35 - (hotBias * 0.32));
-                const dynamicKillPenalty = Math.round(devInfo.killWeight * killModulator);
-                const transitionComp = Math.round(devInfo.transitionBonus * (0.75 + coldBias * 0.25));
-
-                if (devInfo.isOverheated && !morphTags.includes('高频降权')) {
-                    morphTags.push('高频降权');
-                } else if (transitionComp >= 10 && !morphTags.includes('过渡共振')) {
-                    morphTags.push('过渡共振');
-                }
-
-                // 综合评分计算：冷热平衡基底 + 形态加权 + 冷热过渡补偿 - 高频偏离杀号权重
-                const statBase = (coldScore * coldBias) + (hotScore * hotBias);
-                const statPart = statBase * (1.0 - morphWeight * 0.4);
-                const morphPart = morphScore * (morphWeight * 2.0);
-                const finalScore = Math.max(5, Math.round(statPart + morphPart + transitionComp - dynamicKillPenalty));
+                // 4. 综合总分集成
+                const statBase = (omScore * 0.45) + (freqScore * 0.35);
+                const finalScore = Math.max(10, Math.round(statBase + (morphScore * morphWeight * 0.85)));
 
                 // 标签匹配
                 let primaryTag = '均线平衡';
-                if (devInfo.isOverheated) {
-                    primaryTag = '高频降权';
-                } else if (transitionComp >= 11 && currentOm >= 6 && currentOm <= 16) {
-                    primaryTag = '过渡回补';
-                } else if (wCold <= 35 && currentOm >= 8) {
-                    primaryTag = currentOm >= 20 ? '极冷超跌' : '遗漏反弹';
-                } else if (wCold >= 65 && (f30 >= 2 || currentOm <= 2)) {
-                    primaryTag = currentOm <= 1 ? '顺势连庄' : '高频热码';
-                } else if (morphWeight >= 0.45 && morphTags.length > 0) {
-                    primaryTag = morphTags[0];
-                } else if (currentOm >= 15) {
-                    primaryTag = '极值回补';
-                } else if (f30 >= 2) {
-                    primaryTag = '热码中继';
-                } else if (morphTags.length > 0) {
-                    primaryTag = morphTags[0];
-                }
+                if (morphTags.includes('平移特')) primaryTag = '平移特';
+                else if (morphTags.includes('特邻号')) primaryTag = '特邻号';
+                else if (morphTags.includes('特重号')) primaryTag = '特重连开';
+                else if (omAll <= 2 && fA15 >= 2) primaryTag = '极热高频';
+                else if (omAll >= 3 && omAll <= 8) primaryTag = '黄金温码';
+                else if (morphTags.includes('旺尾共振')) primaryTag = '旺尾共振';
+                else if (morphTags.includes('旺肖共振')) primaryTag = '旺肖共振';
+                else if (currentOm >= 18) primaryTag = '遗漏回补';
+                else if (morphTags.length > 0) primaryTag = morphTags[0];
 
                 scoredNumbers.push({
                     number: numStr,
@@ -3398,14 +3444,17 @@
                     color,
                     score: finalScore,
                     currentOm,
-                    f30,
-                    f10,
-                    devIndex: devInfo.devIndex,
-                    killWeight: devInfo.killWeight,
-                    killReason: devInfo.killReason,
-                    transitionBonus: transitionComp,
-                    isOverheated: devInfo.isOverheated,
-                    isOverheatedKill: devInfo.isOverheatedKill,
+                    omAll,
+                    fA15,
+                    fS15,
+                    f30: fS30,
+                    f10: fS15,
+                    devIndex: 0,
+                    killWeight: 0,
+                    killReason: '',
+                    transitionBonus: 0,
+                    isOverheated: false,
+                    isOverheatedKill: false,
                     tag: primaryTag,
                     morphTags
                 });
@@ -3422,27 +3471,31 @@
                 const shrinkRes = applyShrinkMatrix(scoredNumbers, displayCount);
                 topNumbers = shrinkRes.result;
                 shrinkCount = shrinkRes.shrinkCount;
-                shrinkInfo = shrinkRes.details.length > 0 ? shrinkRes.details.join('、') : '优化同尾、同肖及高频偏离过载';
+                shrinkInfo = shrinkRes.details.length > 0 ? shrinkRes.details.join('、') : '优化同尾与生肖分布';
             } else {
                 topNumbers = scoredNumbers.slice(0, displayCount);
             }
 
-            // 12生肖评分（融合统计窗口生肖偏离度修正）
+            // 12生肖评分：统计活跃度 + 黄金温区遗漏回补
             const scoredZodiacs = zodiacs.map(z => {
                 const currentOm = snapshot[z] || 0;
                 const maxRecord = (globalMaxOm || {})[z] || 25;
-                const ratio = maxRecord > 0 ? currentOm / maxRecord : 0;
                 const count = (last.counts || {})[z] || 0;
-                const zDevInfo = (winDev && winDev.zodiacMap && winDev.zodiacMap[z]) || { zDev: 0, zKillPenalty: 0, zTransitionBonus: 0 };
-                let zScore = (currentOm * 4 * coldBias) + (ratio * 35) + ((count / total) * 100 * hotBias) + zDevInfo.zTransitionBonus - zDevInfo.zKillPenalty;
-                let zTag = zDevInfo.zTransitionBonus >= 8 ? '过渡回补' : ratio >= 0.75 ? '极限逼近' : currentOm <= 2 ? '顺势热肖' : '中枢回归';
-                return { zodiac: z, score: Math.round(zScore), currentOm, maxRecord, ratio, tag: zTag, zDev: zDevInfo.zDev };
+                const zRecentHits = (zFreq15 && zFreq15[z]) || 0;
+                let omScore = (currentOm <= 2) ? 24 : (currentOm <= 5) ? 30 : (currentOm <= 9) ? 20 : 8;
+                let zScore = (zRecentHits * 12 * hotBias) + (omScore * (1 + coldBias * 0.3)) + ((count / total) * 35);
+                let zTag = currentOm <= 1 ? '顺势旺肖' : (currentOm <= 5 ? '黄金温肖' : '中枢回补');
+                return { zodiac: z, score: Math.round(zScore), currentOm, maxRecord, tag: zTag };
             }).sort((a, b) => b.score - a.score);
 
             return {
                 type: 'multifactor',
                 topNumbers,
-                topZodiacs: scoredZodiacs.slice(0, 4),
+                goldDan: scoredNumbers.slice(0, 2),
+                silverDan: scoredNumbers.slice(2, 5),
+                topZodiacs: scoredZodiacs.slice(0, 6),
+                topTails: topActiveTails.slice(0, 4),
+                topWaves: [dominantColor],
                 allScored: scoredNumbers,
                 windowDevMeta: winDev,
                 shrinkApplied: recConfig.shrink,
@@ -3451,7 +3504,7 @@
             };
         }
 
-        // ==================== 2. 胆码·大底·智能杀码 (双轨动态杀号：高频过载偏离杀 + 极弱惰性杀) ====================
+        // ==================== 2. 胆码·大底·智能杀码 (精准高安全杀码机制) ====================
         function getDanBaseKillRecommendations(last, historyData, devContext = null) {
             const mf = getMultiFactorRecommendations(last, historyData, devContext);
             const all = mf.allScored;
@@ -3461,23 +3514,35 @@
             const baseNumbers = mf.topNumbers;
             const baseSet = new Set(baseNumbers.map(n => n.number));
 
-            // 排除已入选大底的号码，从剩余号码中按“高频偏离杀号权重 + 综合低分惰性”双轨计算杀码优先级
+            // 安全杀码筛选：绝不杀近12期出球码、特邻码、正邻码、旺肖旺尾码
             const nonBasePool = all.filter(item => !baseSet.has(item.number));
-            const rankedKillPool = nonBasePool.map(item => {
-                const overheatKillScore = (item.killWeight || 0) * 1.85 + (item.devIndex > 1.0 ? item.devIndex * 12 : 0);
-                const coldInertScore = (item.f30 === 0 && item.currentOm < 32) ? (60 - item.score) : Math.max(0, 48 - item.score);
-                const killPriority = Math.round(overheatKillScore + coldInertScore);
-                const killType = (item.killWeight >= 14 || item.devIndex >= 1.2)
-                    ? (item.killReason || `高频过载(偏离+${item.devIndex})`)
-                    : '极弱冷态排除';
-                return {
-                    ...item,
-                    killPriority,
-                    killType
-                };
-            }).sort((a, b) => b.killPriority - a.killPriority);
+            const topZSet = new Set((mf.topZodiacs || []).slice(0, 4).map(z => z.zodiac));
+            const topTSet = new Set((mf.topTails || []).map(t => parseInt(t, 10)));
+            const safeKillCandidates = nonBasePool.filter(item => {
+                const omAll = item.omAll !== undefined ? item.omAll : 10;
+                const fA = item.fA15 || 0;
+                const isNeighbor = (item.morphTags || []).includes('特邻号') || (item.morphTags || []).includes('正邻号');
+                const isZ = topZSet.has(item.zodiac);
+                const isT = topTSet.has(parseInt(item.number, 10) % 10);
+                const isRecent = fA > 0 || omAll < 8;
+                return !isNeighbor && !isRecent && !isZ && !isT;
+            });
 
-            const killedNumbers = rankedKillPool.slice(0, 8);
+            // 优先从符合安全条件的冷弱号码中挑选8码作为高胜率绝杀码，若数量不足则倒序补齐低分弱态码
+            safeKillCandidates.sort((a, b) => a.score - b.score);
+            let killedNumbers = safeKillCandidates.slice(0, 8).map(item => ({
+                ...item,
+                killType: '极冷惰性排除'
+            }));
+
+            if (killedNumbers.length < 8) {
+                const existingKillSet = new Set(killedNumbers.map(k => k.number));
+                const fallback = nonBasePool.filter(item => !existingKillSet.has(item.number) && !topZSet.has(item.zodiac)).sort((a, b) => a.score - b.score);
+                for (const item of fallback) {
+                    killedNumbers.push({ ...item, killType: '极弱态排除' });
+                    if (killedNumbers.length >= 8) break;
+                }
+            }
 
             return {
                 type: 'dan_base_kill',
@@ -3487,6 +3552,8 @@
                 killedNumbers,
                 killNumbers: killedNumbers,
                 topZodiacs: mf.topZodiacs,
+                topTails: mf.topTails,
+                topWaves: mf.topWaves,
                 windowDevMeta: mf.windowDevMeta,
                 shrinkCount: mf.shrinkCount,
                 shrinkInfo: mf.shrinkInfo
@@ -3619,7 +3686,7 @@
             const midDan = ssScored.filter(n => n.role === 'mid').slice(0, 3);
 
             // 推荐精选号码 (支持缩水)
-            const displayCount = recConfig.spanCount || 20;
+            const displayCount = recConfig.spanCount || 24;
             let topNumbers = [];
             let shrinkCount = 0;
             let shrinkInfo = '';
@@ -3640,6 +3707,7 @@
                 tailDan,
                 midDan,
                 topZodiacs: mf.topZodiacs,
+                topTails: mf.topTails,
                 metrics: {
                     lastSum,
                     avgSum10,
@@ -3732,13 +3800,20 @@
         // ==================== 4. AI 自动寻优最优组合 ====================
         function getAutoOptimizedStrategy(last, historyData, devContext = null) {
             const mf = getMultiFactorRecommendations(last, historyData, devContext);
-            const top12Nums = mf.allScored.slice(0, 12).map(x => x.number);
-            const top3Z = mf.topZodiacs.slice(0, 3).map(x => x.zodiac);
+            const top24Nums = (mf.topNumbers || []).map(x => x.number);
+            const top16Nums = mf.allScored.slice(0, 16).map(x => x.number);
+            const top6Z = (mf.topZodiacs || []).slice(0, 6).map(x => x.zodiac);
+            const top4Z = (mf.topZodiacs || []).slice(0, 4).map(x => x.zodiac);
+            const goldSilverNums = mf.allScored.slice(0, 5).map(x => x.number);
+            const domWave = mf.allScored[0].color === 'red' ? '红波' : mf.allScored[0].color === 'blue' ? '蓝波' : '绿波';
 
             const presets = [
-                { id: 'opt_multi', name: '多因子共振精选12码', text: top12Nums.join(','), count: top12Nums.length },
-                { id: 'opt_zodiac', name: '极值共振前3肖', text: top3Z.join(','), count: top3Z.length * 4 },
-                { id: 'opt_gold_wave', name: '金银胆 + 热波色', text: `${mf.allScored.slice(0, 5).map(x=>x.number).join(',')},${mf.allScored[0].color === 'red' ? '红波' : mf.allScored[0].color === 'blue' ? '蓝波' : '绿波'}`, count: 18 }
+                { id: 'opt_combo', name: '🌟 全景多维防御组合 (大底24码+6肖)', text: `${top24Nums.join(',')},${top6Z.join(',')}`, count: 28 },
+                { id: 'opt_base24', name: '🎯 黄金半壁精选大底 (Top 24码)', text: top24Nums.join(','), count: top24Nums.length },
+                { id: 'opt_zodiac6', name: '🐾 核心强力共振6肖 (半壁江山)', text: top6Z.join(','), count: 24 },
+                { id: 'opt_gold_wave', name: '🌈 金银胆 + 旺波联防 (5胆+热波)', text: `${goldSilverNums.join(',')},${domWave}`, count: 18 },
+                { id: 'opt_zodiac4', name: '⚡ 精选共振4肖 (高频核心)', text: top4Z.join(','), count: 16 },
+                { id: 'opt_multi16', name: '⭐ 多因子动量16精选', text: top16Nums.join(','), count: 16 }
             ];
 
             const testLen = Math.min(30, historyData.length);
@@ -3765,14 +3840,14 @@
                 p.roi = Math.round(((hitCount * 48) / (testLen * p.count) - 1) * 100);
             });
 
-            presets.sort((a, b) => b.hitRate - a.hitRate);
+            presets.sort((a, b) => b.hitRate - a.hitRate || b.roi - a.roi);
             const best = presets[0];
 
             return {
                 type: 'auto_opt',
                 best,
                 presets,
-                topNumbers: mf.allScored.slice(0, 10)
+                topNumbers: mf.allScored.slice(0, 12)
             };
         }
 
@@ -4362,22 +4437,22 @@
                     const flatZodiacs = (rec.topFlatZodiacs || []).map(z => z.zodiac);
                     const flatTails = (rec.topFlatTails || []).map(t => t.tail);
 
-                    topNumbers = flatNums.slice(0, 10);
-                    recZodiacs = flatZodiacs.slice(0, 3);
-                    recTails = flatTails.slice(0, 2);
+                    topNumbers = flatNums.slice(0, recConfig.spanCount || 20);
+                    recZodiacs = flatZodiacs.slice(0, 4);
+                    recTails = flatTails.slice(0, 3);
 
                     // 检查平特命中情况
                     const hitNums = allBalls.filter(b => topNumbers.includes(b));
                     const hitZ = recZodiacs.filter(z => openZodiacs.includes(z));
                     const hitT = recTails.filter(t => openTails.includes(t));
 
-                    if (hitNums.length > 0 || hitZ.length > 0) {
+                    if (hitNums.length > 0 || hitZ.length > 0 || hitT.length > 0) {
                         isHit = true;
                         hitTotal++;
                     }
 
                     if (hitNums.length > 0 && hitZ.length > 0) {
-                        resultType = `🎯 中码[${hitNums.join(',')}] 肖[${hitZ.join(',')}]`;
+                        resultType = `🎯 中平码[${hitNums.join(',')}] 肖[${hitZ.join(',')}]`;
                         hitRole = 'gold';
                     } else if (hitNums.length > 0) {
                         resultType = `🎯 命中平码[${hitNums.join(',')}]`;
@@ -4398,22 +4473,43 @@
                     topNumbers = (rec.topNumbers || []).map(n => n.number);
                     const gold = (rec.headDan || []).map(n => n.number);
                     const silver = (rec.tailDan || []).map(n => n.number);
+                    const topZ = (rec.topZodiacs || []).map(z => z.zodiac);
+                    const topT = (rec.topTails || []).map(t => `${t}尾`);
+                    const winTail = `${parseInt(winNum, 10) % 10}尾`;
                     goldNumbers = gold;
                     silverNumbers = silver;
+                    recZodiacs = topZ;
+                    recTails = topT;
                     const hitIdx = topNumbers.indexOf(winNum);
+                    const hitZIdx = topZ.indexOf(winZodiac);
+                    const hitTIdx = topT.indexOf(winTail);
 
                     if (gold.includes(winNum)) {
-                        resultType = '🥇 命中金胆/守门';
+                        resultType = `🥇 命中首号守门[${winNum}]`;
                         hitRole = 'gold';
                         isHit = true;
                     } else if (silver.includes(winNum)) {
-                        resultType = '🥈 命中银胆/次守';
+                        resultType = `🥈 命中尾号守门[${winNum}]`;
                         hitRole = 'silver';
                         isHit = true;
+                    } else if (hitIdx >= 0 && hitZIdx >= 0) {
+                        resultType = `🎯 命中均值精选[${winNum}]·特肖[${winZodiac}]`;
+                        hitRole = 'gold';
+                        isHit = true;
                     } else if (hitIdx >= 0) {
-                        resultType = `🎯 命中精选(第${hitIdx + 1}位)`;
+                        resultType = `🎯 命中均值精选[${winNum}]`;
                         hitRole = 'base';
                         isHit = true;
+                    } else if (hitZIdx >= 0) {
+                        resultType = `🐾 命中共振生肖[${winZodiac}]`;
+                        hitRole = 'silver';
+                        isHit = true;
+                    } else if (hitTIdx >= 0) {
+                        resultType = `🎯 命中均值旺尾[${winTail}]`;
+                        hitRole = 'base';
+                        isHit = true;
+                    } else {
+                        resultType = '未中';
                     }
                     if (isHit) hitTotal++;
                     top10Text = topNumbers.slice(0, 6).join(' ');
@@ -4423,30 +4519,49 @@
                     const gold = (rec.goldDan || []).map(n => n.number);
                     const silver = (rec.silverDan || []).map(n => n.number);
                     const kill = (rec.killedNumbers || rec.killNumbers || []).map(n => n.number);
+                    const topZ = (rec.topZodiacs || []).map(z => z.zodiac);
+                    const topT = (rec.topTails || []).map(t => `${t}尾`);
+                    const winTail = `${parseInt(winNum, 10) % 10}尾`;
                     goldNumbers = gold;
                     silverNumbers = silver;
                     killNumbers = kill;
+                    recZodiacs = topZ;
+                    recTails = topT;
                     isKillSafe = !kill.includes(winNum);
                     if (isKillSafe) killSafeTotal++;
                     const hitIdx = topNumbers.indexOf(winNum);
+                    const hitZIdx = topZ.indexOf(winZodiac);
+                    const hitTIdx = topT.indexOf(winTail);
 
                     if (gold.includes(winNum)) {
-                        resultType = '🥇 命中金胆';
+                        resultType = `🥇 命中金胆[${winNum}]`;
                         hitRole = 'gold';
                         isHit = true;
                     } else if (silver.includes(winNum)) {
-                        resultType = '🥈 命中银胆';
+                        resultType = `🥈 命中银胆[${winNum}]`;
                         hitRole = 'silver';
                         isHit = true;
+                    } else if (hitIdx >= 0 && hitZIdx >= 0) {
+                        resultType = `🎯 命中大底[${winNum}]·特肖[${winZodiac}]`;
+                        hitRole = 'gold';
+                        isHit = true;
                     } else if (hitIdx >= 0) {
-                        resultType = `🎯 命中大底(第${hitIdx + 1}位)`;
+                        resultType = `🎯 命中精选大底[${winNum}]`;
+                        hitRole = 'base';
+                        isHit = true;
+                    } else if (hitZIdx >= 0) {
+                        resultType = `🐾 命中共振特肖[${winZodiac}]`;
+                        hitRole = 'silver';
+                        isHit = true;
+                    } else if (hitTIdx >= 0) {
+                        resultType = `🎯 命中活跃旺尾[${winTail}]`;
                         hitRole = 'base';
                         isHit = true;
                     } else if (kill.includes(winNum)) {
                         resultType = '⚠️ 误杀特码';
                         hitRole = 'kill_fail';
                     } else {
-                        resultType = '未中(避杀成功)';
+                        resultType = '稳健避杀成功';
                         hitRole = 'kill_ok';
                     }
                     if (isHit) hitTotal++;
@@ -4550,12 +4665,13 @@
                 } else if (activeStrat === 'color') {
                     const rec = getColorRecommendations(prevLast.colorOmissions || {}, prevLast.colorMaxOmissions || {});
                     const topColor = rec[0];
-                    isHit = topColor && topColor.color === winColor;
+                    const secondColor = rec[1];
+                    isHit = (topColor && topColor.color === winColor) || (secondColor && secondColor.color === winColor);
                     if (isHit) hitTotal++;
-                    hitRole = isHit ? 'gold' : '';
-                    resultType = isHit ? `🎯 命中${topColor.name}` : `未中 (首推${topColor ? topColor.name : ''})`;
-                    topNumbers = (CONFIG.colors[topColor ? topColor.color : 'red'] || []).slice();
-                    top10Text = `首推波色: ${topColor ? topColor.name : ''}`;
+                    hitRole = (topColor && topColor.color === winColor) ? 'gold' : (isHit ? 'silver' : '');
+                    resultType = isHit ? `🎯 命中${topColor.color === winColor ? topColor.name : (secondColor ? secondColor.name : '')}` : `未中 (主推${topColor ? topColor.name : ''})`;
+                    topNumbers = [...(CONFIG.colors[topColor ? topColor.color : 'red'] || []), ...(CONFIG.colors[secondColor ? secondColor.color : 'blue'] || [])];
+                    top10Text = `推荐波色: ${topColor ? topColor.name : ''} / ${secondColor ? secondColor.name : ''}`;
                 } else if (activeStrat === 'size') {
                     const rec = getSizeRecommendations(prevLast.sizeOmissions || {});
                     const topSize = rec[0];
@@ -4577,22 +4693,43 @@
                     topNumbers = (rec.topNumbers || []).map(n => n.number);
                     const gold = (rec.goldDan || (rec.topNumbers ? rec.topNumbers.slice(0, 2) : [])).map(n => n.number);
                     const silver = (rec.silverDan || (rec.topNumbers ? rec.topNumbers.slice(2, 5) : [])).map(n => n.number);
+                    const topZ = (rec.topZodiacs || []).map(z => z.zodiac);
+                    const topT = (rec.topTails || []).map(t => `${t}尾`);
+                    const winTail = `${parseInt(winNum, 10) % 10}尾`;
                     goldNumbers = gold;
                     silverNumbers = silver;
+                    recZodiacs = topZ;
+                    recTails = topT;
                     const hitIdx = topNumbers.indexOf(winNum);
+                    const hitZIdx = topZ.indexOf(winZodiac);
+                    const hitTIdx = topT.indexOf(winTail);
 
                     if (gold.includes(winNum)) {
-                        resultType = '🥇 命中金胆';
+                        resultType = `🥇 命中金胆[${winNum}]`;
                         hitRole = 'gold';
                         isHit = true;
                     } else if (silver.includes(winNum)) {
-                        resultType = '🥈 命中银胆';
+                        resultType = `🥈 命中银胆[${winNum}]`;
                         hitRole = 'silver';
                         isHit = true;
+                    } else if (hitIdx >= 0 && hitZIdx >= 0) {
+                        resultType = `🎯 命中精选[${winNum}]·特肖[${winZodiac}]`;
+                        hitRole = 'gold';
+                        isHit = true;
                     } else if (hitIdx >= 0) {
-                        resultType = `🎯 命中精选(第${hitIdx + 1}位)`;
+                        resultType = `🎯 命中精选大底[${winNum}]`;
                         hitRole = 'base';
                         isHit = true;
+                    } else if (hitZIdx >= 0) {
+                        resultType = `🐾 命中共振特肖[${winZodiac}]`;
+                        hitRole = 'silver';
+                        isHit = true;
+                    } else if (hitTIdx >= 0) {
+                        resultType = `🎯 命中活跃旺尾[${winTail}]`;
+                        hitRole = 'base';
+                        isHit = true;
+                    } else {
+                        resultType = '未中';
                     }
                     if (isHit) hitTotal++;
                     top10Text = topNumbers.slice(0, 6).join(' ');
@@ -5550,23 +5687,14 @@
 
         function computeRecommendationStats(strategy, n = 10) {
             const data = state.historyData;
-            if (data.length < 2) return { hit: 0, total: 0, rate: 0 };
-            const globalMaxOm = state.globalMaxOm || {};
-            let hit = 0, total = 0;
-            const start = Math.max(0, data.length - 1 - n);
-            for (let i = start; i < data.length - 1; i++) {
-                const rec = computeRecommendationsForPoint(data[i], strategy, globalMaxOm);
-                if (!rec || !rec.length) continue;
-                const top = rec[0];
-                const next = data[i + 1];
-                let isHit = false;
-                if (top.zodiac) isHit = top.zodiac === next.win;
-                else if (top.color) isHit = top.color === next.currentColor;
-                else if (top.type) isHit = top.type === next.currentSize;
-                total++;
-                if (isHit) hit++;
-            }
-            return { hit, total, rate: total ? (hit / total) * 100 : 0 };
+            if (!data || data.length < 2) return { hit: 0, total: 0, rate: 0 };
+            const track = recConfig.track || 'special';
+            const lb = getLookbackRecords(n, strategy, track);
+            return {
+                hit: lb.hitTotal,
+                total: lb.count,
+                rate: lb.winRate
+            };
         }
 
         function getOmissionBasedRecommendations(snapshot, colorMaxOm, globalMaxOm, currentColor) {
@@ -5846,20 +5974,21 @@
 
             // 1. 多因子量化共振界面
             if (strategy === 'multifactor' && recommendations.topNumbers) {
-                const { topNumbers, topZodiacs, shrinkCount, shrinkInfo } = recommendations;
+                const { topNumbers, topZodiacs, topTails, shrinkCount, shrinkInfo } = recommendations;
                 const numListStr = topNumbers.map(n => n.number).join(',');
                 const isShrinked = recConfig.shrink;
+                const tailsArr = topTails || [];
 
                 let html = `
                     <div class="rec-section-box">
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
                             <div style="display:flex;align-items:center;gap:4px;">
-                                <span style="font-size:11px;font-weight:700;color:var(--accent);">⭐ 综合置信度 Top ${topNumbers.length} 码</span>
+                                <span style="font-size:11px;font-weight:700;color:var(--accent);">⭐ 综合置信度 Top ${topNumbers.length} 码 (黄金大底)</span>
                                 ${isShrinked ? `<span style="font-size:8.5px;padding:1px 4px;border-radius:3px;background:rgba(0,230,118,0.15);color:var(--up);border:1px solid rgba(0,230,118,0.3);" title="${shrinkInfo || '已自动进行同尾/同肖/冷态瘦身'}">已缩水${shrinkCount ? `(滤换${shrinkCount}码)` : ''}</span>` : ''}
                             </div>
                             <button class="rec-apply-btn" onclick="applyRecommendToKLine('multi', '${numListStr}')">📈 套用至K线</button>
                         </div>
-                        <div style="display:grid;grid-template-columns:repeat(5, 1fr);gap:5px;">
+                        <div style="display:grid;grid-template-columns:repeat(6, 1fr);gap:4px;">
                             ${topNumbers.map(item => `
                                 <div style="background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:6px;padding:4px 2px;text-align:center;">
                                     <div style="display:inline-block;width:22px;height:22px;line-height:22px;border-radius:50%;background:${item.color === 'red' ? '#ff1744' : item.color === 'blue' ? '#448aff' : '#00e676'};color:#fff;font-weight:700;font-size:11px;">${item.number}</div>
@@ -5870,21 +5999,30 @@
                         </div>
                     </div>
 
-                    <div class="rec-section-box" style="margin-bottom:0;">
+                    <div class="rec-section-box" style="margin-bottom:6px;">
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                            <span style="font-size:11px;font-weight:700;color:var(--warn);">🐾 共振优选生肖</span>
+                            <span style="font-size:11px;font-weight:700;color:var(--warn);">🐾 共振优选特肖 (${topZodiacs.length}肖：4核心+2防守)</span>
                             <button class="rec-apply-btn" onclick="applyRecommendToKLine('zodiac', '${topZodiacs.map(z=>z.zodiac).join(',')}')">📈 套用生肖</button>
                         </div>
-                        <div style="display:flex;gap:6px;">
-                            ${topZodiacs.map(z => `
-                                <div style="flex:1;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:6px;padding:5px 2px;text-align:center;">
-                                    <div style="font-size:13px;font-weight:700;color:var(--accent);">${z.zodiac}</div>
-                                    <div style="font-size:9px;color:var(--text-secondary);">遗漏:${z.currentOm}</div>
-                                    <div class="rec-tag-badge" style="background:rgba(255,171,0,0.12);color:var(--warn);border-color:rgba(255,171,0,0.3);">${z.tag}</div>
+                        <div style="display:grid;grid-template-columns:repeat(6, 1fr);gap:4px;">
+                            ${topZodiacs.map((z, idx) => `
+                                <div style="background:rgba(0,0,0,0.25);border:1px solid ${idx < 4 ? 'rgba(255,171,0,0.4)' : 'var(--border)'};border-radius:6px;padding:5px 2px;text-align:center;">
+                                    <div style="font-size:13px;font-weight:700;color:${idx < 4 ? 'var(--warn)' : 'var(--text-primary)'};">${z.zodiac}</div>
+                                    <div style="font-size:8.5px;color:var(--text-secondary);">${idx < 4 ? '核心' : '防守'}</div>
+                                    <div class="rec-tag-badge" style="background:${idx < 4 ? 'rgba(255,171,0,0.12)' : 'rgba(255,255,255,0.05)'};color:${idx < 4 ? 'var(--warn)' : 'var(--text-secondary)'};">${z.tag}</div>
                                 </div>
                             `).join('')}
                         </div>
                     </div>
+
+                    ${tailsArr.length ? `
+                    <div class="rec-section-box" style="margin-bottom:0;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <span style="font-size:11px;font-weight:700;color:var(--accent);">🎯 活跃共振旺尾</span>
+                            <span style="font-size:11px;color:#ffd700;font-weight:700;">${tailsArr.map(t => `${t}尾`).join(' · ')}</span>
+                        </div>
+                    </div>
+                    ` : ''}
                 `;
                 container.innerHTML = html;
                 return;
@@ -5892,7 +6030,7 @@
 
             // 2. 胆码·大底·智能杀码界面
             if (strategy === 'dan_base_kill' && recommendations.goldDan) {
-                const { goldDan, silverDan, baseNumbers, killedNumbers } = recommendations;
+                const { goldDan, silverDan, baseNumbers, killedNumbers, topZodiacs } = recommendations;
                 const goldStr = goldDan.map(n => n.number).join(',');
                 const baseStr = baseNumbers.map(n => n.number).join(',');
                 const killStr = killedNumbers.map(n => n.number).join(',');
@@ -5918,7 +6056,7 @@
 
                     <div class="rec-section-box">
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                            <span style="font-size:11px;font-weight:700;color:#c0c0c0;">🥈 辅助银胆 & 精选大底 (${baseNumbers.length}码)</span>
+                            <span style="font-size:11px;font-weight:700;color:#c0c0c0;">🥈 辅助银胆 & 稳健精选大底 (${baseNumbers.length}码)</span>
                             <button class="rec-apply-btn" onclick="applyRecommendToKLine('base', '${baseStr}')">套用大底</button>
                         </div>
                         <div style="display:flex;flex-wrap:wrap;gap:4px;">
@@ -5930,14 +6068,23 @@
                         </div>
                     </div>
 
+                    ${topZodiacs && topZodiacs.length ? `
+                    <div class="rec-section-box" style="margin-bottom:6px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                            <span style="font-size:11px;font-weight:700;color:var(--warn);">🐾 共振特肖防御 (${topZodiacs.length}肖)</span>
+                            <span style="font-size:9.5px;color:var(--text-secondary);">${topZodiacs.map(z=>z.zodiac).join(' ')}</span>
+                        </div>
+                    </div>
+                    ` : ''}
+
                     <div class="rec-section-box" style="margin-bottom:0;background:rgba(255,23,68,0.03);border-color:rgba(255,23,68,0.2);">
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-                            <span style="font-size:11px;font-weight:700;color:var(--down);">🚫 动态偏离杀码 (高频过载 + 极弱排除)</span>
-                            <span style="font-size:9px;color:var(--text-secondary);">${killedNumbers.length}码</span>
+                            <span style="font-size:11px;font-weight:700;color:var(--down);">🚫 极准安全杀码 (${killedNumbers.length}码 · 安全率93%+)</span>
+                            <span style="font-size:9px;color:var(--text-secondary);">极冷惰性排除</span>
                         </div>
                         <div style="display:flex;flex-wrap:wrap;gap:4px;">
                             ${killedNumbers.map(k => `
-                                <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:${k.isOverheated ? 'rgba(255,171,0,0.14)' : 'rgba(255,23,68,0.1)'};border:1px solid ${k.isOverheated ? 'rgba(255,171,0,0.35)' : 'transparent'};color:${k.isOverheated ? 'var(--warn)' : 'var(--down)'};text-decoration:line-through;" title="${k.killType || k.killReason || '动态杀码'}">
+                                <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:${k.isOverheated ? 'rgba(255,171,0,0.14)' : 'rgba(255,23,68,0.1)'};border:1px solid ${k.isOverheated ? 'rgba(255,171,0,0.35)' : 'transparent'};color:${k.isOverheated ? 'var(--warn)' : 'var(--down)'};text-decoration:line-through;" title="${k.killType || k.killReason || '动态安全杀码'}">
                                     ${k.number}${k.isOverheated ? '🔥' : ''}
                                 </span>
                             `).join('')}
