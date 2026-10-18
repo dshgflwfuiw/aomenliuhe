@@ -1059,24 +1059,90 @@
                 min-height: 100dvh;
             }
 
+            .toggle-btn {
+                position: fixed;
+                top: 7px;
+                left: 6px;
+                width: 30px;
+                height: 30px;
+                line-height: 28px;
+                border-radius: 6px;
+                border: 1px solid var(--border);
+                z-index: 1005 !important;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 13px;
+                background: var(--card-bg);
+            }
+
             .top-bar {
-                padding-left: 62px;
+                padding: 0 6px 0 42px !important;
+                gap: 4px !important;
+                overflow: hidden;
+            }
+            .top-bar-left {
+                flex-shrink: 0;
+                gap: 2px;
+                white-space: nowrap;
+            }
+            .top-bar-left span {
+                font-size: 10px !important;
+            }
+            .top-bar-left b {
+                font-size: 12px !important;
+                margin-left: 2px !important;
             }
             .top-bar-center {
-                justify-content: flex-start;
+                flex: 1;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                overflow-x: auto;
                 gap: 2px;
+                padding: 0 2px;
+                scrollbar-width: none;
             }
             .top-bar .top-ball-cell {
+                display: inline-flex;
+                flex-direction: column;
+                align-items: center;
                 margin: 0;
+                flex-shrink: 0;
             }
             .top-bar .top-ball-cell .ball {
-                width: 15px;
-                height: 15px;
-                font-size: 8px;
+                width: 17px;
+                height: 17px;
+                font-size: 9px;
+                margin: 0 1px;
+            }
+            .top-bar .top-ball-cell .ball.top-special-ball {
+                outline: 1.5px solid var(--warn);
+                outline-offset: 1px;
             }
             .top-bar .top-zodiac {
-                font-size: 7px;
+                font-size: 8px;
                 margin-top: 1px;
+                line-height: 1;
+            }
+            .top-bar .top-plus {
+                font-size: 11px;
+                margin: 0 2px;
+                color: var(--text-secondary);
+                align-self: center;
+                flex-shrink: 0;
+            }
+            .top-bar-right {
+                flex-shrink: 0;
+                gap: 3px;
+            }
+            .top-bar-right button {
+                width: 26px !important;
+                height: 26px !important;
+                font-size: 12px !important;
+            }
+            #quickBetCalcBtn {
+                display: none;
             }
 
             .sidebar {
@@ -1406,10 +1472,10 @@
             }
 
             .toggle-btn {
-                width: 40px;
-                height: 40px;
-                top: 8px;
-                left: 8px;
+                width: 30px;
+                height: 30px;
+                top: 7px;
+                left: 6px;
             }
 
             .sidebar-card h3 {
@@ -4344,6 +4410,166 @@
         }
         body.light-theme .bet-calc-table tr:hover td {
             background: rgba(0, 212, 255, 0.08);
+        }
+
+        /* 深度遗漏预警与超阈值展示样式 */
+        .cold-threshold-box {
+            grid-column: 1 / -1;
+            background: rgba(255, 71, 87, 0.08);
+            border: 1px solid rgba(255, 71, 87, 0.35);
+            border-radius: 8px;
+            padding: 8px 10px;
+            margin: 4px 0 6px;
+            box-sizing: border-box;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .cold-threshold-box:hover {
+            border-color: rgba(255, 71, 87, 0.6);
+            box-shadow: 0 2px 10px rgba(255, 71, 87, 0.12);
+        }
+        .omission-threshold-balls-wrap {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            max-height: 140px;
+            overflow-y: auto;
+            padding: 4px 2px;
+        }
+        .om-threshold-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 16px;
+            padding: 2px 7px 2px 3px;
+            cursor: pointer;
+            user-select: none;
+            transition: transform 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+        }
+        .om-threshold-chip:hover {
+            transform: translateY(-1px) scale(1.04);
+            border-color: #ff5252;
+            background: rgba(255, 71, 87, 0.22);
+        }
+        .om-threshold-chip.active-picked {
+            border-color: var(--accent);
+            background: rgba(0, 212, 255, 0.18);
+        }
+        .om-period-badge {
+            font-size: 10px;
+            font-weight: 700;
+            color: #ff5252;
+            background: rgba(255, 71, 87, 0.16);
+            border: 1px solid rgba(255, 71, 87, 0.35);
+            border-radius: 4px;
+            padding: 1px 4px;
+            line-height: 1.1;
+            white-space: nowrap;
+        }
+        .om-period-badge.ultra-deep {
+            color: #ff3838;
+            background: rgba(255, 56, 56, 0.28);
+            border-color: #ff3838;
+        }
+        .om-zodiac-circle {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #ff7675, #d63031);
+            color: #fff;
+            font-size: 11px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: inset 0 -1px 3px rgba(0,0,0,0.3);
+        }
+        body.light-theme .cold-threshold-box {
+            background: rgba(255, 71, 87, 0.05);
+            border-color: rgba(255, 71, 87, 0.3);
+        }
+        body.light-theme .om-threshold-chip {
+            background: #fff;
+            border-color: rgba(0, 0, 0, 0.12);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        }
+
+        /* 遗漏排序位次卡片样式 (重点展示第几位) */
+        .om-rank-card {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background: rgba(20, 24, 33, 0.75);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 6px;
+            padding: 3px 7px 3px 5px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: all 0.15s ease;
+            user-select: none;
+            box-sizing: border-box;
+        }
+        .om-rank-card:hover {
+            border-color: var(--accent);
+            background: rgba(0, 212, 255, 0.14);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+        .om-rank-card.active-selected {
+            border-color: #ffd700;
+            background: rgba(255, 215, 0, 0.15);
+            box-shadow: 0 0 8px rgba(255, 215, 0, 0.3);
+        }
+        .om-rank-title-badge {
+            font-weight: 800;
+            color: #ffd700;
+            background: rgba(255, 215, 0, 0.18);
+            border: 1px solid rgba(255, 215, 0, 0.45);
+            border-radius: 4px;
+            padding: 1px 6px;
+            font-size: 11px;
+            letter-spacing: 0.3px;
+            white-space: nowrap;
+        }
+        .om-rank-miss-badge {
+            font-size: 10px;
+            font-weight: 700;
+            color: #ff5252;
+            background: rgba(255, 71, 87, 0.16);
+            border: 1px solid rgba(255, 71, 87, 0.35);
+            border-radius: 4px;
+            padding: 1px 5px;
+            white-space: nowrap;
+        }
+        .om-rank-miss-badge.ultra {
+            color: #fff;
+            background: linear-gradient(135deg, #ff4757, #ff6b81);
+            border-color: #ff4757;
+            box-shadow: 0 0 6px rgba(255, 71, 87, 0.4);
+        }
+        .om-rank-target-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            font-size: 10.5px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+        body.light-theme .om-rank-card {
+            background: #ffffff;
+            border-color: #cbd5e1;
+            color: #0f172a;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+        body.light-theme .om-rank-card:hover {
+            background: #f0fdf4;
+            border-color: #0284c7;
+        }
+        body.light-theme .om-rank-title-badge {
+            color: #b45309;
+            background: #fef3c7;
+            border-color: #f59e0b;
         }
 
 

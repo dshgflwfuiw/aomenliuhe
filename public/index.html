@@ -355,7 +355,7 @@
             <!-- 统计计算窗口控制器 -->
             <div class="cold-window-control-bar" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 8px 12px; background: rgba(0, 230, 118, 0.06); border: 1px solid rgba(0, 230, 118, 0.25); border-radius: 6px; margin-bottom: 12px;">
                 <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                    <span style="font-size: 11px; font-weight: 700; color: var(--text-primary); white-space: nowrap;">📊 统计计算窗口期数:</span>
+                    <span style="font-size: 11px; font-weight: 700; color: var(--text-primary); white-space: nowrap;">📊 冷热频次计算窗口:</span>
                     <select id="coldCalcWindowSel" onchange="onColdCalcWindowChange(this.value)" style="font-size: 11px; padding: 4px 8px; border-radius: 4px; background: var(--card-bg); border: 1px solid var(--border); color: var(--text-primary); cursor: pointer;">
                         <option value="auto" selected>🔗 跟随主图期数 (当前50期)</option>
                         <option value="20">最近 20 期 (超短期活跃)</option>
@@ -372,18 +372,18 @@
                 </div>
                 <div style="display: flex; align-items: center; gap: 6px;">
                     <span id="coldCalcWindowBadge" style="font-size: 10px; color: var(--accent); font-weight: 700; background: rgba(0,230,118,0.12); padding: 3px 8px; border-radius: 3px; border: 1px solid rgba(0,230,118,0.2); white-space: nowrap;">
-                        实取 50 期样本
+                        频次实取 50 期样本
                     </span>
                 </div>
             </div>
 
             <!-- 模块一：遗漏选号因子库 -->
-            <div class="cold-subcard collapsed" id="subcard_omission">
+            <div class="cold-subcard" id="subcard_omission">
                 <div class="cold-subcard-header collapsible" onclick="toggleColdSubcard('subcard_omission')" title="点击折叠/展开遗漏选号因子">
                     <div style="display: flex; align-items: center; gap: 6px; min-width: 0;">
-                        <span class="cold-subcard-arrow" id="arrow_subcard_omission">▾</span>
+                        <span class="cold-subcard-arrow" id="arrow_subcard_omission">▴</span>
                         <span class="title-tag">🔍 遗漏选号因子</span>
-                        <span id="factorWindowTag_omission" style="font-size: 10px; color: var(--text-secondary); font-weight: normal;">(基于最近50期统计)</span>
+                        <span id="factorWindowTag_omission" style="font-size: 10px; color: var(--text-secondary); font-weight: normal;">(全量历史持续遗漏)</span>
                         <span class="cold-subcard-badge" id="badge_subcard_omission" style="display: none;">已选 0 项</span>
                     </div>
                     <div style="display: flex; gap: 4px;" onclick="event.stopPropagation();">
@@ -392,6 +392,58 @@
                     </div>
                 </div>
                 <div class="cold-factors-grid" id="grid_subcard_omission">
+                    <!-- 遗漏排序位次未出预警与分析模块 (重点展示第几位) -->
+                    <div class="cold-threshold-box" id="box_omissionThreshold">
+                        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                <input type="checkbox" id="coldOption_omissionOverThreshold" onchange="onOmissionOverThresholdChange()">
+                                <label for="coldOption_omissionOverThreshold" style="font-weight:700; color:var(--down); cursor:pointer; font-size:11.5px;" title="勾选后将超期未出位次对应的号码纳入综合K线选号">🎯 遗漏排序位次未出 (纳入选号)</label>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap;">
+                                <span style="font-size:10.5px; color:var(--text-secondary);">模式:</span>
+                                <select id="coldOmissionRankModeSel" onchange="onOmissionThresholdParamChange()" style="font-size:11px; padding:2px 6px; border-radius:4px; background:var(--card-bg); border:1px solid var(--border); color:var(--text-primary); cursor:pointer;" title="切换位次未出分析模式">
+                                    <option value="rankHit" selected>位次未出跟踪 (第几位未曾开出)</option>
+                                    <option value="currentRank">当前排位遗漏 (遗漏值超阈值位次)</option>
+                                </select>
+                                <span style="font-size:10.5px; color:var(--text-secondary); margin-left:3px;">期数阈值:</span>
+                                <select id="coldOmissionThresholdSel" onchange="onOmissionThresholdParamChange()" style="font-size:11px; padding:2px 6px; border-radius:4px; background:var(--card-bg); border:1px solid var(--border); color:var(--text-primary); cursor:pointer;">
+                                    <option value="20">≥ 20期</option>
+                                    <option value="30">≥ 30期</option>
+                                    <option value="40">≥ 40期</option>
+                                    <option value="50">≥ 50期</option>
+                                    <option value="60" selected>≥ 60期 (推荐)</option>
+                                    <option value="70">≥ 70期</option>
+                                    <option value="80">≥ 80期</option>
+                                    <option value="100">≥ 100期</option>
+                                    <option value="120">≥ 120期</option>
+                                    <option value="custom">自定期数...</option>
+                                </select>
+                                <input type="number" id="coldOmissionThresholdCustom" min="1" max="1000" placeholder="期数" style="display:none; width:48px; font-size:10.5px; padding:2px 4px; border-radius:4px; background:var(--card-bg); border:1px solid var(--border); color:var(--text-primary);" oninput="onOmissionThresholdParamChange()">
+                                <select id="coldOmissionThresholdTypeSel" onchange="onOmissionThresholdParamChange()" style="font-size:11px; padding:2px 6px; border-radius:4px; background:var(--card-bg); border:1px solid var(--border); color:var(--text-primary); cursor:pointer;">
+                                    <option value="teNum" selected>特码遗漏位次 (49位)</option>
+                                    <option value="teZodiac">特码生肖位次 (12位)</option>
+                                    <option value="teTail">特码尾数位次 (10位)</option>
+                                    <option value="pingNum">平特号码位次 (49位)</option>
+                                    <option value="pingZodiac">平特生肖位次 (12位)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin: 6px 0 4px; font-size:11px; flex-wrap:wrap; gap:6px;">
+                            <span style="color:var(--text-secondary);">
+                                超期位次: <strong id="omissionThresholdCount" style="color:var(--down); font-size:12px;">0</strong> 个位次
+                                <span id="omissionThresholdSummaryNote" style="font-size:10.5px; color:var(--accent); margin-left:4px;"></span>
+                            </span>
+                            <div style="display:flex; gap:4px; flex-wrap:wrap;">
+                                <button type="button" onclick="syncOmissionRankToSliders()" style="font-size:10px; padding:2px 7px; background:rgba(0,212,255,0.12); border:1px solid var(--accent); border-radius:3px; color:var(--accent); cursor:pointer;" title="将超期未出位次一键同步设定至下方遗漏区间滑块选区">🔘 同步到位次滑块</button>
+                                <button type="button" onclick="copyOmissionThresholdRankText()" style="font-size:10px; padding:2px 6px; background:rgba(255,255,255,0.06); border:1px solid var(--border); border-radius:3px; color:var(--text-primary); cursor:pointer;" title="复制超期未出位次列表（以第几位排位为主）">📋 复制位次</button>
+                                <button type="button" onclick="copyOmissionThresholdNumbers()" style="font-size:10px; padding:2px 6px; background:rgba(0,212,255,0.1); border:1px solid var(--accent); border-radius:3px; color:var(--accent); cursor:pointer;" title="复制超期位次对应的号码">📋 复制号码</button>
+                                <button type="button" onclick="fillOmissionThresholdToInput()" style="font-size:10px; padding:2px 6px; background:rgba(255,71,87,0.12); border:1px solid rgba(255,71,87,0.4); border-radius:3px; color:var(--down); cursor:pointer;" title="将超期未出位次对应的号码填入自定义选号输入框">➕ 填自选</button>
+                            </div>
+                        </div>
+                        <div id="omissionThresholdList" class="omission-threshold-balls-wrap">
+                            <!-- 动态加载遗漏排序第几位超过可选期数的位次卡片 -->
+                        </div>
+                    </div>
                     <div class="cold-factor-item">
                         <input type="checkbox" id="coldOption_wave">
                         <label for="coldOption_wave" title="统计最近遗漏最多的波色">最多波色</label>
@@ -666,7 +718,7 @@
                     <div style="display: flex; align-items: center; gap: 6px; min-width: 0;">
                         <span class="cold-subcard-arrow" id="arrow_subcard_hotcold">▾</span>
                         <span class="title-tag">🔥 冷热选号因子</span>
-                        <span id="factorWindowTag_hotcold" style="font-size: 10px; color: var(--text-secondary); font-weight: normal;">(基于最近50期统计)</span>
+                        <span id="factorWindowTag_hotcold" style="font-size: 10px; color: var(--text-secondary); font-weight: normal;">(基于最近50期频次)</span>
                         <span class="cold-subcard-badge" id="badge_subcard_hotcold" style="display: none;">已选 0 项</span>
                     </div>
                     <div style="display: flex; gap: 4px;" onclick="event.stopPropagation();">
@@ -675,6 +727,92 @@
                     </div>
                 </div>
                 <div class="cold-factors-grid" id="grid_subcard_hotcold">
+                    <!-- 冷热排序位次未出预警与分析模块 (重点展示第几位) -->
+                    <div class="cold-threshold-box" id="box_hotColdThreshold" style="border-color: rgba(255, 145, 0, 0.4); background: rgba(255, 145, 0, 0.08);">
+                        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                <input type="checkbox" id="coldOption_hotColdOverThreshold" onchange="onHotColdThresholdChange()">
+                                <label for="coldOption_hotColdOverThreshold" style="font-weight:700; color:#ff9100; cursor:pointer; font-size:11.5px;" title="勾选后将超期未出冷热位次对应的号码纳入综合K线选号">🎯 冷热排序位次未出 (纳入选号)</label>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap;">
+                                <span style="font-size:10.5px; color:var(--text-secondary);">模式:</span>
+                                <select id="coldHotRankModeSel" onchange="onHotColdThresholdParamChange()" style="font-size:11px; padding:2px 6px; border-radius:4px; background:var(--card-bg); border:1px solid var(--border); color:var(--text-primary); cursor:pointer;" title="切换冷热位次未出分析模式">
+                                    <option value="rankHit" selected>位次未出跟踪 (第几位未曾开出)</option>
+                                    <option value="currentRank">当前排位遗漏 (遗漏值超阈值位次)</option>
+                                </select>
+                                <span style="font-size:10.5px; color:var(--text-secondary); margin-left:3px;">期数阈值:</span>
+                                <select id="coldHotThresholdSel" onchange="onHotColdThresholdParamChange()" style="font-size:11px; padding:2px 6px; border-radius:4px; background:var(--card-bg); border:1px solid var(--border); color:var(--text-primary); cursor:pointer;">
+                                    <option value="20">≥ 20期</option>
+                                    <option value="30">≥ 30期</option>
+                                    <option value="40">≥ 40期</option>
+                                    <option value="50">≥ 50期</option>
+                                    <option value="60" selected>≥ 60期 (推荐)</option>
+                                    <option value="70">≥ 70期</option>
+                                    <option value="80">≥ 80期</option>
+                                    <option value="100">≥ 100期</option>
+                                    <option value="120">≥ 120期</option>
+                                    <option value="custom">自定期数...</option>
+                                </select>
+                                <input type="number" id="coldHotThresholdCustom" min="1" max="1000" placeholder="期数" style="display:none; width:48px; font-size:10.5px; padding:2px 4px; border-radius:4px; background:var(--card-bg); border:1px solid var(--border); color:var(--text-primary);" oninput="onHotColdThresholdParamChange()">
+                                <select id="coldHotThresholdTypeSel" onchange="onHotColdThresholdParamChange()" style="font-size:11px; padding:2px 6px; border-radius:4px; background:var(--card-bg); border:1px solid var(--border); color:var(--text-primary); cursor:pointer;">
+                                    <option value="allHotNum" selected>特码冷热位次 (49位)</option>
+                                    <option value="hotNum">平特冷热位次 (49位)</option>
+                                    <option value="allHotZodiac">特码冷热肖位次 (12位)</option>
+                                    <option value="hotZodiac">平特冷热肖位次 (12位)</option>
+                                    <option value="allHotHead">特码冷热头数 (5位)</option>
+                                    <option value="allHotTail">特码冷热尾数 (10位)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin: 6px 0 4px; font-size:11px; flex-wrap:wrap; gap:6px;">
+                            <span style="color:var(--text-secondary);">
+                                超期位次: <strong id="hotColdThresholdCount" style="color:#ff9100; font-size:12px;">0</strong> 个位次
+                                <span id="hotColdThresholdSummaryNote" style="font-size:10.5px; color:var(--accent); margin-left:4px;"></span>
+                            </span>
+                            <div style="display:flex; gap:4px; flex-wrap:wrap;">
+                                <button type="button" onclick="syncHotColdRankToSliders()" style="font-size:10px; padding:2px 7px; background:rgba(255,145,0,0.14); border:1px solid #ff9100; border-radius:3px; color:#ff9100; cursor:pointer;" title="将超期未出冷热位次一键同步设定至下方冷热区间滑块选区">🔘 同步到位次滑块</button>
+                                <button type="button" onclick="copyHotColdThresholdRankText()" style="font-size:10px; padding:2px 6px; background:rgba(255,255,255,0.06); border:1px solid var(--border); border-radius:3px; color:var(--text-primary); cursor:pointer;" title="复制超期未出冷热位次列表（以第几位排位为主）">📋 复制位次</button>
+                                <button type="button" onclick="copyHotColdThresholdNumbers()" style="font-size:10px; padding:2px 6px; background:rgba(0,212,255,0.1); border:1px solid var(--accent); border-radius:3px; color:var(--accent); cursor:pointer;" title="复制超期位次对应的号码">📋 复制号码</button>
+                                <button type="button" onclick="fillHotColdThresholdToInput()" style="font-size:10px; padding:2px 6px; background:rgba(255,145,0,0.15); border:1px solid rgba(255,145,0,0.4); border-radius:3px; color:#ff9100; cursor:pointer;" title="将超期未出冷热位次对应的号码填入自定义选号输入框">➕ 填自选</button>
+                            </div>
+                        </div>
+                        <div id="hotColdThresholdList" class="omission-threshold-balls-wrap">
+                            <!-- 动态加载冷热排序第几位超过可选期数的位次卡片 -->
+                        </div>
+                    </div>
+                    <!-- 特码头尾冷热选号因子 -->
+                    <div class="cold-factor-item">
+                        <input type="checkbox" id="coldOption_allHotHeads" onchange="onColdOptionChange()">
+                        <label for="coldOption_allHotHeads" title="统计最近特码开出频次最高的热门头数">特码热头</label>
+                        <select id="coldOption_allHotHeads_count" onchange="onColdOptionCountChange()">
+                            <option value="1" selected>1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option>
+                        </select>
+                        <span class="unit">个</span>
+                    </div>
+                    <div class="cold-factor-item">
+                        <input type="checkbox" id="coldOption_allColdHeads" onchange="onColdOptionChange()">
+                        <label for="coldOption_allColdHeads" title="统计最近特码开出频次最低的冷门头数">特码冷头</label>
+                        <select id="coldOption_allColdHeads_count" onchange="onColdOptionCountChange()">
+                            <option value="1" selected>1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option>
+                        </select>
+                        <span class="unit">个</span>
+                    </div>
+                    <div class="cold-factor-item">
+                        <input type="checkbox" id="coldOption_allHotTails" onchange="onColdOptionChange()">
+                        <label for="coldOption_allHotTails" title="统计最近特码开出频次最高的热门尾数">特码热尾</label>
+                        <select id="coldOption_allHotTails_count" onchange="onColdOptionCountChange()">
+                            <option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
+                        </select>
+                        <span class="unit">个</span>
+                    </div>
+                    <div class="cold-factor-item">
+                        <input type="checkbox" id="coldOption_allColdTails" onchange="onColdOptionChange()">
+                        <label for="coldOption_allColdTails" title="统计最近特码开出频次最低的冷门尾数">特码冷尾</label>
+                        <select id="coldOption_allColdTails_count" onchange="onColdOptionCountChange()">
+                            <option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
+                        </select>
+                        <span class="unit">个</span>
+                    </div>
                     <div class="cold-range-box" id="box_hotNumberRange">
                         <div class="cold-range-top">
                             <div class="cold-range-title-wrap">
@@ -882,6 +1020,110 @@
                                 <button type="button" class="multi-segments-clear" onclick="clearRangeSegments('allHotZodiacRange')">清空所有分段</button>
                             </div>
                             <div id="chips_allHotZodiacRange" class="multi-segments-chips"></div>
+                        </div>
+                    </div>
+
+                    <div class="cold-range-box" id="box_allHotHeadRange">
+                        <div class="cold-range-top">
+                            <div class="cold-range-title-wrap">
+                                <input type="checkbox" id="coldOption_allHotHeadRange">
+                                <label for="coldOption_allHotHeadRange">特码热头区</label>
+                            </div>
+                            <span class="range-val-badge" id="badge_allHotHeadRange">第 1 ~ 2 位 (共2头)</span>
+                        </div>
+                        <div class="dual-slider-wrap">
+                            <div class="dual-slider-track-bg"></div>
+                            <div class="dual-slider-track-active" id="track_allHotHeadRange"></div>
+                            <div class="slider-coord-pill" id="coordPill_allHotHeadRange_start">1</div>
+                            <div class="slider-coord-pill" id="coordPill_allHotHeadRange_end">2</div>
+                            <input type="range" id="coldOption_allHotHeadRange_start" min="1" max="5" value="1" step="1" class="range-slider-input range-slider-min" oninput="onDualSliderChange('allHotHeadRange', 5, '头', true)">
+                            <input type="range" id="coldOption_allHotHeadRange_end" min="1" max="5" value="2" step="1" class="range-slider-input range-slider-max" oninput="onDualSliderChange('allHotHeadRange', 5, '头', false)">
+                        </div>
+                        <div class="dual-slider-scale">
+                            <span class="dual-slider-scale-item scale-endpoint-left scale-endpoint-hot"><span class="scale-text-tag">热</span> 1</span>
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.25);">2</span>
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.5);">3</span>
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.75);">4</span>
+                            <span class="dual-slider-scale-item scale-endpoint-right scale-endpoint-cold">5 <span class="scale-text-tag">冷</span></span>
+                        </div>
+                        <div class="cold-range-bottom-row">
+                            <div class="range-steppers">
+                                <div class="stepper-unit">
+                                    <span class="stepper-lbl" title="起点（最热）">起·热</span>
+                                    <button type="button" class="stepper-btn" onclick="stepDualRange('allHotHeadRange', 'start', -1)" title="起点 -1">−</button>
+                                    <span class="stepper-val" id="stepperVal_allHotHeadRange_start">1</span>
+                                    <button type="button" class="stepper-btn" onclick="stepDualRange('allHotHeadRange', 'start', 1)" title="起点 +1">+</button>
+                                </div>
+                                <div class="stepper-unit">
+                                    <span class="stepper-lbl" title="终点（最冷）">止·冷</span>
+                                    <button type="button" class="stepper-btn" onclick="stepDualRange('allHotHeadRange', 'end', -1)" title="终点 -1">−</button>
+                                    <span class="stepper-val" id="stepperVal_allHotHeadRange_end">2</span>
+                                    <button type="button" class="stepper-btn" onclick="stepDualRange('allHotHeadRange', 'end', 1)" title="终点 +1">+</button>
+                                </div>
+                            </div>
+                            <div class="quick-range-chips">
+                                <button type="button" class="quick-chip-btn add-segment-btn" id="btn_addSegment_allHotHeadRange" onclick="addRangeSegment('allHotHeadRange')" title="将当前滑块设定的区间添加为多段选区之一">➕存为选区</button>
+                            </div>
+                        </div>
+                        <!-- 特码热头多段选区标签容器 -->
+                        <div id="segments_container_allHotHeadRange" class="multi-segments-wrap" style="display:none;">
+                            <div class="multi-segments-header">
+                                <span class="multi-segments-title">已组合多段选区:</span>
+                                <button type="button" class="multi-segments-clear" onclick="clearRangeSegments('allHotHeadRange')">清空所有分段</button>
+                            </div>
+                            <div id="chips_allHotHeadRange" class="multi-segments-chips"></div>
+                        </div>
+                    </div>
+
+                    <div class="cold-range-box" id="box_allHotTailRange">
+                        <div class="cold-range-top">
+                            <div class="cold-range-title-wrap">
+                                <input type="checkbox" id="coldOption_allHotTailRange">
+                                <label for="coldOption_allHotTailRange">特码热尾区</label>
+                            </div>
+                            <span class="range-val-badge" id="badge_allHotTailRange">第 1 ~ 3 位 (共3尾)</span>
+                        </div>
+                        <div class="dual-slider-wrap">
+                            <div class="dual-slider-track-bg"></div>
+                            <div class="dual-slider-track-active" id="track_allHotTailRange"></div>
+                            <div class="slider-coord-pill" id="coordPill_allHotTailRange_start">1</div>
+                            <div class="slider-coord-pill" id="coordPill_allHotTailRange_end">3</div>
+                            <input type="range" id="coldOption_allHotTailRange_start" min="1" max="10" value="1" step="1" class="range-slider-input range-slider-min" oninput="onDualSliderChange('allHotTailRange', 10, '尾', true)">
+                            <input type="range" id="coldOption_allHotTailRange_end" min="1" max="10" value="3" step="1" class="range-slider-input range-slider-max" oninput="onDualSliderChange('allHotTailRange', 10, '尾', false)">
+                        </div>
+                        <div class="dual-slider-scale">
+                            <span class="dual-slider-scale-item scale-endpoint-left scale-endpoint-hot"><span class="scale-text-tag">热</span> 1</span>
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.2222);">3</span>
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.4444);">5</span>
+                            <span class="dual-slider-scale-item" style="left: calc(9px + (100% - 18px) * 0.6667);">7</span>
+                            <span class="dual-slider-scale-item scale-endpoint-right scale-endpoint-cold">10 <span class="scale-text-tag">冷</span></span>
+                        </div>
+                        <div class="cold-range-bottom-row">
+                            <div class="range-steppers">
+                                <div class="stepper-unit">
+                                    <span class="stepper-lbl" title="起点（最热）">起·热</span>
+                                    <button type="button" class="stepper-btn" onclick="stepDualRange('allHotTailRange', 'start', -1)" title="起点 -1">−</button>
+                                    <span class="stepper-val" id="stepperVal_allHotTailRange_start">1</span>
+                                    <button type="button" class="stepper-btn" onclick="stepDualRange('allHotTailRange', 'start', 1)" title="起点 +1">+</button>
+                                </div>
+                                <div class="stepper-unit">
+                                    <span class="stepper-lbl" title="终点（最冷）">止·冷</span>
+                                    <button type="button" class="stepper-btn" onclick="stepDualRange('allHotTailRange', 'end', -1)" title="终点 -1">−</button>
+                                    <span class="stepper-val" id="stepperVal_allHotTailRange_end">3</span>
+                                    <button type="button" class="stepper-btn" onclick="stepDualRange('allHotTailRange', 'end', 1)" title="终点 +1">+</button>
+                                </div>
+                            </div>
+                            <div class="quick-range-chips">
+                                <button type="button" class="quick-chip-btn add-segment-btn" id="btn_addSegment_allHotTailRange" onclick="addRangeSegment('allHotTailRange')" title="将当前滑块设定的区间添加为多段选区之一">➕存为选区</button>
+                            </div>
+                        </div>
+                        <!-- 特码热尾多段选区标签容器 -->
+                        <div id="segments_container_allHotTailRange" class="multi-segments-wrap" style="display:none;">
+                            <div class="multi-segments-header">
+                                <span class="multi-segments-title">已组合多段选区:</span>
+                                <button type="button" class="multi-segments-clear" onclick="clearRangeSegments('allHotTailRange')">清空所有分段</button>
+                            </div>
+                            <div id="chips_allHotTailRange" class="multi-segments-chips"></div>
                         </div>
                     </div>
                 </div>
@@ -1662,6 +1904,17 @@
                                 <option value="200">最近200期</option>
                                 <option value="300">最近300期</option>
                                 <option value="all">全部历史</option>
+                            </select>
+                        </div>
+                        <div class="period-selector" id="omissionThresholdFilterWrapper" style="margin-left: 6px;">
+                            <label>🚨 深度筛选：</label>
+                            <select id="omissionThresholdFilterSel" onchange="updateOmissionStats()">
+                                <option value="0">全部项目</option>
+                                <option value="30">遗漏 ≥ 30期</option>
+                                <option value="50">遗漏 ≥ 50期</option>
+                                <option value="60">遗漏 ≥ 60期 (极限深度)</option>
+                                <option value="80">遗漏 ≥ 80期</option>
+                                <option value="100">遗漏 ≥ 100期</option>
                             </select>
                         </div>
                         <div class="omission-sort-controls">

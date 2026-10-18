@@ -99,7 +99,9 @@
                 hotNumberRange: [],
                 allHotNumberRange: [],
                 hotZodiacRange: [],
-                allHotZodiacRange: []
+                allHotZodiacRange: [],
+                allHotHeadRange: [],
+                allHotTailRange: []
             },
             followPosition: 2,
             followMode: 'zodiac',
@@ -259,6 +261,8 @@
                 }
 
                 const rect = canvas.getBoundingClientRect();
+                const chartSection = document.getElementById('chartSection');
+                const chartRect = chartSection ? chartSection.getBoundingClientRect() : rect;
                 const dpr = window.devicePixelRatio || 1;
                 const logicalWidth = canvas.width / dpr;
                 const { spacing, startX } = getChartSettings(state.visibleData.length, logicalWidth);
@@ -272,10 +276,10 @@
                     state.hoverIndex = idx;
                     requestDraw();
                     updateInfoPanel(state.visibleData[idx]);
-                    
-                    if (state.visibleData[idx]) {
-                        showKlineTooltip(state.visibleData[idx], state.lastMouse.x - rect.left, e.clientY - rect.top);
-                    }
+                }
+
+                if (state.visibleData[idx]) {
+                    showKlineTooltip(state.visibleData[idx], e.clientX, e.clientY);
                 }
                 
                 state.lastMouse.x = e.clientX;
@@ -319,25 +323,66 @@
                 }
             });
 
-            canvas.addEventListener('touchstart', (e) => {
-                if (e.touches.length === 1) {
-                    state.isDragging = true;
-                    state.lastMouse.x = e.touches[0].clientX;
-                    state.lastMouse.y = e.touches[0].clientY;
-                    
-                    const rect = canvas.getBoundingClientRect();
-                    const dpr = window.devicePixelRatio || 1;
-                    const logicalWidth = canvas.width / dpr;
-                    const { spacing, startX } = getChartSettings(state.visibleData.length, logicalWidth);
-                    const touchX = e.touches[0].clientX - rect.left - state.viewState.x;
-                    let idx = Math.round((touchX - startX) / spacing);
-                    state.hoverIndex = Math.max(0, Math.min(idx, state.visibleData.length - 1));
-                    requestDraw();
-                    if (state.visibleData[state.hoverIndex]) {
-                        updateInfoPanel(state.visibleData[state.hoverIndex]);
+            let touchHoverTimer = null;
+            let lastTapTime = 0;
+
+            function handleCanvasTouchBrowse(clientX, clientY) {
+                const rect = canvas.getBoundingClientRect();
+                const chartSection = document.getElementById('chartSection');
+                const chartRect = chartSection ? chartSection.getBoundingClientRect() : rect;
+                const dpr = window.devicePixelRatio || 1;
+                const logicalWidth = canvas.width / dpr;
+                const { spacing, startX } = getChartSettings(state.visibleData.length, logicalWidth);
+
+                const touchX = clientX - rect.left - state.viewState.x;
+                let idx = Math.round((touchX - startX) / spacing);
+                idx = Math.max(0, Math.min(idx, state.visibleData.length - 1));
+
+                const prevIdx = state.hoverIndex;
+                state.hoverIndex = idx;
+
+                requestDraw();
+
+                if (state.visibleData[idx]) {
+                    updateInfoPanel(state.visibleData[idx]);
+                    showKlineTooltip(state.visibleData[idx], clientX, clientY);
+                }
+
+                if (prevIdx !== idx && typeof navigator !== 'undefined' && navigator.vibrate) {
+                    try { navigator.vibrate(6); } catch (vErr) {}
+                }
+
+                if (state.viewState.scale > 1) {
+                    const edgeDist = clientX - rect.left;
+                    if (edgeDist < 45) {
+                        state.viewState.x = Math.min(0, state.viewState.x + 8);
+                        requestDraw();
+                    } else if (edgeDist > rect.width - 45) {
+                        const totalWidth = (state.visibleData.length - 1) * spacing;
+                        const minX = rect.width - totalWidth - 60;
+                        state.viewState.x = Math.max(minX, state.viewState.x - 8);
+                        requestDraw();
                     }
+                }
+            }
+
+            canvas.addEventListener('touchstart', (e) => {
+                if (touchHoverTimer) {
+                    clearTimeout(touchHoverTimer);
+                    touchHoverTimer = null;
+                }
+                if (state.tooltipTimeout) {
+                    clearTimeout(state.tooltipTimeout);
+                    state.tooltipTimeout = null;
+                }
+
+                if (e.touches.length === 1) {
+                    const touch = e.touches[0];
+                    state.lastMouse.x = touch.clientX;
+                    state.lastMouse.y = touch.clientY;
+                    handleCanvasTouchBrowse(touch.clientX, touch.clientY);
                 } else if (e.touches.length === 2) {
-                    state.isDragging = false;
+                    hideKlineTooltip();
                     state.lastTouchDist = Math.hypot(
                         e.touches[0].clientX - e.touches[1].clientX,
                         e.touches[0].clientY - e.touches[1].clientY
@@ -346,16 +391,14 @@
             }, { passive: false });
 
             canvas.addEventListener('touchmove', (e) => {
-                if (e.touches.length === 1 && state.isDragging) {
-                    const dx = e.touches[0].clientX - state.lastMouse.x;
-                    const dy = e.touches[0].clientY - state.lastMouse.y;
-                    state.viewState.x += dx;
-                    state.viewState.y += dy;
-                    state.lastMouse.x = e.touches[0].clientX;
-                    state.lastMouse.y = e.touches[0].clientY;
-                    requestDraw();
+                e.preventDefault();
+
+                if (e.touches.length === 1) {
+                    const touch = e.touches[0];
+                    state.lastMouse.x = touch.clientX;
+                    state.lastMouse.y = touch.clientY;
+                    handleCanvasTouchBrowse(touch.clientX, touch.clientY);
                 } else if (e.touches.length === 2) {
-                    e.preventDefault();
                     const dist = Math.hypot(
                         e.touches[0].clientX - e.touches[1].clientX,
                         e.touches[0].clientY - e.touches[1].clientY
@@ -364,7 +407,7 @@
                     if (state.lastTouchDist > 0) {
                         const factor = dist / state.lastTouchDist;
                         const oldScale = state.viewState.scale;
-                        state.viewState.scale = Math.max(0.2, Math.min(20, state.viewState.scale * factor));
+                        state.viewState.scale = Math.max(0.5, Math.min(10, state.viewState.scale * factor));
                         
                         const rect = canvas.getBoundingClientRect();
                         const centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
@@ -376,21 +419,35 @@
                 }
             }, { passive: false });
 
-            canvas.addEventListener('touchend', () => {
-                state.isDragging = false;
-                state.lastTouchDist = 0;
-                setTimeout(() => {
-                    if (!state.isDragging && state.hoverIndex >= 0) {
+            canvas.addEventListener('touchend', (e) => {
+                if (e.touches.length === 0) {
+                    state.lastTouchDist = 0;
+                    const now = Date.now();
+
+                    if (lastTapTime && (now - lastTapTime < 300)) {
+                        resetChartView();
+                        hideKlineTooltip();
+                        lastTapTime = 0;
+                        return;
+                    }
+                    lastTapTime = now;
+
+                    touchHoverTimer = setTimeout(() => {
                         state.hoverIndex = -1;
                         requestDraw();
                         hideKlineTooltip();
-                        if (state.latestDataRecord) {
+                        const trueLatest = (state.historyData && state.historyData.length > 0)
+                            ? state.historyData[state.historyData.length - 1]
+                            : null;
+                        if (trueLatest) {
+                            updateInfoPanel(trueLatest, false);
+                        } else if (state.latestDataRecord) {
                             updateInfoPanel(state.latestDataRecord, false);
                         } else if (state.visibleData && state.visibleData.length > 0) {
                             updateInfoPanel(state.visibleData[state.visibleData.length - 1], false);
                         }
-                    }
-                }, 3000);
+                    }, 8000);
+                }
             });
         }
 
@@ -1576,6 +1633,9 @@
                 });
             }
 
+            if (state.historyData && state.historyData.length > 0) {
+                state.latestDataRecord = state.historyData[state.historyData.length - 1];
+            }
             changePage('last');
             updateStats();
             updatePeriodSelectors();
@@ -1586,6 +1646,8 @@
             updateColdCalcWindowUI();
             updateAllDualSliders();
             updateLiveSelectionPreview();
+            if (typeof updateOmissionThresholdDisplay === 'function') updateOmissionThresholdDisplay();
+            if (typeof updateHotColdThresholdDisplay === 'function') updateHotColdThresholdDisplay();
             schedulePanelUpdates();
         }
 
@@ -2202,13 +2264,15 @@
             let topHtml = '';
             const topZodiacs = d.pingXiao ? d.pingXiao.split(' ') : [];
             topZodiacs.push(d.win || '');
+            const itemYear = parseInt(String(d.expect).slice(0, 4), 10) || state.currentYear;
 
-            d.codes.forEach((c, i) => {
+            (d.codes || []).forEach((c, i) => {
                 const isSpecial = i === 6;
+                const zod = topZodiacs[i] || (typeof getZodiac === 'function' ? getZodiac(parseInt(c.num, 10), itemYear) : '');
                 topHtml += `<span class="top-ball-cell">` +
                     `<span class="ball ${c.wave}${isSpecial ? ' top-special-ball' : ''}">${c.num}</span>` +
-                    `<span class="top-zodiac${isSpecial ? ' top-special' : ''}">${topZodiacs[i] || ''}</span>` +
-                    `</span>${i === 5 ? ' <span class="top-plus">+</span> ' : ''}`;
+                    `<span class="top-zodiac${isSpecial ? ' top-special' : ''}">${zod}</span>` +
+                    `</span>${i === 5 ? '<span class="top-plus">+</span>' : ''}`;
             });
 
             const topCenterEl = document.getElementById('topBarCenter');
@@ -2365,7 +2429,7 @@
             const hotEl = document.getElementById('statHot');
             const coldEl = document.getElementById('statCold');
             if (hotEl && coldEl) {
-                const source = (typeof getSelectedColdSourceData === 'function') ? getSelectedColdSourceData() : state.historyData;
+                const source = (typeof getSelectedHotColdSourceData === 'function') ? getSelectedHotColdSourceData() : state.historyData;
                 if (source && source.length > 0) {
                     const keys = Array.from({ length: 49 }, (_, i) => (i + 1).toString().padStart(2, '0'));
                     const counts = (typeof calculateFrequencyCounts === 'function') 
@@ -5442,7 +5506,8 @@
                 `).join('');
             }
 
-            tbody.innerHTML = records.map((r, idx) => {
+            const displayRecords = records.slice().reverse();
+            tbody.innerHTML = displayRecords.map((r, idx) => {
                 const rowZebraClass = idx % 2 === 1 ? 'zebra-even' : 'zebra-odd';
                 const spColor = r.color === 'red' ? '#ff1744' : r.color === 'blue' ? '#448aff' : '#00e676';
                 const nums = r.topNumbers || [];
@@ -5473,10 +5538,19 @@
                         </div>
                     `;
                 } else {
+                    const normalMiniBadges = (r.normalBalls || []).map(b => {
+                        const bStr = parseInt(b, 10).toString().padStart(2, '0');
+                        const c = getColor(bStr);
+                        const bg = c === 'red' ? '#ff1744' : c === 'blue' ? '#448aff' : '#00e676';
+                        return `<span style="display:inline-block;padding:0 3px;border-radius:2px;background:${bg};color:#fff;font-size:9px;margin-right:2px;opacity:0.9;">${bStr}</span>`;
+                    }).join('');
                     ballDisplay = `
-                        <span class="${r.isHit ? 'rec-drawn-hit-ball' : ''}" title="${r.isHit ? '该期开出特码包含在K线动态推演选号中' : ''}" style="display:inline-block;padding:1px 6px;border-radius:4px;background:${spColor};color:#fff;font-weight:700;">${r.special}</span>
-                        <span style="font-size:10.5px;margin-left:4px;color:${r.isHit ? '#ffd700' : 'var(--text-secondary)'};font-weight:${r.isHit ? '700' : 'normal'};">${r.zodiac}</span>
-                        ${r.isHit ? '<span class="rec-drawn-hit-tag">★命中</span>' : ''}
+                        <div style="font-size:9.5px;display:flex;align-items:center;flex-wrap:wrap;gap:2px;">
+                            ${normalMiniBadges}
+                            <span class="${r.isHit ? 'rec-drawn-hit-ball' : ''}" title="${r.isHit ? '该期开出特码包含在K线动态推演选号中' : ''}" style="display:inline-block;padding:1px 5px;border-radius:3px;background:${spColor};color:#fff;font-weight:700;font-size:10px;">+${r.special}</span>
+                            <span style="font-size:10px;margin-left:2px;color:${r.isHit ? '#ffd700' : 'var(--text-secondary)'};font-weight:${r.isHit ? '700' : 'normal'};">${r.zodiac}</span>
+                            ${r.isHit ? '<span class="rec-drawn-hit-tag">★命中</span>' : ''}
+                        </div>
                     `;
                 }
 
@@ -6599,11 +6673,11 @@
             const win = getEffectiveColdWindow();
             const totalLen = state.historyData ? state.historyData.length : 0;
             const actualCount = win === Infinity ? totalLen : Math.min(win, totalLen);
-            const txt = `基于最近 ${actualCount} 期样本`;
+            const txt = `基于最近 ${actualCount} 期频次`;
 
-            if (badge) badge.textContent = txt;
+            if (badge) badge.textContent = `频次实取 ${actualCount} 期样本`;
             if (tagHot) tagHot.textContent = `(${txt})`;
-            if (tagOm) tagOm.textContent = `(${txt})`;
+            if (tagOm) tagOm.textContent = `(全量历史持续遗漏)`;
         }
 
         function onColdCalcWindowChange(val) {
@@ -6612,33 +6686,29 @@
             updateAllDualSliders();
             updateLiveSelectionPreview();
             updateStats();
+            if (typeof updateHotColdThresholdDisplay === 'function') updateHotColdThresholdDisplay();
             generateRecommendations();
             if (isColdKlineMode(state.currentMode) && state.coldSelection) {
                 recalcData();
             }
         }
 
+        // 遗漏统计基础数据源：真实遗漏属于客观历史连续未出期数，基于全量可用历史数据计算，不受短周期样本截断
         function getSelectedColdSourceData() {
-            const win = getEffectiveColdWindow();
-            const totalLen = state.historyData ? state.historyData.length : 0;
-            const count = win === Infinity ? totalLen : Math.min(win, totalLen);
-            return state.historyData.slice(-count);
+            return (state.historyData && state.historyData.length > 0) ? state.historyData : [];
         }
 
         function getRollingColdSourceData(historyData, currentIndex) {
-            const win = getEffectiveColdWindow();
-            const count = win === Infinity ? currentIndex : Math.min(win, currentIndex);
-            return historyData.slice(Math.max(0, currentIndex - count), currentIndex);
+            if (!historyData || historyData.length === 0) return [];
+            // 在滚动回测或K线逐期计算时，截至当前期 idx 的历史遗漏应回溯该期之前的所有可用历史（0 至 currentIndex），不被人为截断
+            return historyData.slice(0, currentIndex);
         }
 
         function getCurrentColdSourceData(historyData) {
-            const win = getEffectiveColdWindow();
-            const totalLen = historyData ? historyData.length : 0;
-            const count = win === Infinity ? totalLen : Math.min(win, totalLen);
-            return historyData.slice(-count);
+            return (historyData && historyData.length > 0) ? historyData : (state.historyData || []);
         }
 
-        // 冷热统计跟随设置的统计窗口（默认跟随右上角选择的期数）
+        // 冷热统计（频次/出号次数）跟随设置的统计窗口（默认跟随右上角选择的期数）
         function getSelectedHotColdSourceData() {
             const win = getEffectiveColdWindow();
             const totalLen = state.historyData ? state.historyData.length : 0;
@@ -6664,15 +6734,20 @@
             keys.forEach(k => counts[k] = 0);
             const seen = {};
             keys.forEach(k => seen[k] = false);
+            let unseenCount = keys.length;
 
-            for (let i = sourceData.length - 1; i >= 0; i--) {
-                const item = sourceData[i];
+            const dataToUse = (sourceData && sourceData.length > 0) ? sourceData : (state.historyData || []);
+
+            for (let i = dataToUse.length - 1; i >= 0; i--) {
+                if (unseenCount <= 0) break;
+                const item = dataToUse[i];
                 const matched = matchFn(item);
                 keys.forEach(key => {
                     if (seen[key]) return;
                     const hit = Array.isArray(matched) ? matched.includes(key) : matched === key;
                     if (hit) {
                         seen[key] = true;
+                        unseenCount--;
                     } else {
                         counts[key]++;
                     }
@@ -6789,6 +6864,42 @@
                 .map(item => item[0]);
         }
 
+        function getAllHotHeads(sourceData, count = 2) {
+            const keys = ['0头', '1头', '2头', '3头', '4头'];
+            const counts = calculateFrequencyCounts(keys, item => {
+                const wn = typeof item.winNum === 'number' ? item.winNum : parseInt(item.winNum, 10);
+                return isNaN(wn) ? '' : `${Math.floor(wn / 10)}头`;
+            }, sourceData);
+            return Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, count).map(item => item[0]);
+        }
+
+        function getAllColdHeads(sourceData, count = 2) {
+            const keys = ['0头', '1头', '2头', '3头', '4头'];
+            const counts = calculateFrequencyCounts(keys, item => {
+                const wn = typeof item.winNum === 'number' ? item.winNum : parseInt(item.winNum, 10);
+                return isNaN(wn) ? '' : `${Math.floor(wn / 10)}头`;
+            }, sourceData);
+            return Object.entries(counts).sort((a, b) => a[1] - b[1] || b[0].localeCompare(a[0])).slice(0, count).map(item => item[0]);
+        }
+
+        function getAllHotTails(sourceData, count = 2) {
+            const keys = Array.from({ length: 10 }, (_, i) => `${i}尾`);
+            const counts = calculateFrequencyCounts(keys, item => {
+                const wn = typeof item.winNum === 'number' ? item.winNum : parseInt(item.winNum, 10);
+                return isNaN(wn) ? '' : `${wn % 10}尾`;
+            }, sourceData);
+            return Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, count).map(item => item[0]);
+        }
+
+        function getAllColdTails(sourceData, count = 2) {
+            const keys = Array.from({ length: 10 }, (_, i) => `${i}尾`);
+            const counts = calculateFrequencyCounts(keys, item => {
+                const wn = typeof item.winNum === 'number' ? item.winNum : parseInt(item.winNum, 10);
+                return isNaN(wn) ? '' : `${wn % 10}尾`;
+            }, sourceData);
+            return Object.entries(counts).sort((a, b) => a[1] - b[1] || b[0].localeCompare(a[0])).slice(0, count).map(item => item[0]);
+        }
+
         function getColdWave(sourceData) {
             const keys = ['red', 'blue', 'green'];
             const counts = calculateOmissionCounts(keys, item => getColor(item.winNum.toString().padStart(2, '0')), sourceData);
@@ -6899,6 +7010,871 @@
             return sorted.slice(s - 1, e);
         }
 
+        function getOmissionRankAnalysis(threshold = 60, type = 'teNum', mode = 'rankHit', sourceData = null) {
+            const dataToUse = (sourceData && sourceData.length > 0) ? sourceData : (state.historyData || []);
+            const numThreshold = parseInt(threshold, 10) || 60;
+            const y = state.currentYear;
+            const allNumbers = Array.from({ length: 49 }, (_, i) => (i + 1).toString().padStart(2, '0'));
+            const zodiacs = CONFIG.zodiacMap[y] || ['鼠','牛','虎','兔','龙','蛇','马','羊','猴','鸡','狗','猪'];
+            const tails = Array.from({ length: 10 }, (_, i) => `${i}尾`);
+
+            let keys, getDrawnKeys, getKeyMeta;
+            if (type === 'teNum') {
+                keys = allNumbers;
+                getDrawnKeys = item => {
+                    const wn = item.winNum != null ? item.winNum : '';
+                    return [wn.toString().padStart(2, '0')];
+                };
+                getKeyMeta = k => ({
+                    name: k,
+                    color: getColor(k),
+                    zodiac: getZodiac(parseInt(k, 10), y),
+                    numbers: [k]
+                });
+            } else if (type === 'teZodiac') {
+                keys = zodiacs;
+                getDrawnKeys = item => [item.win || ''];
+                getKeyMeta = k => ({
+                    name: k,
+                    color: 'zodiac',
+                    zodiac: k,
+                    numbers: allNumbers.filter(n => getZodiac(parseInt(n, 10), y) === k)
+                });
+            } else if (type === 'teTail') {
+                keys = tails;
+                getDrawnKeys = item => {
+                    const wn = typeof item.winNum === 'number' ? item.winNum : parseInt(item.winNum, 10);
+                    return isNaN(wn) ? [] : [`${wn % 10}尾`];
+                };
+                getKeyMeta = k => {
+                    const t = parseInt(k, 10);
+                    return {
+                        name: k,
+                        color: 'tail',
+                        zodiac: '',
+                        numbers: allNumbers.filter(n => parseInt(n, 10) % 10 === t)
+                    };
+                };
+            } else if (type === 'pingNum') {
+                keys = allNumbers;
+                getDrawnKeys = item => getAllDrawNumbers(item);
+                getKeyMeta = k => ({
+                    name: k,
+                    color: getColor(k),
+                    zodiac: getZodiac(parseInt(k, 10), y),
+                    numbers: [k]
+                });
+            } else if (type === 'pingZodiac') {
+                keys = zodiacs;
+                getDrawnKeys = item => getAllDrawZodiacs(item);
+                getKeyMeta = k => ({
+                    name: k,
+                    color: 'zodiac',
+                    zodiac: k,
+                    numbers: allNumbers.filter(n => getZodiac(parseInt(n, 10), y) === k)
+                });
+            } else {
+                keys = allNumbers;
+                getDrawnKeys = item => [item.winNum.toString().padStart(2, '0')];
+                getKeyMeta = k => ({ name: k, color: getColor(k), zodiac: getZodiac(parseInt(k, 10), y), numbers: [k] });
+            }
+
+            // Historical tracking of rank hit omissions (位次本身连续未出期数)
+            let runningOmission = {};
+            keys.forEach(k => { runningOmission[k] = 0; });
+            let rankMiss = Array.from({ length: keys.length }, () => 0);
+            let rankLastHit = Array.from({ length: keys.length }, () => null);
+
+            for (let i = 0; i < dataToUse.length; i++) {
+                const item = dataToUse[i];
+                // Sort keys by current running omission descending before this draw
+                const rankedKeys = keys.slice().sort((a, b) => runningOmission[b] - runningOmission[a] || a.localeCompare(b));
+                const drawn = getDrawnKeys(item);
+                const drawnRanks = drawn.map(k => rankedKeys.indexOf(k)).filter(r => r !== -1);
+
+                for (let r = 0; r < keys.length; r++) {
+                    if (drawnRanks.includes(r)) {
+                        rankMiss[r] = 0;
+                        rankLastHit[r] = item.expect;
+                    } else {
+                        rankMiss[r]++;
+                    }
+                }
+
+                keys.forEach(k => {
+                    if (drawn.includes(k)) runningOmission[k] = 0;
+                    else runningOmission[k]++;
+                });
+            }
+
+            // Current ranking (Rank 1 = coldest / highest omission, Rank N = hottest / lowest omission)
+            const currentRankedKeys = keys.slice().sort((a, b) => runningOmission[b] - runningOmission[a] || a.localeCompare(b));
+
+            const allRankItems = currentRankedKeys.map((key, idx) => {
+                const meta = getKeyMeta(key);
+                return {
+                    rank: idx + 1,
+                    key: key,
+                    name: meta.name,
+                    color: meta.color,
+                    zodiac: meta.zodiac,
+                    numbers: meta.numbers,
+                    rankOmission: rankMiss[idx],
+                    keyOmission: runningOmission[key],
+                    lastHitExpect: rankLastHit[idx]
+                };
+            });
+
+            if (mode === 'currentRank') {
+                return allRankItems.filter(it => it.keyOmission >= numThreshold);
+            } else {
+                return allRankItems.filter(it => it.rankOmission >= numThreshold);
+            }
+        }
+
+        function getOmissionOverThresholdItems(threshold = 60, type = 'teNum', sourceData = state.historyData) {
+            const mode = document.getElementById('coldOmissionRankModeSel')?.value || 'rankHit';
+            return getOmissionRankAnalysis(threshold, type, mode, sourceData);
+        }
+
+        function getOmissionOverThresholdNumbers(sourceData, threshold = 60, type = 'teNum', mode = null) {
+            const actualMode = mode || document.getElementById('coldOmissionRankModeSel')?.value || 'rankHit';
+            const items = getOmissionRankAnalysis(threshold, type, actualMode, sourceData);
+            const numSet = new Set();
+            items.forEach(it => {
+                (it.numbers || []).forEach(n => numSet.add(n));
+            });
+            return Array.from(numSet).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+        }
+
+        function getEffectiveOmissionThreshold() {
+            const sel = document.getElementById('coldOmissionThresholdSel');
+            const customInput = document.getElementById('coldOmissionThresholdCustom');
+            if (!sel) return 60;
+            if (sel.value === 'custom') {
+                return Math.max(1, parseInt(customInput?.value, 10) || 60);
+            }
+            return parseInt(sel.value, 10) || 60;
+        }
+
+        function onOmissionThresholdParamChange() {
+            const sel = document.getElementById('coldOmissionThresholdSel');
+            const customInput = document.getElementById('coldOmissionThresholdCustom');
+            if (sel && customInput) {
+                customInput.style.display = sel.value === 'custom' ? 'inline-block' : 'none';
+            }
+            updateOmissionThresholdDisplay();
+            const cb = document.getElementById('coldOption_omissionOverThreshold');
+            if (cb && cb.checked) {
+                requestLivePreviewUpdate(true);
+                requestColdKlineUpdate(true);
+            }
+        }
+
+        function onOmissionOverThresholdChange() {
+            updateOmissionThresholdDisplay();
+            requestLivePreviewUpdate(true);
+            requestColdKlineUpdate(true);
+        }
+
+        function updateOmissionThresholdDisplay() {
+            const listEl = document.getElementById('omissionThresholdList');
+            const countEl = document.getElementById('omissionThresholdCount');
+            const noteEl = document.getElementById('omissionThresholdSummaryNote');
+            if (!listEl) return;
+
+            const threshold = getEffectiveOmissionThreshold();
+            const type = document.getElementById('coldOmissionThresholdTypeSel')?.value || 'teNum';
+            const mode = document.getElementById('coldOmissionRankModeSel')?.value || 'rankHit';
+            const items = getOmissionRankAnalysis(threshold, type, mode, getSelectedColdSourceData());
+
+            const typeNames = {
+                teNum: '特码遗漏位次',
+                teZodiac: '特码生肖位次',
+                teTail: '特码尾数位次',
+                pingNum: '平特号码位次',
+                pingZodiac: '平特生肖位次'
+            };
+            const typeName = typeNames[type] || '位次';
+
+            if (countEl) countEl.textContent = String(items.length);
+
+            if (items.length === 0) {
+                if (noteEl) noteEl.textContent = `(暂无超过 ${threshold} 期的位次)`;
+                listEl.innerHTML = `<div style="color:var(--text-secondary);font-size:11px;padding:6px 0;">当前暂无遗漏排序位次未出超过 ${threshold} 期的${typeName}</div>`;
+                return;
+            }
+
+            const rankLabels = items.map(it => `第${it.rank}位`);
+            if (noteEl) {
+                if (mode === 'currentRank') {
+                    noteEl.textContent = `(当前号码遗漏 ≥ ${threshold} 期: ${rankLabels.join('、')})`;
+                } else {
+                    noteEl.textContent = `(该位次连续未出 ≥ ${threshold} 期: ${rankLabels.join('、')})`;
+                }
+            }
+
+            listEl.innerHTML = items.map(it => {
+                const miss = mode === 'currentRank' ? it.keyOmission : it.rankOmission;
+                const isUltra = miss >= (type === 'teZodiac' || type === 'teTail' ? 30 : 80);
+                const missLabel = mode === 'currentRank' ? '当前遗漏' : '连续未出';
+
+                let targetHtml = '';
+                if (type === 'teNum' || type === 'pingNum') {
+                    targetHtml = `
+                        <span class="preview-ball-item ${it.color}" style="width:20px;height:20px;font-size:9.5px;vertical-align:middle;">
+                            <span>${it.key}</span>
+                            <span class="ball-zodiac-tag">${it.zodiac}</span>
+                        </span>
+                    `;
+                } else if (type === 'teTail') {
+                    targetHtml = `
+                        <span class="om-zodiac-circle" style="width:20px;height:20px;font-size:9.5px;background:rgba(255,145,0,0.18);color:#ff9100;border:1px solid rgba(255,145,0,0.35);">
+                            ${it.name}
+                        </span>
+                    `;
+                } else {
+                    targetHtml = `
+                        <span class="om-zodiac-circle" style="width:20px;height:20px;font-size:9.5px;">
+                            ${it.name}
+                        </span>
+                    `;
+                }
+
+                return `
+                    <div class="om-rank-card ${isUltra ? 'ultra' : ''}" onclick="copySingleRankInfo(${it.rank}, '${it.key}', ${miss}, '${it.zodiac || ''}', '${mode}')" title="遗漏排序第 ${it.rank} 位：当前对应 ${it.key} ${it.zodiac ? '(' + it.zodiac + ')' : ''}，${missLabel} ${miss} 期，点击复制该位次信息">
+                        <span class="om-rank-title-badge">第 ${it.rank} 位</span>
+                        <span class="om-rank-miss-badge ${isUltra ? 'ultra' : ''}">${miss}期</span>
+                        <span class="om-rank-target-tag">
+                            ${targetHtml}
+                        </span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function copySingleRankInfo(rank, key, miss, zodiac, mode) {
+            const modeText = mode === 'currentRank' ? '当前号码遗漏' : '连续未出';
+            const zodStr = zodiac ? ` (${zodiac})` : '';
+            const txt = `遗漏排序第 ${rank} 位 [${modeText} ${miss}期, 当前对应: ${key}${zodStr}]`;
+            navigator.clipboard.writeText(txt).then(() => {
+                if (typeof showToast === 'function') {
+                    showToast(`📋 已复制: ${txt}`, 2000);
+                } else {
+                    showNotification(`已复制: ${txt}`);
+                }
+            }).catch(() => {
+                showNotification(`复制: ${txt}`);
+            });
+        }
+
+        function copyOmissionThresholdRankText() {
+            const threshold = getEffectiveOmissionThreshold();
+            const type = document.getElementById('coldOmissionThresholdTypeSel')?.value || 'teNum';
+            const mode = document.getElementById('coldOmissionRankModeSel')?.value || 'rankHit';
+            const items = getOmissionRankAnalysis(threshold, type, mode, getSelectedColdSourceData());
+            if (items.length === 0) {
+                showNotification(`当前没有未出超过 ${threshold} 期的位次`);
+                return;
+            }
+            const modeLabel = mode === 'currentRank' ? '当前遗漏' : '位次未出';
+            const details = items.map(it => {
+                const miss = mode === 'currentRank' ? it.keyOmission : it.rankOmission;
+                const zod = it.zodiac ? `(${it.zodiac})` : '';
+                return `第${it.rank}位[${miss}期,码${it.key}${zod}]`;
+            }).join(', ');
+            const txt = `遗漏排序超 ${threshold} 期未出位次 (共 ${items.length} 个位次, ${modeLabel}): ${details}`;
+            navigator.clipboard.writeText(txt).then(() => {
+                if (typeof showToast === 'function') {
+                    showToast(`📋 已复制 ${items.length} 个超 ${threshold} 期位次信息`, 2500);
+                } else {
+                    showNotification(`已复制 ${items.length} 个位次`);
+                }
+            }).catch(() => {
+                showNotification(`已复制位次列表`);
+            });
+        }
+
+        function copyOmissionThresholdNumbers() {
+            const threshold = getEffectiveOmissionThreshold();
+            const type = document.getElementById('coldOmissionThresholdTypeSel')?.value || 'teNum';
+            const mode = document.getElementById('coldOmissionRankModeSel')?.value || 'rankHit';
+            const numbers = getOmissionOverThresholdNumbers(getSelectedColdSourceData(), threshold, type, mode);
+            if (numbers.length === 0) {
+                showNotification(`当前没有未出超过 ${threshold} 期的号码`);
+                return;
+            }
+            const txt = numbers.join(',');
+            navigator.clipboard.writeText(txt).then(() => {
+                if (typeof showToast === 'function') {
+                    showToast(`📋 已复制 ${numbers.length} 个超期位次对应号码: ${txt}`, 2500);
+                } else {
+                    showNotification(`已复制 ${numbers.length} 个号码: ${txt}`);
+                }
+            }).catch(() => {
+                showNotification(`已复制: ${txt}`);
+            });
+        }
+
+        function fillOmissionThresholdToInput() {
+            const threshold = getEffectiveOmissionThreshold();
+            const type = document.getElementById('coldOmissionThresholdTypeSel')?.value || 'teNum';
+            const mode = document.getElementById('coldOmissionRankModeSel')?.value || 'rankHit';
+            const numbers = getOmissionOverThresholdNumbers(getSelectedColdSourceData(), threshold, type, mode);
+            if (numbers.length === 0) {
+                showNotification(`当前没有未出超过 ${threshold} 期的号码`);
+                return;
+            }
+            const inputEl = document.getElementById('coldOption_inputNumbers');
+            if (inputEl) {
+                const currentVal = inputEl.value.trim();
+                const newVals = currentVal ? `${currentVal},${numbers.join(',')}` : numbers.join(',');
+                inputEl.value = newVals;
+                updateLiveSelectionPreview();
+                requestColdKlineUpdate(true);
+                if (typeof showToast === 'function') {
+                    showToast(`➕ 已将 ${numbers.length} 个超期位次号码填入自选区`, 2000);
+                } else {
+                    showNotification(`已填入 ${numbers.length} 个号码到自选区`);
+                }
+            }
+        }
+
+        function syncOmissionRankToSliders() {
+            const threshold = getEffectiveOmissionThreshold();
+            const type = document.getElementById('coldOmissionThresholdTypeSel')?.value || 'teNum';
+            const mode = document.getElementById('coldOmissionRankModeSel')?.value || 'rankHit';
+            const items = getOmissionRankAnalysis(threshold, type, mode, getSelectedColdSourceData());
+
+            if (items.length === 0) {
+                showNotification(`当前没有未出超过 ${threshold} 期的位次可同步`);
+                return;
+            }
+
+            let rangeType = 'omissionRange';
+            let unit = '码';
+            let maxVal = 49;
+            if (type === 'teNum') {
+                rangeType = 'omissionRange';
+                unit = '码';
+                maxVal = 49;
+            } else if (type === 'teZodiac') {
+                rangeType = 'omissionZodiacRange';
+                unit = '肖';
+                maxVal = 12;
+            } else if (type === 'pingNum') {
+                rangeType = 'pingOmissionRange';
+                unit = '码';
+                maxVal = 49;
+            } else if (type === 'pingZodiac') {
+                rangeType = 'pingOmissionZodiacRange';
+                unit = '肖';
+                maxVal = 12;
+            }
+
+            const cb = document.getElementById(`coldOption_${rangeType}`);
+            const sEl = document.getElementById(`coldOption_${rangeType}_start`);
+            const eEl = document.getElementById(`coldOption_${rangeType}_end`);
+            if (!cb || !sEl || !eEl) return;
+
+            const ranks = items.map(it => it.rank).sort((a, b) => a - b);
+            const minRank = ranks[0];
+            const maxRank = ranks[ranks.length - 1];
+
+            // If contiguous from minRank to maxRank, or in currentRank mode:
+            sEl.value = minRank;
+            eEl.value = maxRank;
+            cb.checked = true;
+            if (typeof onDualSliderChange === 'function') {
+                onDualSliderChange(rangeType, maxVal, unit, false);
+            }
+
+            // Also add individual discrete non-contiguous ranks as segments if in rankHit mode
+            if (mode === 'rankHit' && ranks.length > 1 && (maxRank - minRank + 1 > ranks.length)) {
+                if (typeof clearRangeSegments === 'function') clearRangeSegments(rangeType);
+                const segments = getRangeSegments(rangeType);
+                // Group contiguous ranks into segments
+                let segStart = ranks[0];
+                let prev = ranks[0];
+                for (let i = 1; i < ranks.length; i++) {
+                    if (ranks[i] === prev + 1) {
+                        prev = ranks[i];
+                    } else {
+                        segments.push({ start: segStart, end: prev });
+                        segStart = ranks[i];
+                        prev = ranks[i];
+                    }
+                }
+                segments.push({ start: segStart, end: prev });
+                if (typeof renderRangeSegments === 'function') renderRangeSegments(rangeType);
+                showToast(`🎯 已同步 ${items.length} 个超期位次到 [${rangeType === 'omissionRange' ? '特码遗漏码区' : '遗漏肖区'}] 多段选区`, 2500);
+            } else {
+                showToast(`🎯 已同步设定 [第 ${minRank} ~ ${maxRank} 位] 至滑块选区`, 2200);
+            }
+
+            requestLivePreviewUpdate(true);
+            requestColdKlineUpdate(true);
+        }
+
+        // ==================== 冷热排序位次未出分析与控制 (冷热选号因子) ====================
+        function getHotColdRankAnalysis(threshold = 60, type = 'allHotNum', mode = 'rankHit', sourceData = null) {
+            const dataToUse = (sourceData && sourceData.length > 0) ? sourceData : ((state.historyData && state.historyData.length > 0) ? state.historyData : []);
+            const numThreshold = parseInt(threshold, 10) || 60;
+            const y = state.currentYear;
+            const allNumbers = Array.from({ length: 49 }, (_, i) => (i + 1).toString().padStart(2, '0'));
+            const zodiacs = CONFIG.zodiacMap[y] || ['鼠','牛','虎','兔','龙','蛇','马','羊','猴','鸡','狗','猪'];
+            const heads = Array.from({ length: 5 }, (_, i) => `${i}头`);
+            const tails = Array.from({ length: 10 }, (_, i) => `${i}尾`);
+
+            let keys, getDrawnKeys, getKeyMeta;
+            if (type === 'allHotNum') {
+                keys = allNumbers;
+                getDrawnKeys = item => {
+                    const wn = item.winNum != null ? item.winNum : '';
+                    return [wn.toString().padStart(2, '0')];
+                };
+                getKeyMeta = k => ({
+                    name: k,
+                    color: getColor(k),
+                    zodiac: getZodiac(parseInt(k, 10), y),
+                    numbers: [k]
+                });
+            } else if (type === 'hotNum') {
+                keys = allNumbers;
+                getDrawnKeys = item => getAllDrawNumbers(item);
+                getKeyMeta = k => ({
+                    name: k,
+                    color: getColor(k),
+                    zodiac: getZodiac(parseInt(k, 10), y),
+                    numbers: [k]
+                });
+            } else if (type === 'allHotZodiac') {
+                keys = zodiacs;
+                getDrawnKeys = item => [item.win || ''];
+                getKeyMeta = k => ({
+                    name: k,
+                    color: 'zodiac',
+                    zodiac: k,
+                    numbers: allNumbers.filter(n => getZodiac(parseInt(n, 10), y) === k)
+                });
+            } else if (type === 'hotZodiac') {
+                keys = zodiacs;
+                getDrawnKeys = item => getAllDrawZodiacs(item);
+                getKeyMeta = k => ({
+                    name: k,
+                    color: 'zodiac',
+                    zodiac: k,
+                    numbers: allNumbers.filter(n => getZodiac(parseInt(n, 10), y) === k)
+                });
+            } else if (type === 'allHotHead') {
+                keys = heads;
+                getDrawnKeys = item => {
+                    const wn = typeof item.winNum === 'number' ? item.winNum : parseInt(item.winNum, 10);
+                    return isNaN(wn) ? [] : [`${Math.floor(wn / 10)}头`];
+                };
+                getKeyMeta = k => {
+                    const h = parseInt(k, 10);
+                    return {
+                        name: k,
+                        color: 'head',
+                        zodiac: '',
+                        numbers: allNumbers.filter(n => Math.floor(parseInt(n, 10) / 10) === h)
+                    };
+                };
+            } else if (type === 'allHotTail') {
+                keys = tails;
+                getDrawnKeys = item => {
+                    const wn = typeof item.winNum === 'number' ? item.winNum : parseInt(item.winNum, 10);
+                    return isNaN(wn) ? [] : [`${wn % 10}尾`];
+                };
+                getKeyMeta = k => {
+                    const t = parseInt(k, 10);
+                    return {
+                        name: k,
+                        color: 'tail',
+                        zodiac: '',
+                        numbers: allNumbers.filter(n => parseInt(n, 10) % 10 === t)
+                    };
+                };
+            } else {
+                keys = allNumbers;
+                getDrawnKeys = item => [item.winNum.toString().padStart(2, '0')];
+                getKeyMeta = k => ({ name: k, color: getColor(k), zodiac: getZodiac(parseInt(k, 10), y), numbers: [k] });
+            }
+
+            const windowSize = (typeof getEffectiveColdWindow === 'function') ? getEffectiveColdWindow() : 50;
+            const actualWin = windowSize === Infinity ? dataToUse.length : Math.max(10, windowSize || 50);
+
+            let rankMiss = Array.from({ length: keys.length }, () => 0);
+            let rankLastHit = Array.from({ length: keys.length }, () => null);
+            let runningOmission = {};
+            keys.forEach(k => { runningOmission[k] = 0; });
+
+            for (let i = 0; i < dataToUse.length; i++) {
+                const item = dataToUse[i];
+                const startIdx = Math.max(0, i - actualWin);
+                let freq = {};
+                keys.forEach(k => { freq[k] = 0; });
+                for (let j = startIdx; j < i; j++) {
+                    const drawnPast = getDrawnKeys(dataToUse[j]);
+                    drawnPast.forEach(k => { if (freq[k] !== undefined) freq[k]++; });
+                }
+
+                const rankedKeys = keys.slice().sort((a, b) => freq[b] - freq[a] || runningOmission[b] - runningOmission[a] || a.localeCompare(b));
+                const drawnCur = getDrawnKeys(item);
+                const drawnRanks = drawnCur.map(k => rankedKeys.indexOf(k)).filter(r => r !== -1);
+
+                for (let r = 0; r < keys.length; r++) {
+                    if (drawnRanks.includes(r)) {
+                        rankMiss[r] = 0;
+                        rankLastHit[r] = item.expect;
+                    } else {
+                        rankMiss[r]++;
+                    }
+                }
+
+                keys.forEach(k => {
+                    if (drawnCur.includes(k)) runningOmission[k] = 0;
+                    else runningOmission[k]++;
+                });
+            }
+
+            // Current window frequency ranking
+            const curStart = Math.max(0, dataToUse.length - actualWin);
+            let curFreq = {};
+            keys.forEach(k => { curFreq[k] = 0; });
+            for (let j = curStart; j < dataToUse.length; j++) {
+                const drawnPast = getDrawnKeys(dataToUse[j]);
+                drawnPast.forEach(k => { if (curFreq[k] !== undefined) curFreq[k]++; });
+            }
+
+            const currentRanked = keys.slice().sort((a, b) => curFreq[b] - curFreq[a] || runningOmission[b] - runningOmission[a] || a.localeCompare(b));
+
+            const allItems = currentRanked.map((key, idx) => {
+                const meta = getKeyMeta(key);
+                return {
+                    rank: idx + 1,
+                    key: key,
+                    name: meta.name,
+                    color: meta.color,
+                    zodiac: meta.zodiac,
+                    numbers: meta.numbers,
+                    freq: curFreq[key] || 0,
+                    rankOmission: rankMiss[idx],
+                    keyOmission: runningOmission[key],
+                    lastHitExpect: rankLastHit[idx]
+                };
+            });
+
+            let filtered = [];
+            if (mode === 'currentRank') {
+                filtered = allItems.filter(it => it.keyOmission >= numThreshold);
+                filtered.sort((a, b) => b.keyOmission - a.keyOmission || a.rank - b.rank);
+            } else {
+                filtered = allItems.filter(it => it.rankOmission >= numThreshold);
+                filtered.sort((a, b) => b.rankOmission - a.rankOmission || a.rank - b.rank);
+            }
+            return filtered;
+        }
+
+        function getHotColdOverThresholdNumbers(sourceData, threshold = 60, type = 'allHotNum', mode = null) {
+            const actualMode = mode || document.getElementById('coldHotRankModeSel')?.value || 'rankHit';
+            const items = getHotColdRankAnalysis(threshold, type, actualMode, sourceData);
+            const numSet = new Set();
+            items.forEach(it => {
+                (it.numbers || []).forEach(n => numSet.add(n));
+            });
+            return Array.from(numSet).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+        }
+
+        function getEffectiveHotColdThreshold() {
+            const sel = document.getElementById('coldHotThresholdSel');
+            const customInput = document.getElementById('coldHotThresholdCustom');
+            if (!sel) return 60;
+            if (sel.value === 'custom') {
+                return Math.max(1, parseInt(customInput?.value, 10) || 60);
+            }
+            return parseInt(sel.value, 10) || 60;
+        }
+
+        function onHotColdThresholdParamChange() {
+            const sel = document.getElementById('coldHotThresholdSel');
+            const customInput = document.getElementById('coldHotThresholdCustom');
+            if (sel && customInput) {
+                customInput.style.display = sel.value === 'custom' ? 'inline-block' : 'none';
+            }
+            updateHotColdThresholdDisplay();
+            const cb = document.getElementById('coldOption_hotColdOverThreshold');
+            if (cb && cb.checked) {
+                requestLivePreviewUpdate(true);
+                requestColdKlineUpdate(true);
+            }
+        }
+
+        function onHotColdThresholdChange() {
+            updateHotColdThresholdDisplay();
+            requestLivePreviewUpdate(true);
+            requestColdKlineUpdate(true);
+        }
+
+        function updateHotColdThresholdDisplay() {
+            const listEl = document.getElementById('hotColdThresholdList');
+            const countEl = document.getElementById('hotColdThresholdCount');
+            const noteEl = document.getElementById('hotColdThresholdSummaryNote');
+            if (!listEl) return;
+
+            const threshold = getEffectiveHotColdThreshold();
+            const type = document.getElementById('coldHotThresholdTypeSel')?.value || 'allHotNum';
+            const mode = document.getElementById('coldHotRankModeSel')?.value || 'rankHit';
+            const items = getHotColdRankAnalysis(threshold, type, mode, getSelectedColdSourceData());
+
+            const typeNames = {
+                allHotNum: '特码冷热位次',
+                hotNum: '平特冷热位次',
+                allHotZodiac: '特码冷热肖位次',
+                hotZodiac: '平特冷热肖位次',
+                allHotHead: '特码冷热头数位次',
+                allHotTail: '特码冷热尾数位次'
+            };
+            const typeName = typeNames[type] || '位次';
+
+            if (countEl) countEl.textContent = String(items.length);
+
+            if (items.length === 0) {
+                if (noteEl) noteEl.textContent = `(暂无超过 ${threshold} 期的冷热位次)`;
+                listEl.innerHTML = `<div style="color:var(--text-secondary);font-size:11px;padding:6px 0;">当前暂无冷热排序位次未出超过 ${threshold} 期的${typeName}</div>`;
+                return;
+            }
+
+            const rankLabels = items.map(it => `第${it.rank}位`);
+            if (noteEl) {
+                if (mode === 'currentRank') {
+                    noteEl.textContent = `(当前号码遗漏 ≥ ${threshold} 期: ${rankLabels.join('、')})`;
+                } else {
+                    noteEl.textContent = `(冷热位次未出 ≥ ${threshold} 期: ${rankLabels.join('、')})`;
+                }
+            }
+
+            listEl.innerHTML = items.map(it => {
+                const miss = mode === 'currentRank' ? it.keyOmission : it.rankOmission;
+                const isUltra = miss >= (type.includes('Head') ? 15 : (type.includes('Zodiac') || type.includes('Tail') ? 30 : 80));
+                const missLabel = mode === 'currentRank' ? '当前遗漏' : '连续未出';
+
+                let targetHtml = '';
+                if (type === 'allHotNum' || type === 'hotNum') {
+                    targetHtml = `
+                        <span class="preview-ball-item ${it.color}" style="width:20px;height:20px;font-size:9.5px;vertical-align:middle;">
+                            <span>${it.key}</span>
+                            <span class="ball-zodiac-tag">${it.zodiac}</span>
+                        </span>
+                        <span style="font-size:9.5px;color:#ff9100;font-weight:700;margin-left:2px;">${it.freq}次</span>
+                    `;
+                } else if (type === 'allHotHead' || type === 'allHotTail') {
+                    targetHtml = `
+                        <span class="om-zodiac-circle" style="width:22px;height:22px;font-size:9.5px;background:rgba(255,145,0,0.18);color:#ff9100;border:1px solid rgba(255,145,0,0.35);">
+                            ${it.name}
+                        </span>
+                        <span style="font-size:9.5px;color:#ff9100;font-weight:700;margin-left:2px;">${it.freq}次</span>
+                    `;
+                } else {
+                    targetHtml = `
+                        <span class="om-zodiac-circle" style="width:20px;height:20px;font-size:9.5px;">
+                            ${it.name}
+                        </span>
+                        <span style="font-size:9.5px;color:#ff9100;font-weight:700;margin-left:2px;">${it.freq}次</span>
+                    `;
+                }
+
+                return `
+                    <div class="om-rank-card ${isUltra ? 'ultra' : ''}" onclick="copySingleHotColdRankInfo(${it.rank}, '${it.key}', ${miss}, ${it.freq}, '${it.zodiac || ''}', '${mode}')" title="冷热排序第 ${it.rank} 位：当前对应 ${it.key} ${it.zodiac ? '(' + it.zodiac + ')' : ''} (频次 ${it.freq} 次)，${missLabel} ${miss} 期，点击复制该位次信息">
+                        <span class="om-rank-title-badge" style="color:#ff9100;background:rgba(255,145,0,0.18);border-color:rgba(255,145,0,0.45);">第 ${it.rank} 位</span>
+                        <span class="om-rank-miss-badge ${isUltra ? 'ultra' : ''}">${miss}期</span>
+                        <span class="om-rank-target-tag">
+                            ${targetHtml}
+                        </span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function copySingleHotColdRankInfo(rank, key, miss, freq, zodiac, mode) {
+            const modeText = mode === 'currentRank' ? '当前号码遗漏' : '连续未出';
+            const zodStr = zodiac ? ` (${zodiac})` : '';
+            const txt = `冷热排序第 ${rank} 位 [${modeText} ${miss}期, 当前对应: ${key}${zodStr}, 频次: ${freq}次]`;
+            navigator.clipboard.writeText(txt).then(() => {
+                if (typeof showToast === 'function') {
+                    showToast(`📋 已复制: ${txt}`, 2000);
+                } else {
+                    showNotification(`已复制: ${txt}`);
+                }
+            }).catch(() => {
+                showNotification(`复制: ${txt}`);
+            });
+        }
+
+        function copyHotColdThresholdRankText() {
+            const threshold = getEffectiveHotColdThreshold();
+            const type = document.getElementById('coldHotThresholdTypeSel')?.value || 'allHotNum';
+            const mode = document.getElementById('coldHotRankModeSel')?.value || 'rankHit';
+            const items = getHotColdRankAnalysis(threshold, type, mode, getSelectedColdSourceData());
+            if (items.length === 0) {
+                showNotification(`当前没有未出超过 ${threshold} 期的冷热位次`);
+                return;
+            }
+            const modeLabel = mode === 'currentRank' ? '当前遗漏' : '位次未出';
+            const details = items.map(it => {
+                const miss = mode === 'currentRank' ? it.keyOmission : it.rankOmission;
+                const zod = it.zodiac ? `(${it.zodiac})` : '';
+                return `第${it.rank}位[${miss}期,码${it.key}${zod},频次${it.freq}]`;
+            }).join(', ');
+            const txt = `冷热排序超 ${threshold} 期未出位次 (共 ${items.length} 个位次, ${modeLabel}): ${details}`;
+            navigator.clipboard.writeText(txt).then(() => {
+                if (typeof showToast === 'function') {
+                    showToast(`📋 已复制 ${items.length} 个超 ${threshold} 期冷热位次信息`, 2500);
+                } else {
+                    showNotification(`已复制 ${items.length} 个冷热位次`);
+                }
+            }).catch(() => {
+                showNotification(`已复制冷热位次列表`);
+            });
+        }
+
+        function copyHotColdThresholdNumbers() {
+            const threshold = getEffectiveHotColdThreshold();
+            const type = document.getElementById('coldHotThresholdTypeSel')?.value || 'allHotNum';
+            const mode = document.getElementById('coldHotRankModeSel')?.value || 'rankHit';
+            const numbers = getHotColdOverThresholdNumbers(getSelectedColdSourceData(), threshold, type, mode);
+            if (numbers.length === 0) {
+                showNotification(`当前没有未出超过 ${threshold} 期的号码`);
+                return;
+            }
+            const txt = numbers.join(',');
+            navigator.clipboard.writeText(txt).then(() => {
+                if (typeof showToast === 'function') {
+                    showToast(`📋 已复制 ${numbers.length} 个超期冷热位次对应号码: ${txt}`, 2500);
+                } else {
+                    showNotification(`已复制 ${numbers.length} 个号码: ${txt}`);
+                }
+            }).catch(() => {
+                showNotification(`已复制: ${txt}`);
+            });
+        }
+
+        function fillHotColdThresholdToInput() {
+            const threshold = getEffectiveHotColdThreshold();
+            const type = document.getElementById('coldHotThresholdTypeSel')?.value || 'allHotNum';
+            const mode = document.getElementById('coldHotRankModeSel')?.value || 'rankHit';
+            const numbers = getHotColdOverThresholdNumbers(getSelectedColdSourceData(), threshold, type, mode);
+            if (numbers.length === 0) {
+                showNotification(`当前没有未出超过 ${threshold} 期的号码`);
+                return;
+            }
+            const inputEl = document.getElementById('coldOption_inputNumbers');
+            if (inputEl) {
+                const currentVal = inputEl.value.trim();
+                const newVals = currentVal ? `${currentVal},${numbers.join(',')}` : numbers.join(',');
+                inputEl.value = newVals;
+                updateLiveSelectionPreview();
+                requestColdKlineUpdate(true);
+                if (typeof showToast === 'function') {
+                    showToast(`➕ 已将 ${numbers.length} 个超期冷热位次号码填入自选区`, 2000);
+                } else {
+                    showNotification(`已填入 ${numbers.length} 个号码到自选区`);
+                }
+            }
+        }
+
+        function syncHotColdRankToSliders() {
+            const threshold = getEffectiveHotColdThreshold();
+            const type = document.getElementById('coldHotThresholdTypeSel')?.value || 'allHotNum';
+            const mode = document.getElementById('coldHotRankModeSel')?.value || 'rankHit';
+            const items = getHotColdRankAnalysis(threshold, type, mode, getSelectedColdSourceData());
+
+            if (items.length === 0) {
+                showNotification(`当前没有未出超过 ${threshold} 期的冷热位次可同步`);
+                return;
+            }
+
+            let rangeType = 'allHotNumberRange';
+            let unit = '码';
+            let maxVal = 49;
+            if (type === 'allHotNum') {
+                rangeType = 'allHotNumberRange';
+                unit = '码';
+                maxVal = 49;
+            } else if (type === 'hotNum') {
+                rangeType = 'hotNumberRange';
+                unit = '码';
+                maxVal = 49;
+            } else if (type === 'allHotZodiac') {
+                rangeType = 'allHotZodiacRange';
+                unit = '肖';
+                maxVal = 12;
+            } else if (type === 'hotZodiac') {
+                rangeType = 'hotZodiacRange';
+                unit = '肖';
+                maxVal = 12;
+            } else if (type === 'allHotHead') {
+                rangeType = 'allHotHeadRange';
+                unit = '头';
+                maxVal = 5;
+            } else if (type === 'allHotTail') {
+                rangeType = 'allHotTailRange';
+                unit = '尾';
+                maxVal = 10;
+            }
+
+            const cb = document.getElementById(`coldOption_${rangeType}`);
+            const sEl = document.getElementById(`coldOption_${rangeType}_start`);
+            const eEl = document.getElementById(`coldOption_${rangeType}_end`);
+            if (!cb || !sEl || !eEl) return;
+
+            const ranks = items.map(it => it.rank).sort((a, b) => a - b);
+            const minRank = ranks[0];
+            const maxRank = ranks[ranks.length - 1];
+
+            sEl.value = minRank;
+            eEl.value = maxRank;
+            cb.checked = true;
+            if (typeof onDualSliderChange === 'function') {
+                onDualSliderChange(rangeType, maxVal, unit, false);
+            }
+
+            const rangeNames = {
+                allHotNumberRange: '特码热码区',
+                hotNumberRange: '平特热码区',
+                allHotZodiacRange: '特码热肖区',
+                hotZodiacRange: '平特热肖区',
+                allHotHeadRange: '特码热头区',
+                allHotTailRange: '特码热尾区'
+            };
+            const rName = rangeNames[rangeType] || '冷热滑块选区';
+
+            if (mode === 'rankHit' && ranks.length > 1 && (maxRank - minRank + 1 > ranks.length)) {
+                if (typeof clearRangeSegments === 'function') clearRangeSegments(rangeType);
+                const segments = getRangeSegments(rangeType);
+                let segStart = ranks[0];
+                let prev = ranks[0];
+                for (let i = 1; i < ranks.length; i++) {
+                    if (ranks[i] === prev + 1) {
+                        prev = ranks[i];
+                    } else {
+                        segments.push({ start: segStart, end: prev });
+                        segStart = ranks[i];
+                        prev = ranks[i];
+                    }
+                }
+                segments.push({ start: segStart, end: prev });
+                if (typeof renderRangeSegments === 'function') renderRangeSegments(rangeType);
+                showToast(`🎯 已同步 ${items.length} 个超期冷热位次到 [${rName}] 多段选区`, 2500);
+            } else {
+                showToast(`🎯 已同步设定 [第 ${minRank} ~ ${maxRank} 位] 至 [${rName}] 滑块选区`, 2200);
+            }
+
+            requestLivePreviewUpdate(true);
+            requestColdKlineUpdate(true);
+        }
+
         function getHotNumberRange(sourceData, startRank = 1, endRank = 10) {
             const keys = Array.from({ length: 49 }, (_, i) => (i + 1).toString().padStart(2, '0'));
             const counts = calculateFrequencyCounts(keys, item => getAllDrawNumbers(item), sourceData);
@@ -6935,6 +7911,30 @@
             return sorted.slice(s - 1, e);
         }
 
+        function getAllHotHeadRange(sourceData, startRank = 1, endRank = 2) {
+            const keys = ['0头', '1头', '2头', '3头', '4头'];
+            const counts = calculateFrequencyCounts(keys, item => {
+                const wn = typeof item.winNum === 'number' ? item.winNum : parseInt(item.winNum, 10);
+                return isNaN(wn) ? '' : `${Math.floor(wn / 10)}头`;
+            }, sourceData);
+            const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(item => item[0]);
+            const s = Math.max(1, Math.min(5, Math.min(startRank, endRank)));
+            const e = Math.max(1, Math.min(5, Math.max(startRank, endRank)));
+            return sorted.slice(s - 1, e);
+        }
+
+        function getAllHotTailRange(sourceData, startRank = 1, endRank = 3) {
+            const keys = Array.from({ length: 10 }, (_, i) => `${i}尾`);
+            const counts = calculateFrequencyCounts(keys, item => {
+                const wn = typeof item.winNum === 'number' ? item.winNum : parseInt(item.winNum, 10);
+                return isNaN(wn) ? '' : `${wn % 10}尾`;
+            }, sourceData);
+            const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(item => item[0]);
+            const s = Math.max(1, Math.min(10, Math.min(startRank, endRank)));
+            const e = Math.max(1, Math.min(10, Math.max(startRank, endRank)));
+            return sorted.slice(s - 1, e);
+        }
+
         function countColdConditionMatches(cold, rollingColdSets, ctx) {
             const { numStr, winZ, winNum, color, headKey, tailKey, halfWaveKey, halfHeadKey, segment, regionKey, regionShort, jiaYe } = ctx;
             const waveDsKey = ctx.waveDsKey || halfWaveKey || getWaveDsKey(winNum);
@@ -6952,10 +7952,16 @@
             if (cold.types.includes('allColdNumbers') && rollingColdSets.allColdNumbers.includes(numStr)) matches++;
             if (cold.types.includes('allHotZodiacs') && rollingColdSets.allHotZodiacs.includes(winZ)) matches++;
             if (cold.types.includes('allColdZodiacs') && rollingColdSets.allColdZodiacs.includes(winZ)) matches++;
+            if (cold.types.includes('allHotHeads') && rollingColdSets.allHotHeads && rollingColdSets.allHotHeads.includes(headKey)) matches++;
+            if (cold.types.includes('allColdHeads') && rollingColdSets.allColdHeads && rollingColdSets.allColdHeads.includes(headKey)) matches++;
+            if (cold.types.includes('allHotTails') && rollingColdSets.allHotTails && rollingColdSets.allHotTails.includes(tailKey)) matches++;
+            if (cold.types.includes('allColdTails') && rollingColdSets.allColdTails && rollingColdSets.allColdTails.includes(tailKey)) matches++;
             if (cold.types.includes('hotNumberRange') && rollingColdSets.hotNumberRange && rollingColdSets.hotNumberRange.includes(numStr)) matches++;
             if (cold.types.includes('allHotNumberRange') && rollingColdSets.allHotNumberRange && rollingColdSets.allHotNumberRange.includes(numStr)) matches++;
             if (cold.types.includes('hotZodiacRange') && rollingColdSets.hotZodiacRange && rollingColdSets.hotZodiacRange.includes(winZ)) matches++;
             if (cold.types.includes('allHotZodiacRange') && rollingColdSets.allHotZodiacRange && rollingColdSets.allHotZodiacRange.includes(winZ)) matches++;
+            if (cold.types.includes('allHotHeadRange') && rollingColdSets.allHotHeadRange && rollingColdSets.allHotHeadRange.includes(headKey)) matches++;
+            if (cold.types.includes('allHotTailRange') && rollingColdSets.allHotTailRange && rollingColdSets.allHotTailRange.includes(tailKey)) matches++;
             if (cold.types.includes('selectZodiacs') && cold.selectedZodiacs && cold.selectedZodiacs.includes(winZ)) matches++;
             if (cold.types.includes('selectedWaves') && cold.selectedWaves && cold.selectedWaves.includes(color)) matches++;
             if (cold.types.includes('selectedWaveDs') && cold.selectedWaveDs && cold.selectedWaveDs.includes(waveDsKey)) matches++;
@@ -6997,6 +8003,8 @@
             if (cold.types.includes('omissionZodiacRange') && rollingColdSets.omissionZodiacRange && rollingColdSets.omissionZodiacRange.includes(winZ)) matches++;
             if (cold.types.includes('pingOmissionRange') && rollingColdSets.pingOmissionRange && rollingColdSets.pingOmissionRange.includes(numStr)) matches++;
             if (cold.types.includes('pingOmissionZodiacRange') && rollingColdSets.pingOmissionZodiacRange && rollingColdSets.pingOmissionZodiacRange.includes(winZ)) matches++;
+            if (cold.types.includes('omissionOverThreshold') && rollingColdSets.omissionOverThreshold && rollingColdSets.omissionOverThreshold.includes(numStr)) matches++;
+            if (cold.types.includes('hotColdOverThreshold') && rollingColdSets.hotColdOverThreshold && rollingColdSets.hotColdOverThreshold.includes(numStr)) matches++;
             if (cold.types.includes('inputNumbers')) {
                 const t = cold.inputTerms || { numbers: cold.selectedNumbers || [] };
                 if (
@@ -7035,7 +8043,9 @@
                     (rollingColdSets.inputHotNumberRangeNumbers && rollingColdSets.inputHotNumberRangeNumbers.includes(numStr)) ||
                     (rollingColdSets.inputAllHotNumberRangeNumbers && rollingColdSets.inputAllHotNumberRangeNumbers.includes(numStr)) ||
                     (rollingColdSets.inputHotZodiacRangeZodiacs && rollingColdSets.inputHotZodiacRangeZodiacs.includes(winZ)) ||
-                    (rollingColdSets.inputAllHotZodiacRangeZodiacs && rollingColdSets.inputAllHotZodiacRangeZodiacs.includes(winZ))
+                    (rollingColdSets.inputAllHotZodiacRangeZodiacs && rollingColdSets.inputAllHotZodiacRangeZodiacs.includes(winZ)) ||
+                    (rollingColdSets.inputAllHotHeadRangeHeads && rollingColdSets.inputAllHotHeadRangeHeads.includes(headKey)) ||
+                    (rollingColdSets.inputAllHotTailRangeTails && rollingColdSets.inputAllHotTailRangeTails.includes(tailKey))
                 ) matches++;
             }
             if (cold.types.includes('wave') && rollingColdSets.wave.includes(color)) matches++;
@@ -7063,6 +8073,10 @@
             if (types.includes('allColdNumbers')) sets.allColdNumbers = getAllCold10Numbers(hotColdSourceData, defaultCounts.allColdNumbers);
             if (types.includes('allHotZodiacs')) sets.allHotZodiacs = getAllHot3Zodiacs(hotColdSourceData, counts.allHotZodiacs || 3);
             if (types.includes('allColdZodiacs')) sets.allColdZodiacs = getAllCold3Zodiacs(hotColdSourceData, counts.allColdZodiacs || 3);
+            if (types.includes('allHotHeads')) sets.allHotHeads = getAllHotHeads(hotColdSourceData, counts.allHotHeads || 1);
+            if (types.includes('allColdHeads')) sets.allColdHeads = getAllColdHeads(hotColdSourceData, counts.allColdHeads || 1);
+            if (types.includes('allHotTails')) sets.allHotTails = getAllHotTails(hotColdSourceData, counts.allHotTails || 2);
+            if (types.includes('allColdTails')) sets.allColdTails = getAllColdTails(hotColdSourceData, counts.allColdTails || 2);
             if (types.includes('wave')) sets.wave = getColdWave(omissionSourceData);
             if (types.includes('halfwave')) sets.halfwave = getColdHalfWave(omissionSourceData, counts.halfwave || 1);
             if (types.includes('jiaYe')) sets.jiaYe = getColdJiaYe(omissionSourceData);
@@ -7115,6 +8129,24 @@
             if (types.includes('allHotZodiacRange')) {
                 sets.allHotZodiacRange = resolveRangeItems('allHotZodiacRange', getAllHotZodiacRange, hotColdSourceData);
             }
+            if (types.includes('allHotHeadRange')) {
+                sets.allHotHeadRange = resolveRangeItems('allHotHeadRange', getAllHotHeadRange, hotColdSourceData);
+            }
+            if (types.includes('allHotTailRange')) {
+                sets.allHotTailRange = resolveRangeItems('allHotTailRange', getAllHotTailRange, hotColdSourceData);
+            }
+            if (types.includes('omissionOverThreshold')) {
+                const threshold = counts.omissionThreshold || (typeof getEffectiveOmissionThreshold === 'function' ? getEffectiveOmissionThreshold() : 60);
+                const type = counts.omissionThresholdType || document.getElementById('coldOmissionThresholdTypeSel')?.value || 'teNum';
+                const mode = counts.omissionRankMode || document.getElementById('coldOmissionRankModeSel')?.value || 'rankHit';
+                sets.omissionOverThreshold = getOmissionOverThresholdNumbers(omissionSourceData, threshold, type, mode);
+            }
+            if (types.includes('hotColdOverThreshold')) {
+                const threshold = counts.hotColdThreshold || (typeof getEffectiveHotColdThreshold === 'function' ? getEffectiveHotColdThreshold() : 60);
+                const type = counts.hotColdThresholdType || document.getElementById('coldHotThresholdTypeSel')?.value || 'allHotNum';
+                const mode = counts.hotColdRankMode || document.getElementById('coldHotRankModeSel')?.value || 'rankHit';
+                sets.hotColdOverThreshold = getHotColdOverThresholdNumbers(omissionSourceData, threshold, type, mode);
+            }
             if (types.includes('inputNumbers') && counts.inputTerms) {
                 if (counts.inputTerms.omissionRanges) {
                     sets.inputOmissionRangeNumbers = [];
@@ -7164,6 +8196,18 @@
                         sets.inputAllHotZodiacRangeZodiacs.push(...getAllHotZodiacRange(hotColdSourceData, r.start, r.end));
                     });
                 }
+                if (counts.inputTerms.allHotHeadRanges) {
+                    sets.inputAllHotHeadRangeHeads = [];
+                    counts.inputTerms.allHotHeadRanges.forEach(r => {
+                        sets.inputAllHotHeadRangeHeads.push(...getAllHotHeadRange(hotColdSourceData, r.start, r.end));
+                    });
+                }
+                if (counts.inputTerms.allHotTailRanges) {
+                    sets.inputAllHotTailRangeTails = [];
+                    counts.inputTerms.allHotTailRanges.forEach(r => {
+                        sets.inputAllHotTailRangeTails.push(...getAllHotTailRange(hotColdSourceData, r.start, r.end));
+                    });
+                }
             }
             return sets;
         }
@@ -7189,8 +8233,14 @@
             if (sets.coldNumbers) sets.coldNumbers.forEach(addNumber);
             if (sets.allHotNumbers) sets.allHotNumbers.forEach(addNumber);
             if (sets.allColdNumbers) sets.allColdNumbers.forEach(addNumber);
+            if (sets.allHotHeads) sets.allHotHeads.forEach(head => addNumbersByFilter(num => `${Math.floor(parseInt(num, 10) / 10)}头` === head));
+            if (sets.allColdHeads) sets.allColdHeads.forEach(head => addNumbersByFilter(num => `${Math.floor(parseInt(num, 10) / 10)}头` === head));
+            if (sets.allHotTails) sets.allHotTails.forEach(tail => addNumbersByFilter(num => `${parseInt(num, 10) % 10}尾` === tail));
+            if (sets.allColdTails) sets.allColdTails.forEach(tail => addNumbersByFilter(num => `${parseInt(num, 10) % 10}尾` === tail));
             if (sets.hotNumberRange) sets.hotNumberRange.forEach(addNumber);
             if (sets.allHotNumberRange) sets.allHotNumberRange.forEach(addNumber);
+            if (sets.allHotHeadRange) sets.allHotHeadRange.forEach(head => addNumbersByFilter(num => `${Math.floor(parseInt(num, 10) / 10)}头` === head));
+            if (sets.allHotTailRange) sets.allHotTailRange.forEach(tail => addNumbersByFilter(num => `${parseInt(num, 10) % 10}尾` === tail));
 
             if (sets.zodiacs) sets.zodiacs.forEach(zodiac => addNumbersByFilter(num => getZodiac(parseInt(num, 10)) === zodiac));
             if (sets.hotZodiacs) sets.hotZodiacs.forEach(zodiac => addNumbersByFilter(num => getZodiac(parseInt(num, 10)) === zodiac));
@@ -7288,6 +8338,8 @@
                 if (sets.inputAllHotNumberRangeNumbers) sets.inputAllHotNumberRangeNumbers.forEach(addNumber);
                 if (sets.inputHotZodiacRangeZodiacs) sets.inputHotZodiacRangeZodiacs.forEach(zodiac => addNumbersByFilter(num => getZodiac(parseInt(num, 10)) === zodiac));
                 if (sets.inputAllHotZodiacRangeZodiacs) sets.inputAllHotZodiacRangeZodiacs.forEach(zodiac => addNumbersByFilter(num => getZodiac(parseInt(num, 10)) === zodiac));
+                if (sets.inputAllHotHeadRangeHeads) sets.inputAllHotHeadRangeHeads.forEach(head => addNumbersByFilter(num => `${Math.floor(parseInt(num, 10) / 10)}头` === head));
+                if (sets.inputAllHotTailRangeTails) sets.inputAllHotTailRangeTails.forEach(tail => addNumbersByFilter(num => `${parseInt(num, 10) % 10}尾` === tail));
             }
             if (sets.setNumbers && sets.setNumbers.length) sets.setNumbers.forEach(addNumber);
 
@@ -7337,7 +8389,7 @@
         }
 
         function parseInputTerms(text) {
-            const terms = { numbers: [], zodiacs: [], wuxings: [], wuxingDs: [], waveDs: [], headDs: [], tails: [], heads: [], waves: [], segments: [], regions: [], omissionRanges: [], omissionZodiacRanges: [], pingOmissionRanges: [], pingOmissionZodiacRanges: [], hotNumberRanges: [], allHotNumberRanges: [], hotZodiacRanges: [], allHotZodiacRanges: [], morphs: [], heNumbers: [], heTails: [] };
+            const terms = { numbers: [], zodiacs: [], wuxings: [], wuxingDs: [], waveDs: [], headDs: [], tails: [], heads: [], waves: [], segments: [], regions: [], omissionRanges: [], omissionZodiacRanges: [], pingOmissionRanges: [], pingOmissionZodiacRanges: [], hotNumberRanges: [], allHotNumberRanges: [], hotZodiacRanges: [], allHotZodiacRanges: [], allHotHeadRanges: [], allHotTailRanges: [], morphs: [], heNumbers: [], heTails: [] };
             if (!text) return terms;
             const zodiacNames = new Set(['鼠', '牛', '虎', '兔', '龙', '蛇', '马', '羊', '猴', '鸡', '狗', '猪']);
             const waveMap = { '红': 'red', '蓝': 'blue', '绿': 'green', '红波': 'red', '蓝波': 'blue', '绿波': 'green' };
@@ -7444,6 +8496,20 @@
                     const s = Math.max(1, Math.min(12, parseInt(mAllHotZ[1], 10)));
                     const e = Math.max(1, Math.min(12, parseInt(mAllHotZ[2], 10)));
                     terms.allHotZodiacRanges.push({ start: Math.min(s, e), end: Math.max(s, e) });
+                    return;
+                }
+                let mAllHotHead = token.match(/^(?:特码热头|特热头|特码头|热头)(\d{1,2})[-~到至](\d{1,2})(?:位|头)?$/);
+                if (mAllHotHead) {
+                    const s = Math.max(1, Math.min(5, parseInt(mAllHotHead[1], 10)));
+                    const e = Math.max(1, Math.min(5, parseInt(mAllHotHead[2], 10)));
+                    terms.allHotHeadRanges.push({ start: Math.min(s, e), end: Math.max(s, e) });
+                    return;
+                }
+                let mAllHotTail = token.match(/^(?:特码热尾|特热尾|特码尾|热尾)(\d{1,2})[-~到至](\d{1,2})(?:位|尾)?$/);
+                if (mAllHotTail) {
+                    const s = Math.max(1, Math.min(10, parseInt(mAllHotTail[1], 10)));
+                    const e = Math.max(1, Math.min(10, parseInt(mAllHotTail[2], 10)));
+                    terms.allHotTailRanges.push({ start: Math.min(s, e), end: Math.max(s, e) });
                     return;
                 }
                 let mHotN = token.match(/^(?:平特热码|平热码|平特热号|平热号|平特码|平热)?(\d{1,2})[-~到至](\d{1,2})(?:位|号)?$/);
@@ -7561,17 +8627,19 @@
             if (t.allHotNumberRanges && t.allHotNumberRanges.length) parts.push(...t.allHotNumberRanges.map(r => `特码热码${r.start}-${r.end}`));
             if (t.hotZodiacRanges && t.hotZodiacRanges.length) parts.push(...t.hotZodiacRanges.map(r => `平特热肖${r.start}-${r.end}`));
             if (t.allHotZodiacRanges && t.allHotZodiacRanges.length) parts.push(...t.allHotZodiacRanges.map(r => `特码热肖${r.start}-${r.end}`));
+            if (t.allHotHeadRanges && t.allHotHeadRanges.length) parts.push(...t.allHotHeadRanges.map(r => `特码热头${r.start}-${r.end}`));
+            if (t.allHotTailRanges && t.allHotTailRanges.length) parts.push(...t.allHotTailRanges.map(r => `特码热尾${r.start}-${r.end}`));
             return parts.map(String);
         }
 
         function calculateColdSelectionDetail() {
-            const types = ['numbers', 'zodiacs', 'hotNumbers', 'coldNumbers', 'hotZodiacs', 'coldZodiacs', 'allHotNumbers', 'allColdNumbers', 'allHotZodiacs', 'allColdZodiacs', 'hotNumberRange', 'allHotNumberRange', 'hotZodiacRange', 'allHotZodiacRange', 'wave', 'halfwave', 'jiaYe', 'head', 'tail', 'wuxing', 'wuxingCold', 'halfHead', 'region', 'omissionRange', 'omissionZodiacRange', 'pingOmissionRange', 'pingOmissionZodiacRange']
+            const types = ['numbers', 'zodiacs', 'hotNumbers', 'coldNumbers', 'hotZodiacs', 'coldZodiacs', 'allHotNumbers', 'allColdNumbers', 'allHotZodiacs', 'allColdZodiacs', 'allHotHeads', 'allColdHeads', 'allHotTails', 'allColdTails', 'hotNumberRange', 'allHotNumberRange', 'hotZodiacRange', 'allHotZodiacRange', 'allHotHeadRange', 'allHotTailRange', 'wave', 'halfwave', 'jiaYe', 'head', 'tail', 'wuxing', 'wuxingCold', 'halfHead', 'region', 'omissionRange', 'omissionZodiacRange', 'pingOmissionRange', 'pingOmissionZodiacRange', 'omissionOverThreshold', 'hotColdOverThreshold']
                 .filter(type => document.getElementById(`coldOption_${type}`)?.checked);
             
             const inputText = document.getElementById('coldOption_inputNumbers')?.value.trim() || '';
             const inputTerms = parseInputTerms(inputText);
             const selectedNumbers = inputTerms.numbers || [];
-            const hasInput = selectedNumbers.length || (inputTerms.zodiacs && inputTerms.zodiacs.length) || (inputTerms.tails && inputTerms.tails.length) || (inputTerms.heads && inputTerms.heads.length) || (inputTerms.headDs && inputTerms.headDs.length) || (inputTerms.waves && inputTerms.waves.length) || (inputTerms.waveDs && inputTerms.waveDs.length) || (inputTerms.wuxings && inputTerms.wuxings.length) || (inputTerms.wuxingDs && inputTerms.wuxingDs.length) || (inputTerms.segments && inputTerms.segments.length) || (inputTerms.regions && inputTerms.regions.length) || (inputTerms.omissionRanges && inputTerms.omissionRanges.length) || (inputTerms.omissionZodiacRanges && inputTerms.omissionZodiacRanges.length) || (inputTerms.pingOmissionRanges && inputTerms.pingOmissionRanges.length) || (inputTerms.pingOmissionZodiacRanges && inputTerms.pingOmissionZodiacRanges.length) || (inputTerms.hotNumberRanges && inputTerms.hotNumberRanges.length) || (inputTerms.allHotNumberRanges && inputTerms.allHotNumberRanges.length) || (inputTerms.hotZodiacRanges && inputTerms.hotZodiacRanges.length) || (inputTerms.allHotZodiacRanges && inputTerms.allHotZodiacRanges.length) || (inputTerms.morphs && inputTerms.morphs.length) || (inputTerms.heNumbers && inputTerms.heNumbers.length) || (inputTerms.heTails && inputTerms.heTails.length);
+            const hasInput = selectedNumbers.length || (inputTerms.zodiacs && inputTerms.zodiacs.length) || (inputTerms.tails && inputTerms.tails.length) || (inputTerms.heads && inputTerms.heads.length) || (inputTerms.headDs && inputTerms.headDs.length) || (inputTerms.waves && inputTerms.waves.length) || (inputTerms.waveDs && inputTerms.waveDs.length) || (inputTerms.wuxings && inputTerms.wuxings.length) || (inputTerms.wuxingDs && inputTerms.wuxingDs.length) || (inputTerms.segments && inputTerms.segments.length) || (inputTerms.regions && inputTerms.regions.length) || (inputTerms.omissionRanges && inputTerms.omissionRanges.length) || (inputTerms.omissionZodiacRanges && inputTerms.omissionZodiacRanges.length) || (inputTerms.pingOmissionRanges && inputTerms.pingOmissionRanges.length) || (inputTerms.pingOmissionZodiacRanges && inputTerms.pingOmissionZodiacRanges.length) || (inputTerms.hotNumberRanges && inputTerms.hotNumberRanges.length) || (inputTerms.allHotNumberRanges && inputTerms.allHotNumberRanges.length) || (inputTerms.hotZodiacRanges && inputTerms.hotZodiacRanges.length) || (inputTerms.allHotZodiacRanges && inputTerms.allHotZodiacRanges.length) || (inputTerms.allHotHeadRanges && inputTerms.allHotHeadRanges.length) || (inputTerms.allHotTailRanges && inputTerms.allHotTailRanges.length) || (inputTerms.morphs && inputTerms.morphs.length) || (inputTerms.heNumbers && inputTerms.heNumbers.length) || (inputTerms.heTails && inputTerms.heTails.length);
             if (hasInput) types.push('inputNumbers');
             const selectedZodiacs = (CONFIG.zodiacMap[state.currentYear] || [])
                 .filter(z => document.getElementById(`zodiacOption_${z}`)?.checked);
@@ -7663,6 +8731,10 @@
                 coldZodiacs: parseInt(document.getElementById('coldOption_coldZodiacs_count')?.value || '3'),
                 allHotZodiacs: parseInt(document.getElementById('coldOption_allHotZodiacs_count')?.value || '3'),
                 allColdZodiacs: parseInt(document.getElementById('coldOption_allColdZodiacs_count')?.value || '3'),
+                allHotHeads: parseInt(document.getElementById('coldOption_allHotHeads_count')?.value || '1'),
+                allColdHeads: parseInt(document.getElementById('coldOption_allColdHeads_count')?.value || '1'),
+                allHotTails: parseInt(document.getElementById('coldOption_allHotTails_count')?.value || '2'),
+                allColdTails: parseInt(document.getElementById('coldOption_allColdTails_count')?.value || '2'),
                 halfwave: parseInt(document.getElementById('coldOption_halfwave_count')?.value || '1'),
                 head: parseInt(document.getElementById('coldOption_head_count')?.value || '1'),
                 tail: parseInt(document.getElementById('coldOption_tail_count')?.value || '2'),
@@ -7694,6 +8766,18 @@
                 allHotZodiacRangeStart: parseInt(document.getElementById('coldOption_allHotZodiacRange_start')?.value || '1', 10),
                 allHotZodiacRangeEnd: parseInt(document.getElementById('coldOption_allHotZodiacRange_end')?.value || '3', 10),
                 allHotZodiacRangeSegments: (getRangeSegments('allHotZodiacRange').length > 0) ? getRangeSegments('allHotZodiacRange').map(s => ({ ...s })) : null,
+                allHotHeadRangeStart: parseInt(document.getElementById('coldOption_allHotHeadRange_start')?.value || '1', 10),
+                allHotHeadRangeEnd: parseInt(document.getElementById('coldOption_allHotHeadRange_end')?.value || '2', 10),
+                allHotHeadRangeSegments: (getRangeSegments('allHotHeadRange').length > 0) ? getRangeSegments('allHotHeadRange').map(s => ({ ...s })) : null,
+                allHotTailRangeStart: parseInt(document.getElementById('coldOption_allHotTailRange_start')?.value || '1', 10),
+                allHotTailRangeEnd: parseInt(document.getElementById('coldOption_allHotTailRange_end')?.value || '3', 10),
+                allHotTailRangeSegments: (getRangeSegments('allHotTailRange').length > 0) ? getRangeSegments('allHotTailRange').map(s => ({ ...s })) : null,
+                omissionThreshold: (typeof getEffectiveOmissionThreshold === 'function') ? getEffectiveOmissionThreshold() : 60,
+                omissionThresholdType: document.getElementById('coldOmissionThresholdTypeSel')?.value || 'teNum',
+                omissionRankMode: document.getElementById('coldOmissionRankModeSel')?.value || 'rankHit',
+                hotColdThreshold: (typeof getEffectiveHotColdThreshold === 'function') ? getEffectiveHotColdThreshold() : 60,
+                hotColdThresholdType: document.getElementById('coldHotThresholdTypeSel')?.value || 'allHotNum',
+                hotColdRankMode: document.getElementById('coldHotRankModeSel')?.value || 'rankHit',
                 inputTerms
             };
 
@@ -8076,6 +9160,12 @@
             add(sets.allColdZodiacs, num => sets.allColdZodiacs.includes(getZodiac(parseInt(num, 10), y)));
             add(sets.hotZodiacRange, num => sets.hotZodiacRange.includes(getZodiac(parseInt(num, 10), y)));
             add(sets.allHotZodiacRange, num => sets.allHotZodiacRange.includes(getZodiac(parseInt(num, 10), y)));
+            add(sets.allHotHeads, num => sets.allHotHeads.includes(`${Math.floor(parseInt(num, 10) / 10)}头`));
+            add(sets.allColdHeads, num => sets.allColdHeads.includes(`${Math.floor(parseInt(num, 10) / 10)}头`));
+            add(sets.allHotTails, num => sets.allHotTails.includes(`${parseInt(num, 10) % 10}尾`));
+            add(sets.allColdTails, num => sets.allColdTails.includes(`${parseInt(num, 10) % 10}尾`));
+            add(sets.allHotHeadRange, num => sets.allHotHeadRange.includes(`${Math.floor(parseInt(num, 10) / 10)}头`));
+            add(sets.allHotTailRange, num => sets.allHotTailRange.includes(`${parseInt(num, 10) % 10}尾`));
             add(sets.selectZodiacs, num => sets.selectZodiacs.includes(getZodiac(parseInt(num, 10), y)));
             add(sets.selectedWaves, num => sets.selectedWaves.includes(getColor(num)));
             add(sets.selectedWaveDs, num => sets.selectedWaveDs.includes(getWaveDsKey(num)));
@@ -8087,6 +9177,8 @@
             add(sets.omissionZodiacRange, num => sets.omissionZodiacRange.includes(getZodiac(parseInt(num, 10), y)));
             add(sets.pingOmissionRange, num => sets.pingOmissionRange.includes(num));
             add(sets.pingOmissionZodiacRange, num => sets.pingOmissionZodiacRange.includes(getZodiac(parseInt(num, 10), y)));
+            add(sets.omissionOverThreshold, num => sets.omissionOverThreshold.includes(num));
+            add(sets.hotColdOverThreshold, num => sets.hotColdOverThreshold.includes(num));
             add(sets.wave, num => sets.wave.includes(getColor(num)));
             add(sets.halfwave, num => sets.halfwave.includes(getHalfWaveKey(num)));
             add(sets.jiaYe, num => sets.jiaYe.includes(getJiaYe(getZodiac(parseInt(num, 10), y))));
@@ -8156,6 +9248,8 @@
             if (sets.inputAllHotNumberRangeNumbers && sets.inputAllHotNumberRangeNumbers.length) out.push(sets.inputAllHotNumberRangeNumbers.slice());
             if (sets.inputHotZodiacRangeZodiacs && sets.inputHotZodiacRangeZodiacs.length) out.push(allNumbers.filter(n => sets.inputHotZodiacRangeZodiacs.includes(getZodiac(parseInt(n, 10), y))));
             if (sets.inputAllHotZodiacRangeZodiacs && sets.inputAllHotZodiacRangeZodiacs.length) out.push(allNumbers.filter(n => sets.inputAllHotZodiacRangeZodiacs.includes(getZodiac(parseInt(n, 10), y))));
+            if (sets.inputAllHotHeadRangeHeads && sets.inputAllHotHeadRangeHeads.length) out.push(allNumbers.filter(n => sets.inputAllHotHeadRangeHeads.includes(`${Math.floor(parseInt(n, 10) / 10)}头`)));
+            if (sets.inputAllHotTailRangeTails && sets.inputAllHotTailRangeTails.length) out.push(allNumbers.filter(n => sets.inputAllHotTailRangeTails.includes(`${parseInt(n, 10) % 10}尾`)));
             if (sets.inputTerms) {
                 const it = sets.inputTerms;
                 if (it.numbers && it.numbers.length) out.push(it.numbers.slice());
@@ -8273,13 +9367,13 @@
         }
 
         function resetColdSelection() {
-            ['numbers', 'zodiacs', 'hotNumbers', 'coldNumbers', 'hotZodiacs', 'coldZodiacs', 'allHotNumbers', 'allColdNumbers', 'allHotZodiacs', 'allColdZodiacs', 'hotNumberRange', 'allHotNumberRange', 'hotZodiacRange', 'allHotZodiacRange', 'wave', 'halfwave', 'jiaYe', 'head', 'tail', 'wuxing', 'wuxingCold', 'halfHead', 'region', 'omissionRange', 'omissionZodiacRange', 'pingOmissionRange', 'pingOmissionZodiacRange'].forEach(type => {
+            ['numbers', 'zodiacs', 'hotNumbers', 'coldNumbers', 'hotZodiacs', 'coldZodiacs', 'allHotNumbers', 'allColdNumbers', 'allHotZodiacs', 'allColdZodiacs', 'allHotHeads', 'allColdHeads', 'allHotTails', 'allColdTails', 'hotNumberRange', 'allHotNumberRange', 'hotZodiacRange', 'allHotZodiacRange', 'allHotHeadRange', 'allHotTailRange', 'wave', 'halfwave', 'jiaYe', 'head', 'tail', 'wuxing', 'wuxingCold', 'halfHead', 'region', 'omissionRange', 'omissionZodiacRange', 'pingOmissionRange', 'pingOmissionZodiacRange'].forEach(type => {
                 const el = document.getElementById(`coldOption_${type}`);
                 if (el) el.checked = false;
                 const countEl = document.getElementById(`coldOption_${type}_count`);
                 if (countEl) countEl.value = '10';
-                if (countEl && (type === 'wuxingCold' || type === 'wuxing' || type === 'halfwave' || type === 'head' || type === 'halfHead' || type === 'region')) countEl.value = '1';
-                if (countEl && type === 'tail') countEl.value = '2';
+                if (countEl && (type === 'wuxingCold' || type === 'wuxing' || type === 'halfwave' || type === 'head' || type === 'halfHead' || type === 'region' || type === 'allHotHeads' || type === 'allColdHeads')) countEl.value = '1';
+                if (countEl && (type === 'tail' || type === 'allHotTails' || type === 'allColdTails')) countEl.value = '2';
                 if (countEl && (type === 'zodiacs' || type === 'hotZodiacs' || type === 'coldZodiacs' || type === 'allHotZodiacs' || type === 'allColdZodiacs')) countEl.value = '3';
             });
             const resetRanges = [
@@ -8290,7 +9384,9 @@
                 { start: 'coldOption_hotNumberRange_start', end: 'coldOption_hotNumberRange_end', sVal: '1', eVal: '10' },
                 { start: 'coldOption_allHotNumberRange_start', end: 'coldOption_allHotNumberRange_end', sVal: '1', eVal: '10' },
                 { start: 'coldOption_hotZodiacRange_start', end: 'coldOption_hotZodiacRange_end', sVal: '1', eVal: '3' },
-                { start: 'coldOption_allHotZodiacRange_start', end: 'coldOption_allHotZodiacRange_end', sVal: '1', eVal: '3' }
+                { start: 'coldOption_allHotZodiacRange_start', end: 'coldOption_allHotZodiacRange_end', sVal: '1', eVal: '3' },
+                { start: 'coldOption_allHotHeadRange_start', end: 'coldOption_allHotHeadRange_end', sVal: '1', eVal: '2' },
+                { start: 'coldOption_allHotTailRange_start', end: 'coldOption_allHotTailRange_end', sVal: '1', eVal: '3' }
             ];
             resetRanges.forEach(r => {
                 const sEl = document.getElementById(r.start);
@@ -8360,9 +9456,9 @@
             updateAllDualSliders();
         }
         function toggleColdSection(section, selectAll) {
-            const omissionIds = ['numbers', 'zodiacs', 'wave', 'halfwave', 'jiaYe', 'head', 'tail', 'wuxing', 'wuxingCold', 'halfHead', 'omissionRange', 'omissionZodiacRange', 'pingOmissionRange', 'pingOmissionZodiacRange'];
+            const omissionIds = ['numbers', 'zodiacs', 'wave', 'halfwave', 'jiaYe', 'head', 'tail', 'wuxing', 'wuxingCold', 'halfHead', 'omissionRange', 'omissionZodiacRange', 'pingOmissionRange', 'pingOmissionZodiacRange', 'omissionOverThreshold'];
             const waveIds = ['red', 'blue', 'green'];
-            const hotcoldIds = ['hotNumbers', 'coldNumbers', 'hotZodiacs', 'coldZodiacs', 'allHotNumbers', 'allColdNumbers', 'allHotZodiacs', 'allColdZodiacs', 'hotNumberRange', 'allHotNumberRange', 'hotZodiacRange', 'allHotZodiacRange'];
+            const hotcoldIds = ['hotNumbers', 'coldNumbers', 'hotZodiacs', 'coldZodiacs', 'allHotNumbers', 'allColdNumbers', 'allHotZodiacs', 'allColdZodiacs', 'allHotHeads', 'allColdHeads', 'allHotTails', 'allColdTails', 'hotNumberRange', 'allHotNumberRange', 'hotZodiacRange', 'allHotZodiacRange', 'allHotHeadRange', 'allHotTailRange', 'hotColdOverThreshold'];
             if (section === 'wave') {
                 waveIds.forEach(w => {
                     const el = document.getElementById('waveOption_' + w);
@@ -8489,6 +9585,8 @@
                         clearRangeSegments('allHotNumberRange');
                         clearRangeSegments('hotZodiacRange');
                         clearRangeSegments('allHotZodiacRange');
+                        clearRangeSegments('allHotHeadRange');
+                        clearRangeSegments('allHotTailRange');
                     }
                 }
             }
@@ -8509,6 +9607,8 @@
             const el = document.getElementById(subcardId);
             if (!el) return;
             const isCollapsed = el.classList.toggle('collapsed');
+            const arrow = document.getElementById('arrow_' + subcardId);
+            if (arrow) arrow.textContent = isCollapsed ? '▾' : '▴';
             try {
                 const curr = JSON.parse(localStorage.getItem('aomen_cold_subcards_collapsed') || '{}');
                 curr[subcardId] = isCollapsed;
@@ -8541,12 +9641,14 @@
             ['subcard_omission', 'subcard_hotcold'].forEach(id => {
                 const el = document.getElementById(id);
                 if (!el) return;
-                const shouldCollapse = saved[id] !== undefined ? saved[id] : true;
+                const shouldCollapse = saved[id] !== undefined ? saved[id] : (id === 'subcard_omission' ? false : true);
                 if (shouldCollapse) {
                     el.classList.add('collapsed');
                 } else {
                     el.classList.remove('collapsed');
                 }
+                const arrow = document.getElementById('arrow_' + id);
+                if (arrow) arrow.textContent = shouldCollapse ? '▾' : '▴';
             });
             updateColdSubcardBadges();
         }
@@ -8560,8 +9662,21 @@
             hotNumberRange: { max: 49, unit: '码', leftLabel: '热', rightLabel: '冷' },
             allHotNumberRange: { max: 49, unit: '码', leftLabel: '热', rightLabel: '冷' },
             hotZodiacRange: { max: 12, unit: '肖', leftLabel: '热', rightLabel: '冷' },
-            allHotZodiacRange: { max: 12, unit: '肖', leftLabel: '热', rightLabel: '冷' }
+            allHotZodiacRange: { max: 12, unit: '肖', leftLabel: '热', rightLabel: '冷' },
+            allHotHeadRange: { max: 5, unit: '头', leftLabel: '热', rightLabel: '冷' },
+            allHotTailRange: { max: 10, unit: '尾', leftLabel: '热', rightLabel: '冷' }
         };
+
+        function onColdOptionChange() {
+            if (typeof updateColdSubcardBadges === 'function') updateColdSubcardBadges();
+            if (typeof updateLiveSelectionPreview === 'function') updateLiveSelectionPreview();
+            requestColdKlineUpdate(true);
+        }
+
+        function onColdOptionCountChange() {
+            if (typeof updateLiveSelectionPreview === 'function') updateLiveSelectionPreview();
+            requestColdKlineUpdate(true);
+        }
 
         let coldKlineDebounceTimer = null;
         let coldPreviewDebounceTimer = null;
@@ -8855,7 +9970,9 @@
             hotNumberRange: '平特热码',
             allHotNumberRange: '特码热码',
             hotZodiacRange: '平特热肖',
-            allHotZodiacRange: '特码热肖'
+            allHotZodiacRange: '特码热肖',
+            allHotHeadRange: '特码热头',
+            allHotTailRange: '特码热尾'
         };
 
         function getRangeSegments(rangeType) {
@@ -8868,7 +9985,9 @@
                     hotNumberRange: [],
                     allHotNumberRange: [],
                     hotZodiacRange: [],
-                    allHotZodiacRange: []
+                    allHotZodiacRange: [],
+                    allHotHeadRange: [],
+                    allHotTailRange: []
                 };
             }
             if (!state.rangeSegments[rangeType]) {
@@ -8899,6 +10018,10 @@
                 return getHotZodiacRange(hcSrc, start, end);
             } else if (rangeType === 'allHotZodiacRange') {
                 return getAllHotZodiacRange(hcSrc, start, end);
+            } else if (rangeType === 'allHotHeadRange') {
+                return getAllHotHeadRange(hcSrc, start, end);
+            } else if (rangeType === 'allHotTailRange') {
+                return getAllHotTailRange(hcSrc, start, end);
             }
             return [];
         }
@@ -9016,7 +10139,7 @@
         }
 
         function renderAllRangeSegments() {
-            ['omissionRange', 'omissionZodiacRange', 'pingOmissionRange', 'pingOmissionZodiacRange', 'hotNumberRange', 'allHotNumberRange', 'hotZodiacRange', 'allHotZodiacRange'].forEach(rk => {
+            ['omissionRange', 'omissionZodiacRange', 'pingOmissionRange', 'pingOmissionZodiacRange', 'hotNumberRange', 'allHotNumberRange', 'hotZodiacRange', 'allHotZodiacRange', 'allHotHeadRange', 'allHotTailRange'].forEach(rk => {
                 renderRangeSegments(rk);
             });
         }
@@ -9093,7 +10216,9 @@
                     hotNumberRange: getRangeSegments('hotNumberRange').map(s => ({ ...s })),
                     allHotNumberRange: getRangeSegments('allHotNumberRange').map(s => ({ ...s })),
                     hotZodiacRange: getRangeSegments('hotZodiacRange').map(s => ({ ...s })),
-                    allHotZodiacRange: getRangeSegments('allHotZodiacRange').map(s => ({ ...s }))
+                    allHotZodiacRange: getRangeSegments('allHotZodiacRange').map(s => ({ ...s })),
+                    allHotHeadRange: getRangeSegments('allHotHeadRange').map(s => ({ ...s })),
+                    allHotTailRange: getRangeSegments('allHotTailRange').map(s => ({ ...s }))
                 },
                 omissionRangeSegments: getRangeSegments('omissionRange').map(s => ({ ...s })),
                 zodiacs: [],
@@ -9105,7 +10230,7 @@
                 excludeKills: JSON.parse(JSON.stringify(state.excludeKills || {}))
             };
             
-            const types = ['numbers', 'zodiacs', 'hotNumbers', 'coldNumbers', 'hotZodiacs', 'coldZodiacs', 'allHotNumbers', 'allColdNumbers', 'allHotZodiacs', 'allColdZodiacs', 'hotNumberRange', 'allHotNumberRange', 'hotZodiacRange', 'allHotZodiacRange', 'wave', 'halfwave', 'jiaYe', 'head', 'tail', 'wuxing', 'wuxingCold', 'halfHead', 'region', 'omissionRange', 'omissionZodiacRange', 'pingOmissionRange', 'pingOmissionZodiacRange'];
+            const types = ['numbers', 'zodiacs', 'hotNumbers', 'coldNumbers', 'hotZodiacs', 'coldZodiacs', 'allHotNumbers', 'allColdNumbers', 'allHotZodiacs', 'allColdZodiacs', 'allHotHeads', 'allColdHeads', 'allHotTails', 'allColdTails', 'hotNumberRange', 'allHotNumberRange', 'hotZodiacRange', 'allHotZodiacRange', 'allHotHeadRange', 'allHotTailRange', 'wave', 'halfwave', 'jiaYe', 'head', 'tail', 'wuxing', 'wuxingCold', 'halfHead', 'region', 'omissionRange', 'omissionZodiacRange', 'pingOmissionRange', 'pingOmissionZodiacRange'];
             types.forEach(t => {
                 const cb = document.getElementById(`coldOption_${t}`);
                 if (cb && cb.checked) config.checkedOptions[t] = true;
@@ -9113,7 +10238,7 @@
                 if (count) config.selectCounts[t] = count.value;
             });
 
-            const rangeKeys = ['omissionRange', 'omissionZodiacRange', 'pingOmissionRange', 'pingOmissionZodiacRange', 'hotNumberRange', 'allHotNumberRange', 'hotZodiacRange', 'allHotZodiacRange'];
+            const rangeKeys = ['omissionRange', 'omissionZodiacRange', 'pingOmissionRange', 'pingOmissionZodiacRange', 'hotNumberRange', 'allHotNumberRange', 'hotZodiacRange', 'allHotZodiacRange', 'allHotHeadRange', 'allHotTailRange'];
             rangeKeys.forEach(rk => {
                 config.ranges[rk] = {
                     start: document.getElementById(`coldOption_${rk}_start`)?.value || '1',
@@ -11168,6 +12293,10 @@
                 allColdNumbers: '特码最冷10号',
                 allHotZodiacs: '特码最热肖',
                 allColdZodiacs: '特码最冷肖',
+                allHotHeads: '特码热头',
+                allColdHeads: '特码冷头',
+                allHotTails: '特码热尾',
+                allColdTails: '特码冷尾',
                 selectZodiacs: '选择生肖',
                 wave: '遗漏最多波色',
                 halfwave: '遗漏最多半波',
@@ -11184,6 +12313,8 @@
                 allHotNumberRange: '特码热码区间',
                 hotZodiacRange: '平特热肖区间',
                 allHotZodiacRange: '特码热肖区间',
+                allHotHeadRange: '特码热头区间',
+                allHotTailRange: '特码热尾区间',
                 selectedRegions: '选择区域',
                 selectedWaves: '选择波色',
                 selectedWaveDs: '波色单双',
@@ -11224,10 +12355,16 @@
                     if (type === 'coldZodiacs') label = `平特最冷${values.length}肖`;
                     if (type === 'allHotZodiacs') label = `特码最热${values.length}肖`;
                     if (type === 'allColdZodiacs') label = `特码最冷${values.length}肖`;
+                    if (type === 'allHotHeads') label = `特码最热${values.length}头`;
+                    if (type === 'allColdHeads') label = `特码最冷${values.length}头`;
+                    if (type === 'allHotTails') label = `特码最热${values.length}尾`;
+                    if (type === 'allColdTails') label = `特码最冷${values.length}尾`;
                     if (type === 'hotNumberRange') label = `平特热码（${values.length}个）`;
                     if (type === 'allHotNumberRange') label = `特码热码（${values.length}个）`;
                     if (type === 'hotZodiacRange') label = `平特热肖（${values.length}肖）`;
                     if (type === 'allHotZodiacRange') label = `特码热肖（${values.length}肖）`;
+                    if (type === 'allHotHeadRange') label = `特码热头（${values.length}头）`;
+                    if (type === 'allHotTailRange') label = `特码热尾（${values.length}尾）`;
                     if (type === 'region') label = `遗漏最多${values.length}区域`;
                     if (type === 'selectedWaves') label = `选择波色（${values.length}项）`;
                     if (type === 'selectedWaveDs') label = `波色单双（${values.length}项）`;
@@ -11272,11 +12409,22 @@
             const tooltip = document.getElementById('klineTooltip');
             if (!data || !tooltip) return;
 
-            const codes = data.codes ||[];
-            const ballsHtml = codes.map((c, i) => `
-                <div class="t-ball ${c.wave}">${c.num}</div>
-                ${i === 5 ? '<div style="color:var(--text-secondary);margin:0 2px;">+</div>' : ''}
-            `).join('');
+            const codes = data.codes || [];
+            const topZodiacs = data.pingXiao ? data.pingXiao.split(' ') : [];
+            topZodiacs.push(data.win || '');
+            const itemYear = parseInt(String(data.expect).slice(0, 4), 10) || state.currentYear;
+
+            const ballsHtml = codes.map((c, i) => {
+                const isSp = i === 6;
+                const zod = topZodiacs[i] || (typeof getZodiac === 'function' ? getZodiac(parseInt(c.num, 10), itemYear) : '');
+                return `
+                    <div style="display:inline-flex;flex-direction:column;align-items:center;margin:0 2px;">
+                        <div class="t-ball ${c.wave}${isSp ? ' top-special-ball' : ''}" style="${isSp ? 'outline:1.5px solid var(--warn);outline-offset:1px;' : ''}">${c.num}</div>
+                        <span style="font-size:9px;color:${isSp ? 'var(--warn)' : 'var(--text-secondary)'};font-weight:${isSp ? '700' : 'normal'};margin-top:2px;">${zod}</span>
+                    </div>
+                    ${i === 5 ? '<div style="color:var(--text-secondary);margin:0 4px;font-weight:700;align-self:center;">+</div>' : ''}
+                `;
+            }).join('');
 
             let trendInfo = '';
             let zodiacOmissionHtml = '';
@@ -11595,12 +12743,34 @@
             tooltip.innerHTML = content;
             tooltip.style.display = 'block';
 
-            const chartRect = document.getElementById('chartSection').getBoundingClientRect();
-            let left = x + 16;
-            let top = y + 16;
+            const chartSection = document.getElementById('chartSection');
+            const chartRect = chartSection ? chartSection.getBoundingClientRect() : { width: window.innerWidth, height: window.innerHeight, left: 0, top: 0 };
 
-            if (left + 280 > chartRect.width) left = x - 280;
-            if (top + 250 > chartRect.height) top = y - 250;
+            let relX = x;
+            let relY = y;
+            if (chartRect.left > 0 && x >= chartRect.left && x <= chartRect.right + 20) {
+                relX = x - chartRect.left;
+            }
+            if (chartRect.top > 0 && y >= chartRect.top && y <= chartRect.bottom + 20) {
+                relY = y - chartRect.top;
+            }
+            relX = Math.max(0, Math.min(relX, chartRect.width));
+            relY = Math.max(0, Math.min(relY, chartRect.height));
+
+            const tipWidth = Math.min(280, Math.max(200, chartRect.width - 24));
+            let left = relX + 16;
+            if (left + tipWidth > chartRect.width - 8) {
+                left = relX - tipWidth - 16;
+            }
+            left = Math.max(8, Math.min(left, chartRect.width - tipWidth - 8));
+
+            let top = relY - 140;
+            if (top < 10) {
+                top = relY + 24;
+            }
+            if (top + 260 > chartRect.height) {
+                top = Math.max(8, chartRect.height - 270);
+            }
 
             tooltip.style.left = `${left}px`;
             tooltip.style.top = `${top}px`;
@@ -11669,95 +12839,6 @@
         }
 
         function initTouchGestures() {
-            const canvas = state.canvas;
-            let touchStartX = 0;
-            let touchStartY = 0;
-            let touchStartTime = 0;
-            let initialScale = 1;
-            let initialDistance = 0;
-
-            canvas.addEventListener('touchstart', (e) => {
-                if (e.touches.length === 1) {
-                    touchStartX = e.touches[0].clientX;
-                    touchStartY = e.touches[0].clientY;
-                    touchStartTime = Date.now();
-                    state.isDragging = true;
-                } else if (e.touches.length === 2) {
-                    initialDistance = Math.hypot(
-                        e.touches[0].clientX - e.touches[1].clientX,
-                        e.touches[0].clientY - e.touches[1].clientY
-                    );
-                    initialScale = state.viewState.scale;
-                }
-            }, { passive: false });
-
-            canvas.addEventListener('touchmove', (e) => {
-                e.preventDefault();
-                if (e.touches.length === 1 && state.isDragging) {
-                    const clientX = e.touches[0].clientX;
-                    const dx = clientX - touchStartX;
-                    state.viewState.x += dx;
-                    touchStartX = clientX;
-
-                    const rect = canvas.getBoundingClientRect();
-                    const dpr = window.devicePixelRatio || 1;
-                    const logicalWidth = canvas.width / dpr;
-                    const { spacing, startX } = getChartSettings(state.visibleData.length, logicalWidth);
-                    const touchX = clientX - rect.left - state.viewState.x;
-                    let idx = Math.round((touchX - startX) / spacing);
-                    const prevIdx = state.hoverIndex;
-                    state.hoverIndex = Math.max(0, Math.min(idx, state.visibleData.length - 1));
-                    if (prevIdx !== state.hoverIndex && typeof navigator !== 'undefined' && navigator.vibrate) {
-                        try { navigator.vibrate(6); } catch (vErr) {}
-                    }
-
-                    draw();
-                } else if (e.touches.length === 2) {
-                    const currentDistance = Math.hypot(
-                        e.touches[0].clientX - e.touches[1].clientX,
-                        e.touches[0].clientY - e.touches[1].clientY
-                    );
-                    const scale = (currentDistance / initialDistance) * initialScale;
-                    state.viewState.scale = Math.max(0.5, Math.min(3, scale));
-                    draw();
-                }
-            }, { passive: false });
-
-            canvas.addEventListener('touchend', (e) => {
-                if (e.touches.length === 0) {
-                    state.isDragging = false;
-                    const touchEndTime = Date.now();
-                    const touchDuration = touchEndTime - touchStartTime;
-
-                    if (touchDuration < 200) {
-                        if (!state.lastTapTime || (touchEndTime - state.lastTapTime) > 300) {
-                            state.lastTapTime = touchEndTime;
-                        } else {
-                            state.viewState.scale = 1;
-                            state.viewState.x = 0;
-                            draw();
-                            hideKlineTooltip();
-                            state.lastTapTime = null;
-                            return;
-                        }
-                    }
-
-                    if (state.hoverIndex >= 0 && state.visibleData[state.hoverIndex]) {
-                        const data = state.visibleData[state.hoverIndex];
-                        const canvasRect = canvas.getBoundingClientRect();
-                        let tooltipX = touchStartX - canvasRect.left;
-                        let tooltipY = touchStartY - canvasRect.top;
-
-                        showKlineTooltip(data, tooltipX, tooltipY);
-
-                        if (state.tooltipTimeout) clearTimeout(state.tooltipTimeout);
-                        state.tooltipTimeout = setTimeout(() => {
-                            hideKlineTooltip();
-                        }, 3000);
-                    }
-                }
-            });
-
             let sidebarTouchStartX = 0;
             const sidebar = document.getElementById('sidebar');
 
@@ -12332,6 +13413,39 @@
                 });
             });
 
+            // 确保当前遗漏为真实连续遗漏（若在 recentData 窗口内从未出现，则继续向过去回溯全量历史，不被所选窗口期数截断）
+            items.forEach(it => {
+                const stat = statsMap[it.key];
+                if (!stat) return;
+                if (stat.count === 0 && data.length > recentData.length) {
+                    let curOm = recentData.length;
+                    for (let i = data.length - 1 - recentData.length; i >= 0; i--) {
+                        const item = data[i];
+                        const winNum = typeof item.winNum === 'number' ? item.winNum : parseInt(item.winNum || (item.codes && item.codes[6] ? item.codes[6].num : '0'), 10);
+                        if (isNaN(winNum) || winNum < 1 || winNum > 49) continue;
+                        const winColor = item.currentColor || (item.codes && item.codes[6] ? item.codes[6].wave : getColor(winNum));
+                        const winYear = parseInt(String(item.expect).slice(0, 4), 10) || state.currentYear;
+                        const winZ = item.win || getZodiac(winNum, winYear);
+                        const pingZList = item.pingXiao ? item.pingXiao.split(' ') : (item.zodiac ? item.zodiac.split(',') : []);
+                        const allZodiacs = new Set([...pingZList, winZ].filter(Boolean));
+                        let allNumbersList = [];
+                        if (item.codes && item.codes.length) {
+                            allNumbersList = item.codes.map(c => c.num.padStart(2, '0'));
+                        } else if (item.openCode) {
+                            allNumbersList = item.openCode.split(',').map(n => n.padStart(2, '0'));
+                        } else {
+                            allNumbersList = [winNum.toString().padStart(2, '0')];
+                        }
+                        const allNumbers = new Set(allNumbersList);
+                        if (it.matcher(winNum, winColor, winYear, winZ, allZodiacs, allNumbers)) {
+                            break;
+                        }
+                        curOm++;
+                    }
+                    stat.currentOmission = curOm;
+                }
+            });
+
             const theoCount = totalPeriods / dimension.theoreticalCount;
             const theoRate = dimension.theoRateCustom ? dimension.theoRateCustom.toFixed(1) : (100 / dimension.theoreticalCount).toFixed(1);
 
@@ -12422,15 +13536,20 @@
             const tbody = document.getElementById('generalOmissionBody');
             if (!tbody) return;
 
-            omissionData = stats || { items: [] };
+            const filterSel = document.getElementById('omissionThresholdFilterSel');
+            const minOm = filterSel ? (parseInt(filterSel.value, 10) || 0) : 0;
+            let displayItems = stats.items;
+            if (minOm > 0) {
+                displayItems = displayItems.filter(it => it.currentOmission >= minOm);
+            }
 
-            if (!stats || !stats.items || stats.items.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 30px; color: var(--text-secondary);">暂无开奖遗漏数据</td></tr>';
+            if (displayItems.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; padding: 30px; color: var(--text-secondary);">当前分类暂无持续遗漏 ≥ ${minOm} 期的项目</td></tr>`;
                 updateOmissionSelectionUI();
                 return;
             }
 
-            const sorted = [...stats.items].sort((a, b) => {
+            const sorted = [...displayItems].sort((a, b) => {
                 const key = omissionSort.key;
                 const isDesc = omissionSort.direction === 'desc';
 
