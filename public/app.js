@@ -7378,42 +7378,56 @@
             if (!cb || !sEl || !eEl) return;
 
             const ranks = items.map(it => it.rank).sort((a, b) => a - b);
-            const minRank = ranks[0];
             const maxRank = ranks[ranks.length - 1];
 
-            // If contiguous from minRank to maxRank, or in currentRank mode:
-            sEl.value = minRank;
+            // 同步时滑块处在最最大位上，不从1位到最大位
+            sEl.value = maxRank;
             eEl.value = maxRank;
             cb.checked = true;
+
+            // 将统计出来的所有超期位次添加到“存为选区”多段选区中
+            const segments = getRangeSegments(rangeType);
+            segments.length = 0;
+            if (rangeType === 'omissionRange') {
+                state.omissionRangeSegments = segments;
+            }
+
+            let segStart = ranks[0];
+            let prev = ranks[0];
+            for (let i = 1; i < ranks.length; i++) {
+                if (ranks[i] === prev + 1) {
+                    prev = ranks[i];
+                } else {
+                    segments.push({ start: segStart, end: prev });
+                    segStart = ranks[i];
+                    prev = ranks[i];
+                }
+            }
+            segments.push({ start: segStart, end: prev });
+
+            if (typeof renderRangeSegments === 'function') {
+                renderRangeSegments(rangeType);
+            }
+
             if (typeof onDualSliderChange === 'function') {
                 onDualSliderChange(rangeType, maxVal, unit, false);
             }
 
-            // Also add individual discrete non-contiguous ranks as segments if in rankHit mode
-            if (mode === 'rankHit' && ranks.length > 1 && (maxRank - minRank + 1 > ranks.length)) {
-                if (typeof clearRangeSegments === 'function') clearRangeSegments(rangeType);
-                const segments = getRangeSegments(rangeType);
-                // Group contiguous ranks into segments
-                let segStart = ranks[0];
-                let prev = ranks[0];
-                for (let i = 1; i < ranks.length; i++) {
-                    if (ranks[i] === prev + 1) {
-                        prev = ranks[i];
-                    } else {
-                        segments.push({ start: segStart, end: prev });
-                        segStart = ranks[i];
-                        prev = ranks[i];
-                    }
-                }
-                segments.push({ start: segStart, end: prev });
-                if (typeof renderRangeSegments === 'function') renderRangeSegments(rangeType);
-                showToast(`🎯 已同步 ${items.length} 个超期位次到 [${rangeType === 'omissionRange' ? '特码遗漏码区' : '遗漏肖区'}] 多段选区`, 2500);
-            } else {
-                showToast(`🎯 已同步设定 [第 ${minRank} ~ ${maxRank} 位] 至滑块选区`, 2200);
-            }
+            const rangeNames = {
+                omissionRange: '特码遗漏码区',
+                omissionZodiacRange: '遗漏肖区',
+                pingOmissionRange: '平特遗漏码区',
+                pingOmissionZodiacRange: '平特遗漏肖区'
+            };
+            const rName = rangeNames[rangeType] || '遗漏滑块选区';
+            showToast(`🎯 已将统计的 ${items.length} 个超期位次添加到 [${rName}] 存为选区，滑块处于最大位 (第 ${maxRank} 位)`, 2500);
 
             requestLivePreviewUpdate(true);
             requestColdKlineUpdate(true);
+        }
+
+        function addOmissionThresholdToSegments() {
+            syncOmissionRankToSliders();
         }
 
         // ==================== 冷热排序位次未出分析与控制 (冷热选号因子) ====================
@@ -7830,12 +7844,34 @@
             if (!cb || !sEl || !eEl) return;
 
             const ranks = items.map(it => it.rank).sort((a, b) => a - b);
-            const minRank = ranks[0];
             const maxRank = ranks[ranks.length - 1];
 
-            sEl.value = minRank;
+            // 同步时滑块处在最最大位上，不从1位到最大位
+            sEl.value = maxRank;
             eEl.value = maxRank;
             cb.checked = true;
+
+            // 将统计出来的所有超期冷热位次添加到“存为选区”多段选区中
+            const segments = getRangeSegments(rangeType);
+            segments.length = 0;
+
+            let segStart = ranks[0];
+            let prev = ranks[0];
+            for (let i = 1; i < ranks.length; i++) {
+                if (ranks[i] === prev + 1) {
+                    prev = ranks[i];
+                } else {
+                    segments.push({ start: segStart, end: prev });
+                    segStart = ranks[i];
+                    prev = ranks[i];
+                }
+            }
+            segments.push({ start: segStart, end: prev });
+
+            if (typeof renderRangeSegments === 'function') {
+                renderRangeSegments(rangeType);
+            }
+
             if (typeof onDualSliderChange === 'function') {
                 onDualSliderChange(rangeType, maxVal, unit, false);
             }
@@ -7849,30 +7885,14 @@
                 allHotTailRange: '特码热尾区'
             };
             const rName = rangeNames[rangeType] || '冷热滑块选区';
-
-            if (mode === 'rankHit' && ranks.length > 1 && (maxRank - minRank + 1 > ranks.length)) {
-                if (typeof clearRangeSegments === 'function') clearRangeSegments(rangeType);
-                const segments = getRangeSegments(rangeType);
-                let segStart = ranks[0];
-                let prev = ranks[0];
-                for (let i = 1; i < ranks.length; i++) {
-                    if (ranks[i] === prev + 1) {
-                        prev = ranks[i];
-                    } else {
-                        segments.push({ start: segStart, end: prev });
-                        segStart = ranks[i];
-                        prev = ranks[i];
-                    }
-                }
-                segments.push({ start: segStart, end: prev });
-                if (typeof renderRangeSegments === 'function') renderRangeSegments(rangeType);
-                showToast(`🎯 已同步 ${items.length} 个超期冷热位次到 [${rName}] 多段选区`, 2500);
-            } else {
-                showToast(`🎯 已同步设定 [第 ${minRank} ~ ${maxRank} 位] 至 [${rName}] 滑块选区`, 2200);
-            }
+            showToast(`🎯 已将统计的 ${items.length} 个超期冷热位次添加到 [${rName}] 存为选区，滑块处于最大位 (第 ${maxRank} 位)`, 2500);
 
             requestLivePreviewUpdate(true);
             requestColdKlineUpdate(true);
+        }
+
+        function addHotColdThresholdToSegments() {
+            syncHotColdRankToSliders();
         }
 
         function getHotNumberRange(sourceData, startRank = 1, endRank = 10) {
