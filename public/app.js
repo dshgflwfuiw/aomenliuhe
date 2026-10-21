@@ -7010,6 +7010,85 @@
             return sorted.slice(s - 1, e);
         }
 
+        const OMISSION_THRESHOLDS_BY_TYPE = {
+            teNum: [
+                { val: 30, text: '≥ 30期' },
+                { val: 40, text: '≥ 40期' },
+                { val: 50, text: '≥ 50期' },
+                { val: 60, text: '≥ 60期 (推荐)', selected: true },
+                { val: 70, text: '≥ 70期' },
+                { val: 80, text: '≥ 80期' },
+                { val: 100, text: '≥ 100期' },
+                { val: 120, text: '≥ 120期' }
+            ],
+            pingNum: [
+                { val: 10, text: '≥ 10期' },
+                { val: 15, text: '≥ 15期' },
+                { val: 20, text: '≥ 20期 (推荐)', selected: true },
+                { val: 25, text: '≥ 25期' },
+                { val: 30, text: '≥ 30期' },
+                { val: 35, text: '≥ 35期' }
+            ],
+            teZodiac: [
+                { val: 10, text: '≥ 10期' },
+                { val: 15, text: '≥ 15期' },
+                { val: 20, text: '≥ 20期' },
+                { val: 25, text: '≥ 25期 (推荐)', selected: true },
+                { val: 30, text: '≥ 30期' },
+                { val: 40, text: '≥ 40期' },
+                { val: 50, text: '≥ 50期' }
+            ],
+            pingZodiac: [
+                { val: 2, text: '≥ 2期' },
+                { val: 3, text: '≥ 3期 (推荐)', selected: true },
+                { val: 4, text: '≥ 4期' },
+                { val: 5, text: '≥ 5期' },
+                { val: 6, text: '≥ 6期' }
+            ],
+            teTail: [
+                { val: 5, text: '≥ 5期' },
+                { val: 8, text: '≥ 8期' },
+                { val: 10, text: '≥ 10期 (推荐)', selected: true },
+                { val: 15, text: '≥ 15期' },
+                { val: 20, text: '≥ 20期' },
+                { val: 25, text: '≥ 25期' }
+            ]
+        };
+
+        let _lastOmissionThresholdType = null;
+        function syncOmissionThresholdOptions(forceType) {
+            const typeSel = document.getElementById('coldOmissionThresholdTypeSel');
+            const thSel = document.getElementById('coldOmissionThresholdSel');
+            if (!typeSel || !thSel) return;
+            const curType = forceType || typeSel.value || 'teNum';
+            if (curType === _lastOmissionThresholdType && thSel.options.length > 0) return;
+            _lastOmissionThresholdType = curType;
+
+            const opts = OMISSION_THRESHOLDS_BY_TYPE[curType] || OMISSION_THRESHOLDS_BY_TYPE.teNum;
+            const prevVal = thSel.value;
+            thSel.innerHTML = '';
+            let matched = false;
+            opts.forEach(o => {
+                const optEl = document.createElement('option');
+                optEl.value = String(o.val);
+                optEl.textContent = o.text;
+                if (String(o.val) === prevVal || (!prevVal && o.selected)) {
+                    optEl.selected = true;
+                    matched = true;
+                }
+                thSel.appendChild(optEl);
+            });
+            if (!matched) {
+                const defaultOpt = opts.find(o => o.selected) || opts[0];
+                if (defaultOpt) thSel.value = String(defaultOpt.val);
+            }
+            const customOpt = document.createElement('option');
+            customOpt.value = 'custom';
+            customOpt.textContent = '自定期数...';
+            if (prevVal === 'custom') customOpt.selected = true;
+            thSel.appendChild(customOpt);
+        }
+
         function getOmissionRankAnalysis(threshold = 60, type = 'teNum', mode = 'rankHit', sourceData = null) {
             const dataToUse = (sourceData && sourceData.length > 0) ? sourceData : (state.historyData || []);
             const numThreshold = parseInt(threshold, 10) || 60;
@@ -7017,6 +7096,7 @@
             const allNumbers = Array.from({ length: 49 }, (_, i) => (i + 1).toString().padStart(2, '0'));
             const zodiacs = CONFIG.zodiacMap[y] || ['鼠','牛','虎','兔','龙','蛇','马','羊','猴','鸡','狗','猪'];
             const tails = Array.from({ length: 10 }, (_, i) => `${i}尾`);
+            const normZ = z => (z || '').replace(/龍/g, '龙').replace(/豬/g, '猪').replace(/雞/g, '鸡').replace(/馬/g, '马');
 
             let keys, getDrawnKeys, getKeyMeta;
             if (type === 'teNum') {
@@ -7033,7 +7113,10 @@
                 });
             } else if (type === 'teZodiac') {
                 keys = zodiacs;
-                getDrawnKeys = item => [item.win || ''];
+                getDrawnKeys = item => {
+                    const z = item.win || (typeof getZodiac === 'function' ? getZodiac(item.winNum, y) : '');
+                    return [normZ(z)];
+                };
                 getKeyMeta = k => ({
                     name: k,
                     color: 'zodiac',
@@ -7066,7 +7149,7 @@
                 });
             } else if (type === 'pingZodiac') {
                 keys = zodiacs;
-                getDrawnKeys = item => getAllDrawZodiacs(item);
+                getDrawnKeys = item => (typeof getAllDrawZodiacs === 'function' ? getAllDrawZodiacs(item) : [item.win]).map(normZ);
                 getKeyMeta = k => ({
                     name: k,
                     color: 'zodiac',
@@ -7110,6 +7193,19 @@
             // Current ranking (Rank 1 = coldest / highest omission, Rank N = hottest / lowest omission)
             const currentRankedKeys = keys.slice().sort((a, b) => runningOmission[b] - runningOmission[a] || a.localeCompare(b));
 
+            // Accurate true omission calculation
+            let trueOmission = {};
+            keys.forEach(k => { trueOmission[k] = 0; });
+            for (let k of keys) {
+                let om = 0;
+                for (let i = dataToUse.length - 1; i >= 0; i--) {
+                    const drawn = getDrawnKeys(dataToUse[i]);
+                    if (drawn.includes(k)) break;
+                    om++;
+                }
+                trueOmission[k] = om;
+            }
+
             const allRankItems = currentRankedKeys.map((key, idx) => {
                 const meta = getKeyMeta(key);
                 return {
@@ -7120,16 +7216,20 @@
                     zodiac: meta.zodiac,
                     numbers: meta.numbers,
                     rankOmission: rankMiss[idx],
-                    keyOmission: runningOmission[key],
+                    keyOmission: trueOmission[key],
                     lastHitExpect: rankLastHit[idx]
                 };
             });
 
+            let filtered = [];
             if (mode === 'currentRank') {
-                return allRankItems.filter(it => it.keyOmission >= numThreshold);
+                filtered = allRankItems.filter(it => it.keyOmission >= numThreshold);
+                filtered.sort((a, b) => b.keyOmission - a.keyOmission || a.rank - b.rank);
             } else {
-                return allRankItems.filter(it => it.rankOmission >= numThreshold);
+                filtered = allRankItems.filter(it => it.rankOmission >= numThreshold);
+                filtered.sort((a, b) => b.rankOmission - a.rankOmission || a.rank - b.rank);
             }
+            return filtered;
         }
 
         function getOmissionOverThresholdItems(threshold = 60, type = 'teNum', sourceData = state.historyData) {
@@ -7158,6 +7258,7 @@
         }
 
         function onOmissionThresholdParamChange() {
+            syncOmissionThresholdOptions();
             const sel = document.getElementById('coldOmissionThresholdSel');
             const customInput = document.getElementById('coldOmissionThresholdCustom');
             if (sel && customInput) {
@@ -7431,21 +7532,107 @@
         }
 
         // ==================== 冷热排序位次未出分析与控制 (冷热选号因子) ====================
+        const HOTCOLD_THRESHOLDS_BY_TYPE = {
+            allHotNum: [
+                { val: 40, text: '≥ 40期' },
+                { val: 50, text: '≥ 50期' },
+                { val: 60, text: '≥ 60期 (推荐)', selected: true },
+                { val: 70, text: '≥ 70期' },
+                { val: 80, text: '≥ 80期' },
+                { val: 100, text: '≥ 100期' },
+                { val: 120, text: '≥ 120期' }
+            ],
+            hotNum: [
+                { val: 10, text: '≥ 10期' },
+                { val: 15, text: '≥ 15期' },
+                { val: 20, text: '≥ 20期 (推荐)', selected: true },
+                { val: 25, text: '≥ 25期' },
+                { val: 30, text: '≥ 30期' },
+                { val: 40, text: '≥ 40期' }
+            ],
+            allHotZodiac: [
+                { val: 10, text: '≥ 10期' },
+                { val: 15, text: '≥ 15期' },
+                { val: 20, text: '≥ 20期 (推荐)', selected: true },
+                { val: 25, text: '≥ 25期' },
+                { val: 30, text: '≥ 30期' },
+                { val: 40, text: '≥ 40期' }
+            ],
+            hotZodiac: [
+                { val: 1, text: '≥ 1期' },
+                { val: 2, text: '≥ 2期 (推荐)', selected: true },
+                { val: 3, text: '≥ 3期' },
+                { val: 4, text: '≥ 4期' },
+                { val: 5, text: '≥ 5期' }
+            ],
+            allHotHead: [
+                { val: 2, text: '≥ 2期' },
+                { val: 3, text: '≥ 3期' },
+                { val: 4, text: '≥ 4期 (推荐)', selected: true },
+                { val: 5, text: '≥ 5期' },
+                { val: 7, text: '≥ 7期' },
+                { val: 10, text: '≥ 10期' }
+            ],
+            allHotTail: [
+                { val: 5, text: '≥ 5期' },
+                { val: 8, text: '≥ 8期' },
+                { val: 10, text: '≥ 10期 (推荐)', selected: true },
+                { val: 12, text: '≥ 12期' },
+                { val: 15, text: '≥ 15期' },
+                { val: 20, text: '≥ 20期' }
+            ]
+        };
+
+        let _lastHotColdThresholdType = null;
+        function syncHotColdThresholdOptions(forceType) {
+            const typeSel = document.getElementById('coldHotThresholdTypeSel');
+            const thSel = document.getElementById('coldHotThresholdSel');
+            if (!typeSel || !thSel) return;
+            const curType = forceType || typeSel.value || 'allHotNum';
+            if (curType === _lastHotColdThresholdType && thSel.options.length > 0) return;
+            _lastHotColdThresholdType = curType;
+
+            const opts = HOTCOLD_THRESHOLDS_BY_TYPE[curType] || HOTCOLD_THRESHOLDS_BY_TYPE.allHotNum;
+            const prevVal = thSel.value;
+            thSel.innerHTML = '';
+            let matched = false;
+            opts.forEach(o => {
+                const optEl = document.createElement('option');
+                optEl.value = String(o.val);
+                optEl.textContent = o.text;
+                if (String(o.val) === prevVal || (!prevVal && o.selected)) {
+                    optEl.selected = true;
+                    matched = true;
+                }
+                thSel.appendChild(optEl);
+            });
+            if (!matched) {
+                const defaultOpt = opts.find(o => o.selected) || opts[0];
+                if (defaultOpt) thSel.value = String(defaultOpt.val);
+            }
+            const customOpt = document.createElement('option');
+            customOpt.value = 'custom';
+            customOpt.textContent = '自定期数...';
+            if (prevVal === 'custom') customOpt.selected = true;
+            thSel.appendChild(customOpt);
+        }
+
         function getHotColdRankAnalysis(threshold = 60, type = 'allHotNum', mode = 'rankHit', sourceData = null) {
             const dataToUse = (sourceData && sourceData.length > 0) ? sourceData : ((state.historyData && state.historyData.length > 0) ? state.historyData : []);
-            const numThreshold = parseInt(threshold, 10) || 60;
+            const numThreshold = parseInt(threshold, 10) || 1;
             const y = state.currentYear;
             const allNumbers = Array.from({ length: 49 }, (_, i) => (i + 1).toString().padStart(2, '0'));
             const zodiacs = CONFIG.zodiacMap[y] || ['鼠','牛','虎','兔','龙','蛇','马','羊','猴','鸡','狗','猪'];
             const heads = Array.from({ length: 5 }, (_, i) => `${i}头`);
             const tails = Array.from({ length: 10 }, (_, i) => `${i}尾`);
+            const normZ = z => (z || '').replace(/龍/g, '龙').replace(/豬/g, '猪').replace(/雞/g, '鸡').replace(/馬/g, '马');
 
             let keys, getDrawnKeys, getKeyMeta;
             if (type === 'allHotNum') {
                 keys = allNumbers;
                 getDrawnKeys = item => {
-                    const wn = item.winNum != null ? item.winNum : '';
-                    return [wn.toString().padStart(2, '0')];
+                    const wn = typeof item.winNum === 'number' ? item.winNum : parseInt(item.winNum, 10);
+                    return isNaN(wn) ? [] : [wn.toString().padStart(2, '0')];
                 };
                 getKeyMeta = k => ({
                     name: k,
@@ -7464,7 +7651,10 @@
                 });
             } else if (type === 'allHotZodiac') {
                 keys = zodiacs;
-                getDrawnKeys = item => [item.win || ''];
+                getDrawnKeys = item => {
+                    const z = item.win || (typeof getZodiac === 'function' ? getZodiac(item.winNum, y) : '');
+                    return z ? [normZ(z)] : [];
+                };
                 getKeyMeta = k => ({
                     name: k,
                     color: 'zodiac',
@@ -7473,7 +7663,7 @@
                 });
             } else if (type === 'hotZodiac') {
                 keys = zodiacs;
-                getDrawnKeys = item => getAllDrawZodiacs(item);
+                getDrawnKeys = item => (typeof getAllDrawZodiacs === 'function' ? getAllDrawZodiacs(item) : [item.win]).map(normZ);
                 getKeyMeta = k => ({
                     name: k,
                     color: 'zodiac',
@@ -7521,8 +7711,6 @@
 
             let rankMiss = Array.from({ length: keys.length }, () => 0);
             let rankLastHit = Array.from({ length: keys.length }, () => null);
-            let runningOmission = {};
-            keys.forEach(k => { runningOmission[k] = 0; });
 
             for (let i = 0; i < dataToUse.length; i++) {
                 const item = dataToUse[i];
@@ -7534,7 +7722,8 @@
                     drawnPast.forEach(k => { if (freq[k] !== undefined) freq[k]++; });
                 }
 
-                const rankedKeys = keys.slice().sort((a, b) => freq[b] - freq[a] || runningOmission[b] - runningOmission[a] || a.localeCompare(b));
+                // 保持与滑块/冷热排序一致的排序规则 (频次降序，频次相同时依自然键排序)
+                const rankedKeys = keys.slice().sort((a, b) => freq[b] - freq[a] || a.localeCompare(b));
                 const drawnCur = getDrawnKeys(item);
                 const drawnRanks = drawnCur.map(k => rankedKeys.indexOf(k)).filter(r => r !== -1);
 
@@ -7546,14 +7735,9 @@
                         rankMiss[r]++;
                     }
                 }
-
-                keys.forEach(k => {
-                    if (drawnCur.includes(k)) runningOmission[k] = 0;
-                    else runningOmission[k]++;
-                });
             }
 
-            // Current window frequency ranking
+            // 当前窗口频次计算 (与对应冷热滑块一致)
             const curStart = Math.max(0, dataToUse.length - actualWin);
             let curFreq = {};
             keys.forEach(k => { curFreq[k] = 0; });
@@ -7562,7 +7746,21 @@
                 drawnPast.forEach(k => { if (curFreq[k] !== undefined) curFreq[k]++; });
             }
 
-            const currentRanked = keys.slice().sort((a, b) => curFreq[b] - curFreq[a] || runningOmission[b] - runningOmission[a] || a.localeCompare(b));
+            // 精准计算各元素当前实际遗漏期数 (从最新一期往回推算)
+            let trueOmission = {};
+            keys.forEach(k => { trueOmission[k] = 0; });
+            for (let k of keys) {
+                let om = 0;
+                for (let i = dataToUse.length - 1; i >= 0; i--) {
+                    const drawn = getDrawnKeys(dataToUse[i]);
+                    if (drawn.includes(k)) break;
+                    om++;
+                }
+                trueOmission[k] = om;
+            }
+
+            // 保持与冷热滑块选区 100% 一致的排位
+            const currentRanked = keys.slice().sort((a, b) => curFreq[b] - curFreq[a] || a.localeCompare(b));
 
             const allItems = currentRanked.map((key, idx) => {
                 const meta = getKeyMeta(key);
@@ -7575,7 +7773,7 @@
                     numbers: meta.numbers,
                     freq: curFreq[key] || 0,
                     rankOmission: rankMiss[idx],
-                    keyOmission: runningOmission[key],
+                    keyOmission: trueOmission[key],
                     lastHitExpect: rankLastHit[idx]
                 };
             });
@@ -7606,12 +7804,13 @@
             const customInput = document.getElementById('coldHotThresholdCustom');
             if (!sel) return 60;
             if (sel.value === 'custom') {
-                return Math.max(1, parseInt(customInput?.value, 10) || 60);
+                return Math.max(1, parseInt(customInput?.value, 10) || 1);
             }
-            return parseInt(sel.value, 10) || 60;
+            return parseInt(sel.value, 10) || 1;
         }
 
         function onHotColdThresholdParamChange() {
+            syncHotColdThresholdOptions();
             const sel = document.getElementById('coldHotThresholdSel');
             const customInput = document.getElementById('coldHotThresholdCustom');
             if (sel && customInput) {
@@ -7632,6 +7831,7 @@
         }
 
         function updateHotColdThresholdDisplay() {
+            syncHotColdThresholdOptions();
             const listEl = document.getElementById('hotColdThresholdList');
             const countEl = document.getElementById('hotColdThresholdCount');
             const noteEl = document.getElementById('hotColdThresholdSummaryNote');
@@ -7663,7 +7863,7 @@
             const rankLabels = items.map(it => `第${it.rank}位`);
             if (noteEl) {
                 if (mode === 'currentRank') {
-                    noteEl.textContent = `(当前号码遗漏 ≥ ${threshold} 期: ${rankLabels.join('、')})`;
+                    noteEl.textContent = `(当前${typeName}遗漏 ≥ ${threshold} 期: ${rankLabels.join('、')})`;
                 } else {
                     noteEl.textContent = `(冷热位次未出 ≥ ${threshold} 期: ${rankLabels.join('、')})`;
                 }
