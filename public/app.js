@@ -143,10 +143,14 @@
             latestDataRecord: null,
             klineTooltipCollapsed: (function() {
                 try {
-                    return localStorage.getItem('kline_tooltip_collapsed') === 'true';
-                } catch (e) {
-                    return false;
-                }
+                    const saved = localStorage.getItem('kline_tooltip_collapsed');
+                    if (saved !== null) return saved === 'true';
+                } catch (e) {}
+                // 移动端默认收起为迷你条，避免浮窗遮挡图表
+                try {
+                    if (isNarrowViewport()) return true;
+                } catch (e) {}
+                return false;
             })(),
             klineTooltipHidden: false,
             lastTooltipData: null,
@@ -154,6 +158,19 @@
             tooltipTimeout: null,
             lastTouchDist: 0,
             touchStartTime: 0,
+            // 移动端单指拖拽平移状态
+            touchPan: {
+                active: false,
+                panning: false,
+                startX: 0,
+                startY: 0,
+                lastX: 0,
+                lastY: 0,
+                startTime: 0,
+                vx: 0,
+                vy: 0
+            },
+            panInertiaId: null,
             overallMaxRise: 0,
             overallMaxFall: 0,
             recInlineCount: 5,
@@ -246,6 +263,103 @@
             state.ctx.scale(dpr, dpr);
         }
 
+        // ==================== 视图平移/边界控制 ====================
+        // 窄屏（手机竖屏/横屏）判定，供浮窗与图表默认视图共用
+        function isNarrowViewport() {
+            return (window.innerWidth <= 767) ||
+                (window.innerHeight <= 500 && window.innerWidth > window.innerHeight);
+        }
+
+        // 移动端默认只显示最近 N 期，保证 K 线可读且可左右拖动
+        const MOBILE_VISIBLE_POINTS = 40;
+
+        // 计算「最新一期贴住画布右边界」时的水平偏移，用于初始定位
+        function getLatestAnchorX() {
+            const canvas = state.canvas;
+            if (!canvas) return 0;
+            const dpr = window.devicePixelRatio || 1;
+            const width = canvas.width / dpr;
+            const count = (state.visibleData && state.visibleData.length) || 0;
+            if (count < 2 || width <= 0) return 0;
+
+            const { spacing, startX, padding } = getChartSettings(count, width);
+            const totalWidth = (count - 1) * spacing;
+            // 内容不足一屏时居中显示
+            if (totalWidth + padding * 2 <= width) return 0;
+            return width - padding - (startX + totalWidth);
+        }
+
+        // 只限制上下拖动范围；左右拖动不做任何限制（可自由拖到任意位置）
+        function clampChartVertical() {
+            if (!state.viewState) return;
+            const canvas = state.canvas;
+            const dpr = window.devicePixelRatio || 1;
+            const height = canvas ? canvas.height / dpr : 0;
+            const limit = Math.max(240, height * 2);
+            state.viewState.y = Math.max(-limit, Math.min(limit, state.viewState.y));
+        }
+
+        // 移动端默认视图：放大到只显示最近 MOBILE_VISIBLE_POINTS 期并锚定最新一期，
+        // 这样打开页面 K 线更易读，也能立刻左右拖动浏览
+        function applyMobileDefaultChartView() {
+            if (!isNarrowViewport()) return false;
+            const count = (state.visibleData && state.visibleData.length) || 0;
+            if (count <= MOBILE_VISIBLE_POINTS) return false;
+
+            const targetScale = (count - 1) / (MOBILE_VISIBLE_POINTS - 1);
+            state.viewState.scale = Math.min(targetScale, 12);
+            state.viewState.y = 0;
+            state.viewState.x = getLatestAnchorX();
+            return true;
+        }
+
+        // 拖拽惯性滑动
+        function stopPanInertia() {
+            if (state.panInertiaId) {
+                cancelAnimationFrame(state.panInertiaId);
+                state.panInertiaId = null;
+            }
+        }
+
+        function startPanInertia(vx, vy) {
+            stopPanInertia();
+            if (!vx && !vy) return;
+            if (Math.abs(vx) < 0.4 && Math.abs(vy) < 0.4) return;
+
+            let curVx = vx;
+            let curVy = vy;
+            const step = () => {
+                curVx *= 0.94;
+                curVy *= 0.94;
+                if (Math.abs(curVx) < 0.35 && Math.abs(curVy) < 0.35) {
+                    state.panInertiaId = null;
+                    return;
+                }
+                const beforeY = state.viewState.y;
+                state.viewState.x += curVx;
+                state.viewState.y += curVy;
+                clampChartVertical();
+                // 纵向撞到边界且横向无位移时停止惯性，避免抖动
+                if (state.viewState.y === beforeY && Math.abs(curVx) < 0.35) {
+                    state.panInertiaId = null;
+                    return;
+                }
+                requestDraw();
+                state.panInertiaId = requestAnimationFrame(step);
+            };
+            state.panInertiaId = requestAnimationFrame(step);
+        }
+
+        function setKlineTooltipVisible(visible) {
+            const tooltip = document.getElementById('klineTooltip');
+            if (!tooltip) return;
+            if (!visible) {
+                tooltip.style.display = 'none';
+                return;
+            }
+            if (!state.klineTooltipHidden) tooltip.style.display = 'block';
+        }
+
         function initEvents() {
             const canvas = state.canvas;
 
@@ -263,6 +377,7 @@
                     const dy = e.clientY - state.lastMouse.y;
                     state.viewState.x += dx;
                     state.viewState.y += dy;
+                    clampChartVertical();
                     state.lastMouse.x = e.clientX;
                     state.lastMouse.y = e.clientY;
                     requestDraw();
@@ -296,6 +411,7 @@
             });
 
             canvas.addEventListener('mousedown', (e) => {
+                stopPanInertia();
                 state.isDragging = true;
                 state.lastMouse.x = e.clientX;
                 state.lastMouse.y = e.clientY;
@@ -305,6 +421,11 @@
             window.addEventListener('mouseup', () => {
                 state.isDragging = false;
                 canvas.style.cursor = 'crosshair';
+            });
+
+            // 桌面端双击图表重置视图（拖动无左右限制，便于随时找回）
+            canvas.addEventListener('dblclick', () => {
+                resetChartView();
             });
 
             canvas.addEventListener('wheel', (e) => {
@@ -317,6 +438,7 @@
                 state.viewState.scale = Math.max(0.2, Math.min(20, state.viewState.scale * delta));
                 
                 state.viewState.x = mouseX - (mouseX - state.viewState.x) * (state.viewState.scale / oldScale);
+                clampChartVertical();
                 
                 requestDraw();
             });
@@ -348,8 +470,6 @@
 
             function handleCanvasTouchBrowse(clientX, clientY) {
                 const rect = canvas.getBoundingClientRect();
-                const chartSection = document.getElementById('chartSection');
-                const chartRect = chartSection ? chartSection.getBoundingClientRect() : rect;
                 const dpr = window.devicePixelRatio || 1;
                 const logicalWidth = canvas.width / dpr;
                 const { spacing, startX } = getChartSettings(state.visibleData.length, logicalWidth);
@@ -371,22 +491,11 @@
                 if (prevIdx !== idx && typeof navigator !== 'undefined' && navigator.vibrate) {
                     try { navigator.vibrate(6); } catch (vErr) {}
                 }
-
-                if (state.viewState.scale > 1) {
-                    const edgeDist = clientX - rect.left;
-                    if (edgeDist < 45) {
-                        state.viewState.x = Math.min(0, state.viewState.x + 8);
-                        requestDraw();
-                    } else if (edgeDist > rect.width - 45) {
-                        const totalWidth = (state.visibleData.length - 1) * spacing;
-                        const minX = rect.width - totalWidth - 60;
-                        state.viewState.x = Math.max(minX, state.viewState.x - 8);
-                        requestDraw();
-                    }
-                }
             }
 
             canvas.addEventListener('touchstart', (e) => {
+                stopPanInertia();
+
                 if (touchHoverTimer) {
                     clearTimeout(touchHoverTimer);
                     touchHoverTimer = null;
@@ -396,13 +505,26 @@
                     state.tooltipTimeout = null;
                 }
 
+                const pan = state.touchPan;
+
                 if (e.touches.length === 1) {
                     const touch = e.touches[0];
+                    pan.active = true;
+                    pan.panning = false;
+                    pan.startX = touch.clientX;
+                    pan.startY = touch.clientY;
+                    pan.lastX = touch.clientX;
+                    pan.lastY = touch.clientY;
+                    pan.startTime = Date.now();
+                    pan.vx = 0;
+                    pan.vy = 0;
                     state.lastMouse.x = touch.clientX;
                     state.lastMouse.y = touch.clientY;
-                    handleCanvasTouchBrowse(touch.clientX, touch.clientY);
                 } else if (e.touches.length === 2) {
+                    pan.active = false;
+                    pan.panning = false;
                     hideKlineTooltip();
+                    setKlineTooltipVisible(false);
                     state.lastTouchDist = Math.hypot(
                         e.touches[0].clientX - e.touches[1].clientX,
                         e.touches[0].clientY - e.touches[1].clientY
@@ -413,11 +535,36 @@
             canvas.addEventListener('touchmove', (e) => {
                 e.preventDefault();
 
+                const pan = state.touchPan;
+
                 if (e.touches.length === 1) {
                     const touch = e.touches[0];
                     state.lastMouse.x = touch.clientX;
                     state.lastMouse.y = touch.clientY;
-                    handleCanvasTouchBrowse(touch.clientX, touch.clientY);
+
+                    // 超过阈值才判定为拖动，避免轻点被误判
+                    if (!pan.panning && pan.active) {
+                        const dist = Math.hypot(touch.clientX - pan.startX, touch.clientY - pan.startY);
+                        if (dist > 8) {
+                            pan.panning = true;
+                            state.hoverIndex = -1;
+                            setKlineTooltipVisible(false); // 拖动时收起浮窗，避免遮挡图表
+                            requestDraw();
+                        }
+                    }
+
+                    if (pan.panning) {
+                        const dx = touch.clientX - pan.lastX;
+                        const dy = touch.clientY - pan.lastY;
+                        pan.lastX = touch.clientX;
+                        pan.lastY = touch.clientY;
+                        pan.vx = dx;
+                        pan.vy = dy;
+                        state.viewState.x += dx;
+                        state.viewState.y += dy;
+                        clampChartVertical();
+                        requestDraw();
+                    }
                 } else if (e.touches.length === 2) {
                     const dist = Math.hypot(
                         e.touches[0].clientX - e.touches[1].clientX,
@@ -432,6 +579,7 @@
                         const rect = canvas.getBoundingClientRect();
                         const centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
                         state.viewState.x = centerX - (centerX - state.viewState.x) * (state.viewState.scale / oldScale);
+                        clampChartVertical();
                         
                         requestDraw();
                     }
@@ -440,17 +588,57 @@
             }, { passive: false });
 
             canvas.addEventListener('touchend', (e) => {
+                // 双指缩放后剩一指：重新接管为单指拖动
+                if (e.touches.length === 1) {
+                    const rest = e.touches[0];
+                    const pan = state.touchPan;
+                    state.lastTouchDist = 0;
+                    pan.active = true;
+                    pan.panning = false;
+                    pan.startX = rest.clientX;
+                    pan.startY = rest.clientY;
+                    pan.lastX = rest.clientX;
+                    pan.lastY = rest.clientY;
+                    pan.vx = 0;
+                    pan.vy = 0;
+                    return;
+                }
+
                 if (e.touches.length === 0) {
                     state.lastTouchDist = 0;
                     const now = Date.now();
+                    const pan = state.touchPan;
+                    const wasPanning = pan.panning;
+                    pan.active = false;
+                    pan.panning = false;
 
+                    // 拖动结束：带惯性滑行，不弹浮窗
+                    if (wasPanning) {
+                        startPanInertia(pan.vx, pan.vy);
+                        pan.vx = 0;
+                        pan.vy = 0;
+                        state.hoverIndex = -1;
+                        requestDraw();
+                        return;
+                    }
+
+                    // 双击：重置视图
                     if (lastTapTime && (now - lastTapTime < 300)) {
                         resetChartView();
                         hideKlineTooltip();
+                        setKlineTooltipVisible(false);
+                        state.hoverIndex = -1;
+                        requestDraw();
                         lastTapTime = 0;
                         return;
                     }
                     lastTapTime = now;
+
+                    // 轻点：显示该期浮窗详情
+                    const touch = (e.changedTouches && e.changedTouches[0]) || null;
+                    if (touch) {
+                        handleCanvasTouchBrowse(touch.clientX, touch.clientY);
+                    }
 
                     touchHoverTimer = setTimeout(() => {
                         state.hoverIndex = -1;
@@ -469,6 +657,17 @@
                     }, 8000);
                 }
             });
+
+            canvas.addEventListener('touchcancel', () => {
+                const pan = state.touchPan;
+                pan.active = false;
+                pan.panning = false;
+                pan.vx = 0;
+                pan.vy = 0;
+                state.lastTouchDist = 0;
+                stopPanInertia();
+            });
+
         }
 
         let toastTimer = null;
@@ -1827,6 +2026,12 @@
             return { spacing, startX, padding };
         }
 
+        // 纵向放大系数：移动端仅放大时间轴，避免放大后 K 线纵向飞出画面
+        function getVerticalZoomBoost() {
+            if (isNarrowViewport()) return 1;
+            return Math.max(1, Math.min(state.viewState.scale, 5));
+        }
+
         function draw() {
             const ctx = state.ctx;
             const canvas = state.canvas;
@@ -1855,6 +2060,19 @@
             drawHoverEffect(ctx, data, width, height);
 
             ctx.restore();
+
+            // 左右拖动不限边界：内容被完全拖出视野时给出复位提示
+            const contentLeft = startX + state.viewState.x;
+            const contentRight = contentLeft + (data.length - 1) * spacing;
+            if (contentRight < 0 || contentLeft > width) {
+                ctx.save();
+                ctx.fillStyle = themeText(0.45);
+                ctx.font = '12px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('图表已拖出视野 · 双击或点 ⟲ 复位', width / 2, height / 2);
+                ctx.restore();
+            }
          }
 
 
@@ -1929,7 +2147,7 @@
             const range = maxScore - minScore;
             const chartHeight = height * 0.6;
             const centerY = height / 2;
-            const zoomBoost = Math.max(1, Math.min(state.viewState.scale, 5));
+            const zoomBoost = getVerticalZoomBoost();
             const scaleY = (chartHeight / Math.max(range, 20)) * zoomBoost;
             drawYAxisGrid(ctx, width, height, centerY, scaleY, maxScore, minScore);
             drawXAxisLabels(ctx, data, width, height, spacing, startX);
@@ -2106,7 +2324,7 @@
             const range = maxScore - minScore;
             const chartHeight = height * 0.6;
             const centerY = height / 2;
-                        const zoomBoost = Math.max(1, Math.min(state.viewState.scale, 5));
+                        const zoomBoost = getVerticalZoomBoost();
             const scaleY = (chartHeight / Math.max(range, 30)) * zoomBoost;
             drawYAxisGrid(ctx, width, height, centerY, scaleY, maxScore, minScore);
             drawXAxisLabels(ctx, data, width, height, spacing, startX);
@@ -2212,7 +2430,7 @@
                 const minScore = Math.min(...allScores, -10);
                 const range = maxScore - minScore;
                 const chartHeight = height * 0.6;
-                const zoomBoost = Math.max(1, Math.min(state.viewState.scale, 5));
+                const zoomBoost = getVerticalZoomBoost();
             const scaleY = (chartHeight / Math.max(range, 30)) * zoomBoost;
                 y = height / 2 - (d.colorScores.red - (maxScore + minScore) / 2) * scaleY;
             } else {
@@ -2222,7 +2440,7 @@
                 const minScore = Math.min(...scores, -5);
                 const range = maxScore - minScore;
                 const chartHeight = height * 0.6;
-                const zoomBoost = Math.max(1, Math.min(state.viewState.scale, 5));
+                const zoomBoost = getVerticalZoomBoost();
             const scaleY = (chartHeight / Math.max(range, 20)) * zoomBoost;
                 y = height / 2 - (d.displayScore - baseScore) * scaleY;
             }
@@ -10891,7 +11109,11 @@
 
             document.getElementById('pageInfo').textContent = `${start + 1}-${Math.min(end, total)}/共${total}期`;
 
-            state.viewState.x = 0;
+            state.viewState.y = 0;
+            // 切换期数后：移动端默认放大到最近若干期并锚定最新一期；桌面端回到全览起点
+            if (!(state.viewState.scale === 1 && applyMobileDefaultChartView())) {
+                state.viewState.x = isNarrowViewport() ? getLatestAnchorX() : 0;
+            }
             
             updateDynamicHotCold();
 
@@ -12506,14 +12728,20 @@
             const dpr = window.devicePixelRatio || 1;
             const centerX = (state.canvas.width / dpr) / 2;
             state.viewState.x = centerX - (centerX - state.viewState.x) * (state.viewState.scale / oldScale);
+            clampChartVertical();
             
             draw();
         }
 
         function resetChartView() {
+            stopPanInertia();
             state.viewState.scale = 1;
             state.viewState.x = 0;
             state.viewState.y = 0;
+            // 移动端重置回默认视图（最近若干期），保持可拖动
+            if (applyMobileDefaultChartView()) {
+                showToast('已回到最近 ' + MOBILE_VISIBLE_POINTS + ' 期，左右拖动可查看更早走势');
+            }
             draw();
         }
 
