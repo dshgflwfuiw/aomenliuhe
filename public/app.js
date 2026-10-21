@@ -141,6 +141,15 @@
             hoverIndex: -1,
             tableHighlightItem: null,
             latestDataRecord: null,
+            klineTooltipCollapsed: (function() {
+                try {
+                    return localStorage.getItem('kline_tooltip_collapsed') === 'true';
+                } catch (e) {
+                    return false;
+                }
+            })(),
+            klineTooltipHidden: false,
+            lastTooltipData: null,
             lastTapTime: null,
             tooltipTimeout: null,
             lastTouchDist: 0,
@@ -312,10 +321,21 @@
                 requestDraw();
             });
 
-            canvas.addEventListener('mouseleave', () => {
+            canvas.addEventListener('mouseleave', (e) => {
                 state.hoverIndex = -1;
                 requestDraw();
-                hideKlineTooltip();
+                const tooltip = document.getElementById('klineTooltip');
+                if (e && e.relatedTarget && tooltip && (tooltip.contains(e.relatedTarget) || tooltip === e.relatedTarget)) {
+                    return;
+                }
+                const latest = (state.visibleData && state.visibleData.length > 0)
+                    ? state.visibleData[state.visibleData.length - 1]
+                    : state.latestDataRecord;
+                if (latest && !state.klineTooltipHidden) {
+                    showKlineTooltip(latest);
+                } else if (state.klineTooltipHidden) {
+                    hideKlineTooltip();
+                }
                 if (state.latestDataRecord) {
                     updateInfoPanel(state.latestDataRecord, false);
                 } else if (state.visibleData && state.visibleData.length > 0) {
@@ -10880,6 +10900,9 @@
                 const latestVisible = state.visibleData[state.visibleData.length - 1];
                 updateInfoPanel(latestVisible, true);
                 syncChartHeader();
+                if (!state.klineTooltipHidden && typeof showKlineTooltip === 'function') {
+                    showKlineTooltip(latestVisible);
+                }
             }
         }
 
@@ -12625,14 +12648,95 @@
             ` : '';
         }
 
+        function toggleKlineTooltipCollapse(e) {
+            if (e) {
+                e.stopPropagation();
+                e.preventDefault();
+            }
+            state.klineTooltipCollapsed = !state.klineTooltipCollapsed;
+            try {
+                localStorage.setItem('kline_tooltip_collapsed', state.klineTooltipCollapsed ? 'true' : 'false');
+            } catch (err) {}
+            if (state.lastTooltipData) {
+                showKlineTooltip(state.lastTooltipData);
+            }
+        }
+        window.toggleKlineTooltipCollapse = toggleKlineTooltipCollapse;
+
+        function closeKlineTooltip(e) {
+            if (e) {
+                e.stopPropagation();
+                e.preventDefault();
+            }
+            state.klineTooltipHidden = true;
+            const tooltip = document.getElementById('klineTooltip');
+            if (tooltip) tooltip.style.display = 'none';
+            const reopenBtn = document.getElementById('klineTooltipReopenBtn');
+            if (reopenBtn) reopenBtn.style.display = 'inline-flex';
+        }
+        window.closeKlineTooltip = closeKlineTooltip;
+
+        function reopenKlineTooltip(e) {
+            if (e) {
+                e.stopPropagation();
+                e.preventDefault();
+            }
+            state.klineTooltipHidden = false;
+            const reopenBtn = document.getElementById('klineTooltipReopenBtn');
+            if (reopenBtn) reopenBtn.style.display = 'none';
+            if (state.lastTooltipData) {
+                showKlineTooltip(state.lastTooltipData);
+            } else if (state.visibleData && state.visibleData.length > 0) {
+                showKlineTooltip(state.visibleData[state.visibleData.length - 1]);
+            }
+        }
+        window.reopenKlineTooltip = reopenKlineTooltip;
+
         function showKlineTooltip(data, x, y) {
             const tooltip = document.getElementById('klineTooltip');
             if (!data || !tooltip) return;
+
+            state.lastTooltipData = data;
+            if (state.klineTooltipHidden) return;
+
+            const reopenBtn = document.getElementById('klineTooltipReopenBtn');
+            if (reopenBtn) reopenBtn.style.display = 'none';
 
             const codes = data.codes || [];
             const topZodiacs = data.pingXiao ? data.pingXiao.split(' ') : [];
             topZodiacs.push(data.win || '');
             const itemYear = parseInt(String(data.expect).slice(0, 4), 10) || state.currentYear;
+            const numStr = data.winNum != null ? data.winNum.toString().padStart(2, '0') : '--';
+
+            // 收起状态展示精简迷你标签
+            if (state.klineTooltipCollapsed) {
+                tooltip.classList.add('collapsed');
+                const scoreColor = data.displayScore >= 0 ? 'var(--up)' : 'var(--down)';
+                const scorePrefix = data.displayScore > 0 ? '+' : '';
+                tooltip.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                        <div style="display:flex; align-items:center; gap:5px; cursor:pointer;" onclick="toggleKlineTooltipCollapse(event)" title="点击展开浮窗详情">
+                            <span style="font-weight:800; color:var(--accent); font-size:11.5px; white-space:nowrap;">📌 ${data.expect}期</span>
+                            <span class="t-ball zodiac" style="font-size:10px; padding:1px 5px; height:18px; line-height:16px;">${data.win || ''}</span>
+                            <span style="font-weight:700; color:var(--warn); font-size:11px;">${numStr}</span>
+                            <span style="font-size:10px; color:${scoreColor}; font-weight:700;">${scorePrefix}${data.displayScore != null ? data.displayScore : ''}</span>
+                        </div>
+                        <div style="display:inline-flex; align-items:center; gap:3px; flex-shrink:0;">
+                            <button type="button" class="kline-tooltip-toggle-btn" onclick="toggleKlineTooltipCollapse(event)" title="展开浮窗详情">展开 ▾</button>
+                            <button type="button" class="kline-tooltip-close-btn" onclick="closeKlineTooltip(event)" title="隐藏浮窗">✕</button>
+                        </div>
+                    </div>
+                `;
+                tooltip.style.display = 'block';
+                const dynamicInfo = document.getElementById('dynamicHotColdInfo');
+                const dynamicHeight = (dynamicInfo && dynamicInfo.style.display !== 'none' && dynamicInfo.offsetHeight) ? dynamicInfo.offsetHeight : 0;
+                tooltip.style.top = `${46 + dynamicHeight}px`;
+                tooltip.style.right = '12px';
+                tooltip.style.left = 'auto';
+                return;
+            }
+
+            tooltip.classList.remove('collapsed');
 
             const ballsHtml = codes.map((c, i) => {
                 const isSp = i === 6;
@@ -12649,8 +12753,8 @@
             let trendInfo = '';
             let zodiacOmissionHtml = '';
             if (state.currentMode === 'zodiac') {
-                const om = data.snapshot[data.win];
-                trendInfo = om === 0 ? '<span style="color:var(--up);">★ 命中</span>' : `<span style="color:var(--text-secondary);">遗漏 ${om} 期</span>`;
+                const om = data.snapshot ? data.snapshot[data.win] : undefined;
+                trendInfo = om === 0 ? '<span style="color:var(--up);">★ 命中</span>' : (om !== undefined ? `<span style="color:var(--text-secondary);">遗漏 ${om} 期</span>` : '');
                 if (data.snapshot) {
                     const sortedZodiacOmissions = Object.entries(data.snapshot)
                         .sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]))
@@ -12670,7 +12774,6 @@
             const N = pageSizeVal === 'all' ? state.historyData.length : parseInt(pageSizeVal);
             const absIdx = data.total - 1;
             const windowData = state.historyData.slice(Math.max(0, absIdx - N), absIdx);
-            const numStr = data.winNum != null ? data.winNum.toString().padStart(2, '0') : '--';
 
             let modeSpecificHtml = '';
             const currentMode = state.currentMode;
@@ -12843,10 +12946,14 @@
             }
 
             let content = `
-                <div class="tooltip-header">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span style="font-weight:800; color:var(--accent); font-size:14px;">${data.expect} 期</span>
-                        <span style="font-size:10px; color:var(--text-secondary);">${data.time}</span>
+                <div class="tooltip-header" style="display:flex; justify-content:space-between; align-items:center; gap:6px; margin-bottom:6px; border-bottom:1px solid var(--border); padding-bottom:4px;">
+                    <div style="display:flex; align-items:center; gap:6px; min-width:0;">
+                        <span style="font-weight:800; color:var(--accent); font-size:13.5px; white-space:nowrap;">📌 ${data.expect} 期</span>
+                        <span style="font-size:10px; color:var(--text-secondary); white-space:nowrap;">${data.time || ''}</span>
+                    </div>
+                    <div style="display:inline-flex; align-items:center; gap:3px; flex-shrink:0;">
+                        <button type="button" class="kline-tooltip-toggle-btn" onclick="toggleKlineTooltipCollapse(event)" title="收起浮窗 (仅保留期号与特码)">收起 ▴</button>
+                        <button type="button" class="kline-tooltip-close-btn" onclick="closeKlineTooltip(event)" title="隐藏浮窗">✕</button>
                     </div>
                 </div>
                 <div class="tooltip-content">
@@ -12890,7 +12997,6 @@
             if (state.currentMode === 'zodiac') {
                 content += zodiacOmissionHtml;
             }
-
 
             const pointStats = computeMaxRiseFall(state.historyData || [], data.total - 1);
             const currentRise = pointStats.currentRise;
@@ -12957,48 +13063,24 @@
             }
 
             content += modeSpecificHtml;
-            
             content += `</div>`;
 
             tooltip.innerHTML = content;
             tooltip.style.display = 'block';
 
-            const chartSection = document.getElementById('chartSection');
-            const chartRect = chartSection ? chartSection.getBoundingClientRect() : { width: window.innerWidth, height: window.innerHeight, left: 0, top: 0 };
-
-            let relX = x;
-            let relY = y;
-            if (chartRect.left > 0 && x >= chartRect.left && x <= chartRect.right + 20) {
-                relX = x - chartRect.left;
-            }
-            if (chartRect.top > 0 && y >= chartRect.top && y <= chartRect.bottom + 20) {
-                relY = y - chartRect.top;
-            }
-            relX = Math.max(0, Math.min(relX, chartRect.width));
-            relY = Math.max(0, Math.min(relY, chartRect.height));
-
-            const tipWidth = Math.min(280, Math.max(200, chartRect.width - 24));
-            let left = relX + 16;
-            if (left + tipWidth > chartRect.width - 8) {
-                left = relX - tipWidth - 16;
-            }
-            left = Math.max(8, Math.min(left, chartRect.width - tipWidth - 8));
-
-            let top = relY - 140;
-            if (top < 10) {
-                top = relY + 24;
-            }
-            if (top + 260 > chartRect.height) {
-                top = Math.max(8, chartRect.height - 270);
-            }
-
-            tooltip.style.left = `${left}px`;
-            tooltip.style.top = `${top}px`;
+            // 固定在走势图右上角显示 (如有顶部动态冷热提示栏则在下方顺延)
+            const dynamicInfo = document.getElementById('dynamicHotColdInfo');
+            const dynamicHeight = (dynamicInfo && dynamicInfo.style.display !== 'none' && dynamicInfo.offsetHeight) ? dynamicInfo.offsetHeight : 0;
+            tooltip.style.top = `${46 + dynamicHeight}px`;
+            tooltip.style.right = '12px';
+            tooltip.style.left = 'auto';
         }
 
         function hideKlineTooltip() {
             const tooltip = document.getElementById('klineTooltip');
-            if (tooltip) tooltip.style.display = 'none';
+            if (tooltip && state.klineTooltipHidden) {
+                tooltip.style.display = 'none';
+            }
         }
 
         function showLoading(show, isError = false, errorMsg = '') {

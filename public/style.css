@@ -683,18 +683,101 @@
 
         .kline-tooltip {
             position: absolute;
-            background: rgba(22, 27, 34, 0.9);
+            top: 48px;
+            right: 12px;
+            left: auto !important;
+            background: rgba(22, 27, 34, 0.94);
             backdrop-filter: blur(16px) saturate(180%);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            padding: 16px;
-            pointer-events: none;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 10px;
+            padding: 10px 12px;
+            pointer-events: auto;
             z-index: 1000;
-            min-width: 240px;  /* 增加悬浮窗宽度以便显示冷热码 */
-            max-width: 280px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), inset 0 0 1px rgba(255, 255, 255, 0.1);
+            min-width: 230px;
+            max-width: 290px;
+            max-height: calc(100% - 60px);
+            overflow-y: auto;
+            box-shadow: 0 10px 35px rgba(0, 0, 0, 0.65), inset 0 0 1px rgba(255, 255, 255, 0.1);
             transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             animation: tooltipAppear 0.2s ease-out;
+            user-select: none;
+        }
+
+        .kline-tooltip.collapsed {
+            min-width: unset;
+            max-width: fit-content;
+            padding: 5px 8px;
+            border-radius: 7px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+        }
+
+        .kline-tooltip.collapsed .tooltip-body,
+        .kline-tooltip.collapsed .tooltip-content {
+            display: none !important;
+        }
+
+        .kline-tooltip-toggle-btn {
+            background: rgba(0, 212, 255, 0.12);
+            border: 1px solid rgba(0, 212, 255, 0.35);
+            border-radius: 4px;
+            color: var(--accent);
+            font-size: 10px;
+            padding: 2px 6px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            line-height: 1.2;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .kline-tooltip-toggle-btn:hover {
+            background: rgba(0, 212, 255, 0.25);
+            color: #ffffff;
+            border-color: var(--accent);
+        }
+
+        .kline-tooltip-close-btn {
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--text-secondary);
+            font-size: 11px;
+            padding: 1px 5px;
+            cursor: pointer;
+            border-radius: 4px;
+            line-height: 1.2;
+            transition: all 0.15s ease;
+        }
+
+        .kline-tooltip-close-btn:hover {
+            color: var(--down, #ff5252);
+            background: rgba(255, 23, 68, 0.15);
+            border-color: rgba(255, 23, 68, 0.3);
+        }
+
+        .kline-tooltip-reopen-btn {
+            position: absolute;
+            top: 48px;
+            right: 12px;
+            z-index: 999;
+            background: rgba(22, 27, 34, 0.9);
+            border: 1px solid rgba(0, 212, 255, 0.35);
+            border-radius: 6px;
+            padding: 4px 9px;
+            font-size: 11px;
+            color: var(--accent);
+            cursor: pointer;
+            backdrop-filter: blur(8px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            user-select: none;
+        }
+
+        .kline-tooltip-reopen-btn:hover {
+            background: rgba(0, 212, 255, 0.2);
+            color: #fff;
         }
 
         @keyframes tooltipAppear {
@@ -2466,6 +2549,12 @@
             background: rgba(255, 255, 255, 0.97);
             border-color: var(--border);
             box-shadow: 0 10px 30px rgba(30, 45, 70, 0.18);
+        }
+        body.light-theme .kline-tooltip-reopen-btn {
+            background: rgba(255, 255, 255, 0.95);
+            border-color: var(--border);
+            color: var(--accent);
+            box-shadow: 0 4px 12px rgba(30, 45, 70, 0.12);
         }
         body.light-theme .chart-legend {
             background: rgba(0, 0, 0, 0.05);
