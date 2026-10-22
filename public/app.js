@@ -7254,12 +7254,16 @@
                 { val: 120, text: '≥ 120期' }
             ],
             pingNum: [
-                { val: 10, text: '≥ 10期' },
-                { val: 15, text: '≥ 15期' },
-                { val: 20, text: '≥ 20期 (推荐)', selected: true },
+                { val: 20, text: '≥ 20期' },
                 { val: 25, text: '≥ 25期' },
                 { val: 30, text: '≥ 30期' },
-                { val: 35, text: '≥ 35期' }
+                { val: 40, text: '≥ 40期' },
+                { val: 50, text: '≥ 50期' },
+                { val: 60, text: '≥ 60期 (推荐)', selected: true },
+                { val: 70, text: '≥ 70期' },
+                { val: 80, text: '≥ 80期' },
+                { val: 100, text: '≥ 100期' },
+                { val: 120, text: '≥ 120期' }
             ],
             teZodiac: [
                 { val: 10, text: '≥ 10期' },
@@ -7271,16 +7275,44 @@
                 { val: 50, text: '≥ 50期' }
             ],
             pingZodiac: [
+                { val: 10, text: '≥ 10期' },
+                { val: 15, text: '≥ 15期' },
+                { val: 20, text: '≥ 20期' },
+                { val: 25, text: '≥ 25期 (推荐)', selected: true },
+                { val: 30, text: '≥ 30期' },
+                { val: 40, text: '≥ 40期' },
+                { val: 50, text: '≥ 50期' }
+            ],
+            teHead: [
                 { val: 2, text: '≥ 2期' },
-                { val: 3, text: '≥ 3期 (推荐)', selected: true },
-                { val: 4, text: '≥ 4期' },
+                { val: 3, text: '≥ 3期' },
+                { val: 4, text: '≥ 4期 (推荐)', selected: true },
                 { val: 5, text: '≥ 5期' },
-                { val: 6, text: '≥ 6期' }
+                { val: 7, text: '≥ 7期' },
+                { val: 10, text: '≥ 10期' }
+            ],
+            pingHead: [
+                { val: 2, text: '≥ 2期' },
+                { val: 3, text: '≥ 3期' },
+                { val: 4, text: '≥ 4期 (推荐)', selected: true },
+                { val: 5, text: '≥ 5期' },
+                { val: 7, text: '≥ 7期' },
+                { val: 10, text: '≥ 10期' }
             ],
             teTail: [
                 { val: 5, text: '≥ 5期' },
                 { val: 8, text: '≥ 8期' },
                 { val: 10, text: '≥ 10期 (推荐)', selected: true },
+                { val: 12, text: '≥ 12期' },
+                { val: 15, text: '≥ 15期' },
+                { val: 20, text: '≥ 20期' },
+                { val: 25, text: '≥ 25期' }
+            ],
+            pingTail: [
+                { val: 5, text: '≥ 5期' },
+                { val: 8, text: '≥ 8期' },
+                { val: 10, text: '≥ 10期 (推荐)', selected: true },
+                { val: 12, text: '≥ 12期' },
                 { val: 15, text: '≥ 15期' },
                 { val: 20, text: '≥ 20期' },
                 { val: 25, text: '≥ 25期' }
@@ -7294,6 +7326,7 @@
             if (!typeSel || !thSel) return;
             const curType = forceType || typeSel.value || 'teNum';
             if (curType === _lastOmissionThresholdType && thSel.options.length > 0) return;
+            const typeChanged = _lastOmissionThresholdType !== null && _lastOmissionThresholdType !== curType;
             _lastOmissionThresholdType = curType;
 
             const opts = OMISSION_THRESHOLDS_BY_TYPE[curType] || OMISSION_THRESHOLDS_BY_TYPE.teNum;
@@ -7304,7 +7337,7 @@
                 const optEl = document.createElement('option');
                 optEl.value = String(o.val);
                 optEl.textContent = o.text;
-                if (String(o.val) === prevVal || (!prevVal && o.selected)) {
+                if (!typeChanged && String(o.val) === prevVal) {
                     optEl.selected = true;
                     matched = true;
                 }
@@ -7317,26 +7350,57 @@
             const customOpt = document.createElement('option');
             customOpt.value = 'custom';
             customOpt.textContent = '自定期数...';
-            if (prevVal === 'custom') customOpt.selected = true;
+            if (prevVal === 'custom' && !typeChanged) customOpt.selected = true;
             thSel.appendChild(customOpt);
+
+            const customInput = document.getElementById('coldOmissionThresholdCustom');
+            if (customInput && thSel.value !== 'custom') {
+                customInput.style.display = 'none';
+            }
         }
 
         function getOmissionRankAnalysis(threshold = 60, type = 'teNum', mode = 'rankHit', sourceData = null) {
-            const dataToUse = (sourceData && sourceData.length > 0) ? sourceData : (state.historyData || []);
+            const dataToUse = (sourceData && sourceData.length > 0) ? sourceData : ((state.historyData && state.historyData.length > 0) ? state.historyData : []);
             const numThreshold = parseInt(threshold, 10) || 60;
             const y = state.currentYear;
             const allNumbers = Array.from({ length: 49 }, (_, i) => (i + 1).toString().padStart(2, '0'));
             const zodiacs = CONFIG.zodiacMap[y] || ['鼠','牛','虎','兔','龙','蛇','马','羊','猴','鸡','狗','猪'];
+            const heads = Array.from({ length: 5 }, (_, i) => `${i}头`);
             const tails = Array.from({ length: 10 }, (_, i) => `${i}尾`);
             const normZ = z => (z || '').replace(/龍/g, '龙').replace(/豬/g, '猪').replace(/雞/g, '鸡').replace(/馬/g, '马');
 
-            let keys, getDrawnKeys, getKeyMeta;
+            const getSpecialNumKeys = item => {
+                const wn = typeof item.winNum === 'number' ? item.winNum : parseInt(item.winNum, 10);
+                return isNaN(wn) ? [] : [wn.toString().padStart(2, '0')];
+            };
+            const getSpecialZodiacKeys = item => {
+                const z = item.win || (typeof getZodiac === 'function' ? getZodiac(item.winNum, y) : '');
+                return z ? [normZ(z)] : [];
+            };
+            const getSpecialHeadKeys = item => {
+                const wn = typeof item.winNum === 'number' ? item.winNum : parseInt(item.winNum, 10);
+                return isNaN(wn) ? [] : [`${Math.floor(wn / 10)}头`];
+            };
+            const getSpecialTailKeys = item => {
+                const wn = typeof item.winNum === 'number' ? item.winNum : parseInt(item.winNum, 10);
+                return isNaN(wn) ? [] : [`${wn % 10}尾`];
+            };
+
+            let keys, getDrawnKeys, getOmissionKeys, getKeyMeta;
             if (type === 'teNum') {
                 keys = allNumbers;
-                getDrawnKeys = item => {
-                    const wn = item.winNum != null ? item.winNum : '';
-                    return [wn.toString().padStart(2, '0')];
-                };
+                getDrawnKeys = getSpecialNumKeys;
+                getOmissionKeys = getSpecialNumKeys;
+                getKeyMeta = k => ({
+                    name: k,
+                    color: getColor(k),
+                    zodiac: getZodiac(parseInt(k, 10), y),
+                    numbers: [k]
+                });
+            } else if (type === 'pingNum') {
+                keys = allNumbers;
+                getDrawnKeys = getSpecialNumKeys;
+                getOmissionKeys = item => getAllDrawNumbers(item);
                 getKeyMeta = k => ({
                     name: k,
                     color: getColor(k),
@@ -7345,22 +7409,54 @@
                 });
             } else if (type === 'teZodiac') {
                 keys = zodiacs;
-                getDrawnKeys = item => {
-                    const z = item.win || (typeof getZodiac === 'function' ? getZodiac(item.winNum, y) : '');
-                    return [normZ(z)];
-                };
+                getDrawnKeys = getSpecialZodiacKeys;
+                getOmissionKeys = getSpecialZodiacKeys;
                 getKeyMeta = k => ({
                     name: k,
                     color: 'zodiac',
                     zodiac: k,
                     numbers: allNumbers.filter(n => getZodiac(parseInt(n, 10), y) === k)
                 });
+            } else if (type === 'pingZodiac') {
+                keys = zodiacs;
+                getDrawnKeys = getSpecialZodiacKeys;
+                getOmissionKeys = item => (typeof getAllDrawZodiacs === 'function' ? getAllDrawZodiacs(item) : [item.win]).map(normZ);
+                getKeyMeta = k => ({
+                    name: k,
+                    color: 'zodiac',
+                    zodiac: k,
+                    numbers: allNumbers.filter(n => getZodiac(parseInt(n, 10), y) === k)
+                });
+            } else if (type === 'teHead') {
+                keys = heads;
+                getDrawnKeys = getSpecialHeadKeys;
+                getOmissionKeys = getSpecialHeadKeys;
+                getKeyMeta = k => {
+                    const h = parseInt(k, 10);
+                    return {
+                        name: k,
+                        color: 'head',
+                        zodiac: '',
+                        numbers: allNumbers.filter(n => Math.floor(parseInt(n, 10) / 10) === h)
+                    };
+                };
+            } else if (type === 'pingHead') {
+                keys = heads;
+                getDrawnKeys = getSpecialHeadKeys;
+                getOmissionKeys = item => getAllDrawNumbers(item).map(n => `${Math.floor(parseInt(n, 10) / 10)}头`);
+                getKeyMeta = k => {
+                    const h = parseInt(k, 10);
+                    return {
+                        name: k,
+                        color: 'head',
+                        zodiac: '',
+                        numbers: allNumbers.filter(n => Math.floor(parseInt(n, 10) / 10) === h)
+                    };
+                };
             } else if (type === 'teTail') {
                 keys = tails;
-                getDrawnKeys = item => {
-                    const wn = typeof item.winNum === 'number' ? item.winNum : parseInt(item.winNum, 10);
-                    return isNaN(wn) ? [] : [`${wn % 10}尾`];
-                };
+                getDrawnKeys = getSpecialTailKeys;
+                getOmissionKeys = getSpecialTailKeys;
                 getKeyMeta = k => {
                     const t = parseInt(k, 10);
                     return {
@@ -7370,27 +7466,23 @@
                         numbers: allNumbers.filter(n => parseInt(n, 10) % 10 === t)
                     };
                 };
-            } else if (type === 'pingNum') {
-                keys = allNumbers;
-                getDrawnKeys = item => getAllDrawNumbers(item);
-                getKeyMeta = k => ({
-                    name: k,
-                    color: getColor(k),
-                    zodiac: getZodiac(parseInt(k, 10), y),
-                    numbers: [k]
-                });
-            } else if (type === 'pingZodiac') {
-                keys = zodiacs;
-                getDrawnKeys = item => (typeof getAllDrawZodiacs === 'function' ? getAllDrawZodiacs(item) : [item.win]).map(normZ);
-                getKeyMeta = k => ({
-                    name: k,
-                    color: 'zodiac',
-                    zodiac: k,
-                    numbers: allNumbers.filter(n => getZodiac(parseInt(n, 10), y) === k)
-                });
+            } else if (type === 'pingTail') {
+                keys = tails;
+                getDrawnKeys = getSpecialTailKeys;
+                getOmissionKeys = item => getAllDrawNumbers(item).map(n => `${parseInt(n, 10) % 10}尾`);
+                getKeyMeta = k => {
+                    const t = parseInt(k, 10);
+                    return {
+                        name: k,
+                        color: 'tail',
+                        zodiac: '',
+                        numbers: allNumbers.filter(n => parseInt(n, 10) % 10 === t)
+                    };
+                };
             } else {
                 keys = allNumbers;
-                getDrawnKeys = item => [item.winNum.toString().padStart(2, '0')];
+                getDrawnKeys = getSpecialNumKeys;
+                getOmissionKeys = getSpecialNumKeys;
                 getKeyMeta = k => ({ name: k, color: getColor(k), zodiac: getZodiac(parseInt(k, 10), y), numbers: [k] });
             }
 
@@ -7404,8 +7496,8 @@
                 const item = dataToUse[i];
                 // Sort keys by current running omission descending before this draw
                 const rankedKeys = keys.slice().sort((a, b) => runningOmission[b] - runningOmission[a] || a.localeCompare(b));
-                const drawn = getDrawnKeys(item);
-                const drawnRanks = drawn.map(k => rankedKeys.indexOf(k)).filter(r => r !== -1);
+                const drawnHit = getDrawnKeys(item);
+                const drawnRanks = drawnHit.map(k => rankedKeys.indexOf(k)).filter(r => r !== -1);
 
                 for (let r = 0; r < keys.length; r++) {
                     if (drawnRanks.includes(r)) {
@@ -7416,14 +7508,12 @@
                     }
                 }
 
+                const drawnOm = getOmissionKeys(item);
                 keys.forEach(k => {
-                    if (drawn.includes(k)) runningOmission[k] = 0;
+                    if (drawnOm.includes(k)) runningOmission[k] = 0;
                     else runningOmission[k]++;
                 });
             }
-
-            // Current ranking (Rank 1 = coldest / highest omission, Rank N = hottest / lowest omission)
-            const currentRankedKeys = keys.slice().sort((a, b) => runningOmission[b] - runningOmission[a] || a.localeCompare(b));
 
             // Accurate true omission calculation
             let trueOmission = {};
@@ -7431,12 +7521,15 @@
             for (let k of keys) {
                 let om = 0;
                 for (let i = dataToUse.length - 1; i >= 0; i--) {
-                    const drawn = getDrawnKeys(dataToUse[i]);
+                    const drawn = getOmissionKeys(dataToUse[i]);
                     if (drawn.includes(k)) break;
                     om++;
                 }
                 trueOmission[k] = om;
             }
+
+            // Current ranking (Rank 1 = coldest / highest omission, Rank N = hottest / lowest omission)
+            const currentRankedKeys = keys.slice().sort((a, b) => trueOmission[b] - trueOmission[a] || a.localeCompare(b));
 
             const allRankItems = currentRankedKeys.map((key, idx) => {
                 const meta = getKeyMeta(key);
@@ -7523,10 +7616,13 @@
 
             const typeNames = {
                 teNum: '特码遗漏位次',
-                teZodiac: '特码生肖位次',
-                teTail: '特码尾数位次',
                 pingNum: '平特号码位次',
-                pingZodiac: '平特生肖位次'
+                teZodiac: '特码生肖位次',
+                pingZodiac: '平特生肖位次',
+                teHead: '特码头数位次',
+                pingHead: '平特头数位次',
+                teTail: '特码尾数位次',
+                pingTail: '平特尾数位次'
             };
             const typeName = typeNames[type] || '位次';
 
@@ -7549,7 +7645,7 @@
 
             listEl.innerHTML = items.map(it => {
                 const miss = mode === 'currentRank' ? it.keyOmission : it.rankOmission;
-                const isUltra = miss >= (type === 'teZodiac' || type === 'teTail' ? 30 : 80);
+                const isUltra = miss >= (type.includes('Head') ? 15 : (type.includes('Zodiac') || type.includes('Tail') ? 30 : 80));
                 const missLabel = mode === 'currentRank' ? '当前遗漏' : '连续未出';
 
                 let targetHtml = '';
@@ -7560,9 +7656,9 @@
                             <span class="ball-zodiac-tag">${it.zodiac}</span>
                         </span>
                     `;
-                } else if (type === 'teTail') {
+                } else if (type.includes('Head') || type.includes('Tail')) {
                     targetHtml = `
-                        <span class="om-zodiac-circle" style="width:20px;height:20px;font-size:9.5px;background:rgba(255,145,0,0.18);color:#ff9100;border:1px solid rgba(255,145,0,0.35);">
+                        <span class="om-zodiac-circle" style="width:22px;height:22px;font-size:9.5px;background:rgba(0,212,255,0.18);color:var(--accent);border:1px solid rgba(0,212,255,0.35);">
                             ${it.name}
                         </span>
                     `;
@@ -8333,11 +8429,11 @@
                 rangeType = 'hotZodiacRange';
                 unit = '肖';
                 maxVal = 12;
-            } else if (type === 'allHotHead') {
+            } else if (type === 'allHotHead' || type === 'hotHead') {
                 rangeType = 'allHotHeadRange';
                 unit = '头';
                 maxVal = 5;
-            } else if (type === 'allHotTail') {
+            } else if (type === 'allHotTail' || type === 'hotTail') {
                 rangeType = 'allHotTailRange';
                 unit = '尾';
                 maxVal = 10;

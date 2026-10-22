@@ -14,7 +14,7 @@
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="/apple-touch-icon.png">
     <link rel="manifest" href="/manifest.json">
-<link rel="stylesheet" href="style.css?v=20261022d">
+<link rel="stylesheet" href="style.css?v=20261022e">
 </head>
 
 <body>
@@ -421,10 +421,13 @@
                                 <input type="number" id="coldOmissionThresholdCustom" min="1" max="1000" placeholder="期数" style="display:none; width:48px; font-size:10.5px; padding:2px 4px; border-radius:4px; background:var(--card-bg); border:1px solid var(--border); color:var(--text-primary);" oninput="onOmissionThresholdParamChange()">
                                 <select id="coldOmissionThresholdTypeSel" onchange="onOmissionThresholdParamChange()" style="font-size:11px; padding:2px 6px; border-radius:4px; background:var(--card-bg); border:1px solid var(--border); color:var(--text-primary); cursor:pointer;">
                                     <option value="teNum" selected>特码遗漏位次 (49位)</option>
-                                    <option value="teZodiac">特码生肖位次 (12位)</option>
-                                    <option value="teTail">特码尾数位次 (10位)</option>
                                     <option value="pingNum">平特号码位次 (49位)</option>
+                                    <option value="teZodiac">特码生肖位次 (12位)</option>
                                     <option value="pingZodiac">平特生肖位次 (12位)</option>
+                                    <option value="teHead">特码头数位次 (5位)</option>
+                                    <option value="pingHead">平特头数位次 (5位)</option>
+                                    <option value="teTail">特码尾数位次 (10位)</option>
+                                    <option value="pingTail">平特尾数位次 (10位)</option>
                                 </select>
                             </div>
                         </div>
@@ -811,6 +814,39 @@
                         <input type="checkbox" id="coldOption_allColdTails" onchange="onColdOptionChange()">
                         <label for="coldOption_allColdTails" title="统计最近特码开出频次最低的冷门尾数">特码冷尾</label>
                         <select id="coldOption_allColdTails_count" onchange="onColdOptionCountChange()">
+                            <option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
+                        </select>
+                        <span class="unit">个</span>
+                    </div>
+                    <!-- 平特头尾冷热选号因子 -->
+                    <div class="cold-factor-item">
+                        <input type="checkbox" id="coldOption_hotHeads" onchange="onColdOptionChange()">
+                        <label for="coldOption_hotHeads" title="统计最近平特7码开出频次最高的热门头数">平特热头</label>
+                        <select id="coldOption_hotHeads_count" onchange="onColdOptionCountChange()">
+                            <option value="1" selected>1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option>
+                        </select>
+                        <span class="unit">个</span>
+                    </div>
+                    <div class="cold-factor-item">
+                        <input type="checkbox" id="coldOption_coldHeads" onchange="onColdOptionChange()">
+                        <label for="coldOption_coldHeads" title="统计最近平特7码开出频次最低的冷门头数">平特冷头</label>
+                        <select id="coldOption_coldHeads_count" onchange="onColdOptionCountChange()">
+                            <option value="1" selected>1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option>
+                        </select>
+                        <span class="unit">个</span>
+                    </div>
+                    <div class="cold-factor-item">
+                        <input type="checkbox" id="coldOption_hotTails" onchange="onColdOptionChange()">
+                        <label for="coldOption_hotTails" title="统计最近平特7码开出频次最高的热门尾数">平特热尾</label>
+                        <select id="coldOption_hotTails_count" onchange="onColdOptionCountChange()">
+                            <option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
+                        </select>
+                        <span class="unit">个</span>
+                    </div>
+                    <div class="cold-factor-item">
+                        <input type="checkbox" id="coldOption_coldTails" onchange="onColdOptionChange()">
+                        <label for="coldOption_coldTails" title="统计最近平特7码开出频次最低的冷门尾数">平特冷尾</label>
+                        <select id="coldOption_coldTails_count" onchange="onColdOptionCountChange()">
                             <option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
                         </select>
                         <span class="unit">个</span>
@@ -1933,12 +1969,14 @@
                     <div class="omission-tabs">
                         <button class="tab-btn active" onclick="switchOmissionTab('pingZodiac')" data-tab="pingZodiac">平特肖</button>
                         <button class="tab-btn" onclick="switchOmissionTab('pingNum')" data-tab="pingNum">平特号码</button>
+                        <button class="tab-btn" onclick="switchOmissionTab('pingHead')" data-tab="pingHead">平特头数</button>
+                        <button class="tab-btn" onclick="switchOmissionTab('pingTail')" data-tab="pingTail">平特尾数</button>
                         <button class="tab-btn" onclick="switchOmissionTab('teNum')" data-tab="teNum">特码</button>
                         <button class="tab-btn" onclick="switchOmissionTab('color')" data-tab="color">波色</button>
                         <button class="tab-btn" onclick="switchOmissionTab('oddEven')" data-tab="oddEven">单双</button>
                         <button class="tab-btn" onclick="switchOmissionTab('bigSmall')" data-tab="bigSmall">大小</button>
-                        <button class="tab-btn" onclick="switchOmissionTab('head')" data-tab="head">头数</button>
-                        <button class="tab-btn" onclick="switchOmissionTab('tail')" data-tab="tail">尾数</button>
+                        <button class="tab-btn" onclick="switchOmissionTab('head')" data-tab="head">特码头数</button>
+                        <button class="tab-btn" onclick="switchOmissionTab('tail')" data-tab="tail">特码尾数</button>
                         <button class="tab-btn" onclick="switchOmissionTab('wuxing')" data-tab="wuxing">五行</button>
                         <button class="tab-btn" onclick="switchOmissionTab('zodiac')" data-tab="zodiac">生肖(特)</button>
                         <button class="tab-btn" onclick="switchOmissionTab('halfWave')" data-tab="halfWave">半波</button>
@@ -2026,7 +2064,7 @@
         </div>
     </div>
 
-    <script src="app.js?v=20261022d"></script>
+    <script src="app.js?v=20261022e"></script>
 
     <nav class="mobile-nav" id="mobileNav">
         <div class="mobile-nav-item active" data-page="chart" onclick="switchToChart()">
