@@ -7814,6 +7814,22 @@
                 { val: 12, text: '≥ 12期' },
                 { val: 15, text: '≥ 15期' },
                 { val: 20, text: '≥ 20期' }
+            ],
+            hotHead: [
+                { val: 2, text: '≥ 2期' },
+                { val: 3, text: '≥ 3期' },
+                { val: 4, text: '≥ 4期 (推荐)', selected: true },
+                { val: 5, text: '≥ 5期' },
+                { val: 7, text: '≥ 7期' },
+                { val: 10, text: '≥ 10期' }
+            ],
+            hotTail: [
+                { val: 5, text: '≥ 5期' },
+                { val: 8, text: '≥ 8期' },
+                { val: 10, text: '≥ 10期 (推荐)', selected: true },
+                { val: 12, text: '≥ 12期' },
+                { val: 15, text: '≥ 15期' },
+                { val: 20, text: '≥ 20期' }
             ]
         };
 
@@ -7945,6 +7961,38 @@
                     return isNaN(wn) ? [] : [`${wn % 10}尾`];
                 };
                 getFreqKeys = getDrawnKeys;
+                getKeyMeta = k => {
+                    const t = parseInt(k, 10);
+                    return {
+                        name: k,
+                        color: 'tail',
+                        zodiac: '',
+                        numbers: allNumbers.filter(n => parseInt(n, 10) % 10 === t)
+                    };
+                };
+            } else if (type === 'hotHead') {
+                keys = heads;
+                getDrawnKeys = item => {
+                    const wn = typeof item.winNum === 'number' ? item.winNum : parseInt(item.winNum, 10);
+                    return isNaN(wn) ? [] : [`${Math.floor(wn / 10)}头`];
+                };
+                getFreqKeys = item => getAllDrawNumbers(item).map(n => `${Math.floor(parseInt(n, 10) / 10)}头`);
+                getKeyMeta = k => {
+                    const h = parseInt(k, 10);
+                    return {
+                        name: k,
+                        color: 'head',
+                        zodiac: '',
+                        numbers: allNumbers.filter(n => Math.floor(parseInt(n, 10) / 10) === h)
+                    };
+                };
+            } else if (type === 'hotTail') {
+                keys = tails;
+                getDrawnKeys = item => {
+                    const wn = typeof item.winNum === 'number' ? item.winNum : parseInt(item.winNum, 10);
+                    return isNaN(wn) ? [] : [`${wn % 10}尾`];
+                };
+                getFreqKeys = item => getAllDrawNumbers(item).map(n => `${parseInt(n, 10) % 10}尾`);
                 getKeyMeta = k => {
                     const t = parseInt(k, 10);
                     return {
@@ -8103,7 +8151,9 @@
                 allHotZodiac: '特码冷热肖位次',
                 hotZodiac: '平特冷热肖位次',
                 allHotHead: '特码冷热头数位次',
-                allHotTail: '特码冷热尾数位次'
+                allHotTail: '特码冷热尾数位次',
+                hotHead: '平特冷热头数位次',
+                hotTail: '平特冷热尾数位次'
             };
             const typeName = typeNames[type] || '位次';
 
@@ -8138,7 +8188,7 @@
                         </span>
                         <span style="font-size:9.5px;color:#ff9100;font-weight:700;margin-left:2px;">${it.freq}次</span>
                     `;
-                } else if (type === 'allHotHead' || type === 'allHotTail') {
+                } else if (type.includes('Head') || type.includes('Tail')) {
                     targetHtml = `
                         <span class="om-zodiac-circle" style="width:22px;height:22px;font-size:9.5px;background:rgba(255,145,0,0.18);color:#ff9100;border:1px solid rgba(255,145,0,0.35);">
                             ${it.name}
