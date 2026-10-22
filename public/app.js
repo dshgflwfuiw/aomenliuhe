@@ -1302,8 +1302,6 @@
                 let coldHitSetsForPoint = null;
                 let coldMatchesForPoint = 0;
                 let followTargetForPoint = null;
-                let klinePreDrawNumsForPoint = [];
-                let klineKilledNumsForPoint = [];
 
                 if (state.currentMode === 'zodiac') {
                     const sorted = zodiacs.map(z => ({ name: z, om: omissions[z] }))
@@ -1349,15 +1347,13 @@
                         const smode = cold.setMode || cold.filterCalcMode || 'all';
                         const killsToUse = cold.excludeKills || state.excludeKills;
                         const rollingColdSource = getRollingColdSourceData(state.historyData, idx);
-                        const { finalNumbers: nums, excludedNumbers: killedNums } = applySetModeAndExcludeKills(
+                        const { finalNumbers: nums } = applySetModeAndExcludeKills(
                             rollingOptionSets,
                             smode,
                             killsToUse,
                             rollingColdSource,
                             itemYear
                         );
-                        klinePreDrawNumsForPoint = nums.slice();
-                        klineKilledNumsForPoint = (killedNums || []).slice();
                         // 悬浮显示用含本期的窗口（本期开奖后数据）
                         const currentWxForPoint = getWuxingKey(winNum, itemYear);
                         const currentWuxingSnapshot = {};
@@ -1748,8 +1744,6 @@
                     coldMatches: coldMatchesForPoint,
                     followZodiac: followTargetForPoint,
                     followHit: state.currentMode === 'special_zodiac_follow' && !followTargetForPoint ? null : step > 0,
-                    klinePreDrawNums: klinePreDrawNumsForPoint,
-                    klineKilledNums: klineKilledNumsForPoint,
                     klineStep: step
                 };
 
@@ -7781,12 +7775,13 @@
                 { val: 120, text: '≥ 120期' }
             ],
             hotNum: [
-                { val: 10, text: '≥ 10期' },
-                { val: 15, text: '≥ 15期' },
-                { val: 20, text: '≥ 20期 (推荐)', selected: true },
-                { val: 25, text: '≥ 25期' },
-                { val: 30, text: '≥ 30期' },
-                { val: 40, text: '≥ 40期' }
+                { val: 40, text: '≥ 40期' },
+                { val: 50, text: '≥ 50期' },
+                { val: 60, text: '≥ 60期 (推荐)', selected: true },
+                { val: 70, text: '≥ 70期' },
+                { val: 80, text: '≥ 80期' },
+                { val: 100, text: '≥ 100期' },
+                { val: 120, text: '≥ 120期' }
             ],
             allHotZodiac: [
                 { val: 10, text: '≥ 10期' },
@@ -7797,11 +7792,12 @@
                 { val: 40, text: '≥ 40期' }
             ],
             hotZodiac: [
-                { val: 1, text: '≥ 1期' },
-                { val: 2, text: '≥ 2期 (推荐)', selected: true },
-                { val: 3, text: '≥ 3期' },
-                { val: 4, text: '≥ 4期' },
-                { val: 5, text: '≥ 5期' }
+                { val: 5, text: '≥ 5期' },
+                { val: 10, text: '≥ 10期 (推荐)', selected: true },
+                { val: 15, text: '≥ 15期' },
+                { val: 20, text: '≥ 20期' },
+                { val: 25, text: '≥ 25期' },
+                { val: 30, text: '≥ 30期' }
             ],
             allHotHead: [
                 { val: 2, text: '≥ 2期' },
@@ -7828,6 +7824,9 @@
             if (!typeSel || !thSel) return;
             const curType = forceType || typeSel.value || 'allHotNum';
             if (curType === _lastHotColdThresholdType && thSel.options.length > 0) return;
+            // 类型切换时旧阈值（尤其自定值）对新类型通常不适用（如特码自定100期对平特过高，导致查询为空），
+            // 应回落到新类型的推荐值；仅同类型内重算时才保留原选择
+            const typeChanged = _lastHotColdThresholdType !== null && _lastHotColdThresholdType !== curType;
             _lastHotColdThresholdType = curType;
 
             const opts = HOTCOLD_THRESHOLDS_BY_TYPE[curType] || HOTCOLD_THRESHOLDS_BY_TYPE.allHotNum;
@@ -7838,7 +7837,7 @@
                 const optEl = document.createElement('option');
                 optEl.value = String(o.val);
                 optEl.textContent = o.text;
-                if (String(o.val) === prevVal || (!prevVal && o.selected)) {
+                if (!typeChanged && String(o.val) === prevVal) {
                     optEl.selected = true;
                     matched = true;
                 }
@@ -7851,8 +7850,14 @@
             const customOpt = document.createElement('option');
             customOpt.value = 'custom';
             customOpt.textContent = '自定期数...';
-            if (prevVal === 'custom') customOpt.selected = true;
+            if (prevVal === 'custom' && !typeChanged) customOpt.selected = true;
             thSel.appendChild(customOpt);
+
+            // 阈值回落到推荐值时同步收起自定输入框，避免残留旧值误导
+            const customInput = document.getElementById('coldHotThresholdCustom');
+            if (customInput && thSel.value !== 'custom') {
+                customInput.style.display = 'none';
+            }
         }
 
         function getHotColdRankAnalysis(threshold = 60, type = 'allHotNum', mode = 'rankHit', sourceData = null) {
@@ -7865,13 +7870,22 @@
             const tails = Array.from({ length: 10 }, (_, i) => `${i}尾`);
             const normZ = z => (z || '').replace(/龍/g, '龙').replace(/豬/g, '猪').replace(/雞/g, '鸡').replace(/馬/g, '马');
 
-            let keys, getDrawnKeys, getKeyMeta;
+            // getDrawnKeys: 当期开奖后用于"位次命中"判定的键 —— 每期特码只开1个号，
+            //   因此平特模式同样只按特码判定位次命中（哪个位次与特码同位次则清零，其余+1）
+            // getFreqKeys: 用于排序的窗口频次统计键 —— 平特=每期7码，特码=每期1码
+            let keys, getDrawnKeys, getFreqKeys, getKeyMeta;
+            const getSpecialNumKeys = item => {
+                const wn = typeof item.winNum === 'number' ? item.winNum : parseInt(item.winNum, 10);
+                return isNaN(wn) ? [] : [wn.toString().padStart(2, '0')];
+            };
+            const getSpecialZodiacKeys = item => {
+                const z = item.win || (typeof getZodiac === 'function' ? getZodiac(item.winNum, y) : '');
+                return z ? [normZ(z)] : [];
+            };
             if (type === 'allHotNum') {
                 keys = allNumbers;
-                getDrawnKeys = item => {
-                    const wn = typeof item.winNum === 'number' ? item.winNum : parseInt(item.winNum, 10);
-                    return isNaN(wn) ? [] : [wn.toString().padStart(2, '0')];
-                };
+                getDrawnKeys = getSpecialNumKeys;
+                getFreqKeys = getSpecialNumKeys;
                 getKeyMeta = k => ({
                     name: k,
                     color: getColor(k),
@@ -7880,7 +7894,8 @@
                 });
             } else if (type === 'hotNum') {
                 keys = allNumbers;
-                getDrawnKeys = item => getAllDrawNumbers(item);
+                getDrawnKeys = getSpecialNumKeys;
+                getFreqKeys = item => getAllDrawNumbers(item);
                 getKeyMeta = k => ({
                     name: k,
                     color: getColor(k),
@@ -7889,10 +7904,8 @@
                 });
             } else if (type === 'allHotZodiac') {
                 keys = zodiacs;
-                getDrawnKeys = item => {
-                    const z = item.win || (typeof getZodiac === 'function' ? getZodiac(item.winNum, y) : '');
-                    return z ? [normZ(z)] : [];
-                };
+                getDrawnKeys = getSpecialZodiacKeys;
+                getFreqKeys = getSpecialZodiacKeys;
                 getKeyMeta = k => ({
                     name: k,
                     color: 'zodiac',
@@ -7901,7 +7914,8 @@
                 });
             } else if (type === 'hotZodiac') {
                 keys = zodiacs;
-                getDrawnKeys = item => (typeof getAllDrawZodiacs === 'function' ? getAllDrawZodiacs(item) : [item.win]).map(normZ);
+                getDrawnKeys = getSpecialZodiacKeys;
+                getFreqKeys = item => (typeof getAllDrawZodiacs === 'function' ? getAllDrawZodiacs(item) : [item.win]).map(normZ);
                 getKeyMeta = k => ({
                     name: k,
                     color: 'zodiac',
@@ -7914,6 +7928,7 @@
                     const wn = typeof item.winNum === 'number' ? item.winNum : parseInt(item.winNum, 10);
                     return isNaN(wn) ? [] : [`${Math.floor(wn / 10)}头`];
                 };
+                getFreqKeys = getDrawnKeys;
                 getKeyMeta = k => {
                     const h = parseInt(k, 10);
                     return {
@@ -7929,6 +7944,7 @@
                     const wn = typeof item.winNum === 'number' ? item.winNum : parseInt(item.winNum, 10);
                     return isNaN(wn) ? [] : [`${wn % 10}尾`];
                 };
+                getFreqKeys = getDrawnKeys;
                 getKeyMeta = k => {
                     const t = parseInt(k, 10);
                     return {
@@ -7940,7 +7956,8 @@
                 };
             } else {
                 keys = allNumbers;
-                getDrawnKeys = item => [item.winNum.toString().padStart(2, '0')];
+                getDrawnKeys = getSpecialNumKeys;
+                getFreqKeys = getSpecialNumKeys;
                 getKeyMeta = k => ({ name: k, color: getColor(k), zodiac: getZodiac(parseInt(k, 10), y), numbers: [k] });
             }
 
@@ -7956,7 +7973,7 @@
                 let freq = {};
                 keys.forEach(k => { freq[k] = 0; });
                 for (let j = startIdx; j < i; j++) {
-                    const drawnPast = getDrawnKeys(dataToUse[j]);
+                    const drawnPast = getFreqKeys(dataToUse[j]);
                     drawnPast.forEach(k => { if (freq[k] !== undefined) freq[k]++; });
                 }
 
@@ -7980,7 +7997,7 @@
             let curFreq = {};
             keys.forEach(k => { curFreq[k] = 0; });
             for (let j = curStart; j < dataToUse.length; j++) {
-                const drawnPast = getDrawnKeys(dataToUse[j]);
+                const drawnPast = getFreqKeys(dataToUse[j]);
                 drawnPast.forEach(k => { if (curFreq[k] !== undefined) curFreq[k]++; });
             }
 
@@ -7990,7 +8007,7 @@
             for (let k of keys) {
                 let om = 0;
                 for (let i = dataToUse.length - 1; i >= 0; i--) {
-                    const drawn = getDrawnKeys(dataToUse[i]);
+                    const drawn = getFreqKeys(dataToUse[i]);
                     if (drawn.includes(k)) break;
                     om++;
                 }
@@ -13065,26 +13082,12 @@
                     `;
                 }
             } else if (isColdKlineMode(currentMode)) {
-                const preDrawNums = data.klinePreDrawNums || [];
-                const isPreHit = preDrawNums.includes(numStr);
-                const preDrawHtml = preDrawNums.length ? `
-                    <div style="margin-top:4px; padding-top:4px; border-top:1px solid rgba(255,255,255,0.06);">
-                        <div style="display:flex; justify-content:space-between; align-items:center; font-size:10.5px; margin-bottom:3px;">
-                            <span style="color:var(--accent); font-weight:700;">🎯 本期开奖前·K线动态选号 (${preDrawNums.length}码)</span>
-                            <span style="color:${isPreHit ? 'var(--up)' : 'var(--down)'}; font-weight:700;">${isPreHit ? '★ 命中特码 (+1)' : '✗ 未命中 (-1)'}</span>
-                        </div>
-                        <div style="font-size:10px; color:var(--text-secondary); line-height:1.45; word-break:break-word;">
-                            ${preDrawNums.map(n => n === numStr ? `<b class="rec-hit-num-highlight">${n}</b>` : n).join(' ')}
-                        </div>
-                    </div>
-                ` : '';
                 modeSpecificHtml = `
                     <div style="margin-top:4px; padding-top:4px; border-top:1px solid rgba(255,255,255,0.05);">
                         <div class="tooltip-row">
                             <span class="tooltip-label">条件命中</span>
                             <span class="tooltip-value" style="color: ${data.coldMatches > 0 ? 'var(--up)' : 'var(--down)'}; font-weight:700;">${data.coldMatches || 0}/${state.coldSelection?.types.length || 0}</span>
                         </div>
-                        ${preDrawHtml}
                         ${renderColdSetsForTooltip(data.coldSets, getColdTooltipTypes(state.coldSelection))}
                     </div>
                 `;
