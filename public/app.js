@@ -1,5 +1,5 @@
         // ==================== 核心配置 ====================
-        const CONFIG = {
+        const CONFIG = (typeof window !== 'undefined' && window.AppCore && window.AppCore.CONFIG) ? window.AppCore.CONFIG : {
             zodiacMap: {
                 2020: ['鼠', '猪', '狗', '鸡', '猴', '羊', '马', '蛇', '龙', '兔', '虎', '牛'],
                 2021: ['牛', '鼠', '猪', '狗', '鸡', '猴', '羊', '马', '蛇', '龙', '兔', '虎'],
@@ -371,6 +371,39 @@
                 }
             });
 
+            document.addEventListener('keydown', (e) => {
+                if (e.key !== 'Escape') return;
+                const confirmModal = document.getElementById('appConfirmModal');
+                if (confirmModal && confirmModal.style.display !== 'none') {
+                    resolveConfirmDialog(false);
+                    return;
+                }
+                const promptModal = document.getElementById('appPromptModal');
+                if (promptModal && promptModal.style.display !== 'none') {
+                    resolvePromptDialog(null);
+                    return;
+                }
+                const copyModal = document.getElementById('appCopyModal');
+                if (copyModal && copyModal.style.display !== 'none') {
+                    closeCopyFallbackModal();
+                    return;
+                }
+                const betModal = document.getElementById('betCalcModal');
+                if (betModal && betModal.style.display !== 'none') {
+                    closeBetCalcModal();
+                    return;
+                }
+                const recModal = document.getElementById('recHistoryModal');
+                if (recModal && recModal.style.display !== 'none') {
+                    closeRecHistoryModal();
+                    return;
+                }
+                const omissionSection = document.getElementById('omissionSection');
+                if (omissionSection && omissionSection.style.display !== 'none' && typeof hideOmissionPage === 'function') {
+                    hideOmissionPage();
+                }
+            });
+
             canvas.addEventListener('mousemove', (e) => {
                 if (state.isDragging) {
                     const dx = e.clientX - state.lastMouse.x;
@@ -670,6 +703,18 @@
 
         }
 
+        function escapeHtml(value) {
+            if (typeof window !== 'undefined' && window.AppCore && typeof window.AppCore.escapeHtml === 'function') {
+                return window.AppCore.escapeHtml(value);
+            }
+            return String(value === undefined || value === null ? '' : value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         let toastTimer = null;
         function showToast(msg, duration = 2200) {
             const el = document.getElementById('appToast');
@@ -681,6 +726,80 @@
                 el.classList.remove('show');
             }, duration);
         }
+        window.showToast = showToast;
+
+        let pendingConfirmResolver = null;
+        function showConfirmDialog(message, title = '⚠️ 操作确认') {
+            const modal = document.getElementById('appConfirmModal');
+            const titleEl = document.getElementById('appConfirmTitle');
+            const msgEl = document.getElementById('appConfirmMsg');
+            if (!modal || !msgEl) return Promise.resolve(false);
+            if (pendingConfirmResolver) {
+                pendingConfirmResolver(false);
+                pendingConfirmResolver = null;
+            }
+            if (titleEl) titleEl.textContent = title;
+            msgEl.textContent = message;
+            modal.style.display = 'flex';
+            return new Promise((resolve) => {
+                pendingConfirmResolver = resolve;
+            });
+        }
+        function resolveConfirmDialog(result) {
+            const modal = document.getElementById('appConfirmModal');
+            if (modal) modal.style.display = 'none';
+            if (pendingConfirmResolver) {
+                const res = pendingConfirmResolver;
+                pendingConfirmResolver = null;
+                res(!!result);
+            }
+        }
+        window.resolveConfirmDialog = resolveConfirmDialog;
+
+        let pendingPromptResolver = null;
+        function showPromptDialog(message, defaultValue = '', title = '✏️ 输入名称') {
+            const modal = document.getElementById('appPromptModal');
+            const titleEl = document.getElementById('appPromptTitle');
+            const msgEl = document.getElementById('appPromptMsg');
+            const inputEl = document.getElementById('appPromptInput');
+            if (!modal || !inputEl) return Promise.resolve(null);
+            if (pendingPromptResolver) {
+                pendingPromptResolver(null);
+                pendingPromptResolver = null;
+            }
+            if (titleEl) titleEl.textContent = title;
+            if (msgEl) msgEl.textContent = message;
+            inputEl.value = defaultValue || '';
+            inputEl.onkeydown = (ev) => {
+                if (ev.key === 'Enter') {
+                    ev.preventDefault();
+                    submitPromptDialog();
+                }
+            };
+            modal.style.display = 'flex';
+            setTimeout(() => {
+                inputEl.focus();
+                inputEl.select();
+            }, 30);
+            return new Promise((resolve) => {
+                pendingPromptResolver = resolve;
+            });
+        }
+        function resolvePromptDialog(val) {
+            const modal = document.getElementById('appPromptModal');
+            if (modal) modal.style.display = 'none';
+            if (pendingPromptResolver) {
+                const res = pendingPromptResolver;
+                pendingPromptResolver = null;
+                res(val);
+            }
+        }
+        function submitPromptDialog() {
+            const inputEl = document.getElementById('appPromptInput');
+            resolvePromptDialog(inputEl ? inputEl.value : '');
+        }
+        window.resolvePromptDialog = resolvePromptDialog;
+        window.submitPromptDialog = submitPromptDialog;
 
         function isColdKlineMode(mode = state.currentMode) {
             return mode === 'cold_custom';
@@ -853,6 +972,12 @@
                 expireAt: isHistoricalYear ? Infinity : (now + maxAge)
             });
 
+            if (typeof window !== 'undefined' && window.AppCore && window.AppCore.storage) {
+                window.AppCore.storage.idbSetYear(year, rawPayload).catch(() => {});
+                window.AppCore.storage.safeLocalStorageWriteYear(year, rawPayload, now);
+                return;
+            }
+
             try {
                 const cacheKey = `lottery_data_${year}`;
                 localStorage.setItem(cacheKey, JSON.stringify(rawPayload));
@@ -955,6 +1080,25 @@
                 if (validCached && validCached.length > 0) {
                     return validCached;
                 }
+                // 1.5 尝试从 IndexedDB 读取大数据缓存 (突破 5MB 配额限制)
+                if (typeof window !== 'undefined' && window.AppCore && window.AppCore.storage) {
+                    try {
+                        const idbEntry = await window.AppCore.storage.idbGetYear(year);
+                        const currentActualYear = new Date().getFullYear();
+                        const isHistoricalYear = parseInt(year, 10) < currentActualYear;
+                        const maxAge = isHistoricalYear ? Infinity : 6 * 60 * 60 * 1000;
+                        if (idbEntry && idbEntry.payload && (isHistoricalYear || (Date.now() - (idbEntry.updatedAt || 0) < maxAge))) {
+                            const arr = idbEntry.payload.data || idbEntry.payload;
+                            if (Array.isArray(arr) && arr.length > 0) {
+                                requestCacheState.memoryYearCache.set(yKey, {
+                                    data: arr,
+                                    expireAt: isHistoricalYear ? Infinity : ((idbEntry.updatedAt || Date.now()) + maxAge)
+                                });
+                                return arr;
+                            }
+                        }
+                    } catch (e) {}
+                }
                 // 2. 若处于防抖冷却窗口内且存在历史缓存副本，直接返回避免高频重复请求
                 if (isYearRequestDebounced(year)) {
                     const fallbackCached = getLocalStorageYearCache(year, true);
@@ -972,7 +1116,7 @@
             const reqPromise = (async () => {
                 markYearRequestAttempt(year);
                 const apiUrl = `https://history.macaumarksix.com/history/macaujc2/y/${year}`;
-                const proxyUrl = `/api/proxy?year=${year}`;
+                const proxyUrl = `/api/proxy?year=${year}${forceRefresh ? '&refresh=1' : ''}`;
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 10000);
 
@@ -990,11 +1134,21 @@
 
                 clearTimeout(timeoutId);
                 if (!response || !response.ok) {
-                    // 网络失败时，尝试降级读取本地已有的任何缓存版本，保障离线可用性
+                    // 网络失败时，尝试降级读取本地已有的任何缓存版本（含 IndexedDB），保障离线可用性
                     const staleCached = getLocalStorageYearCache(year, true);
                     if (staleCached && staleCached.length > 0) {
                         showToast(`⚠️ 网络连接受限，已载入 ${year} 年本地离线数据`, 2800);
                         return staleCached;
+                    }
+                    if (typeof window !== 'undefined' && window.AppCore && window.AppCore.storage) {
+                        try {
+                            const idbStale = await window.AppCore.storage.idbGetYear(year);
+                            const arr = idbStale && idbStale.payload ? (idbStale.payload.data || idbStale.payload) : null;
+                            if (Array.isArray(arr) && arr.length > 0) {
+                                showToast(`⚠️ 网络连接受限，已载入 ${year} 年本地离线数据`, 2800);
+                                return arr;
+                            }
+                        } catch (e) {}
                     }
                     throw new Error(`HTTP ${response ? response.status : 'Network Failed'}`);
                 }
@@ -1099,6 +1253,9 @@
                 localStorage.removeItem(`lottery_data_${y}_time`);
                 localStorage.removeItem(`lottery_req_debounce_${y}`);
             });
+            if (typeof window !== 'undefined' && window.AppCore && window.AppCore.storage) {
+                window.AppCore.storage.idbClearYears(years).catch(() => {});
+            }
             fetchData(true);
         }
 
@@ -1211,7 +1368,7 @@
                 recalcData();
             } catch (e) {
                 console.error('Process error:', e);
-                alert('数据处理失败: ' + e.message);
+                showToast('⚠️ 数据处理失败: ' + escapeHtml(e.message), 3500);
             }
         }
 
@@ -2785,7 +2942,7 @@
             if (document.getElementById('recSpanCount')) document.getElementById('recSpanCount').value = recConfig.spanCount;
             if (document.getElementById('recShrinkToggle')) document.getElementById('recShrinkToggle').checked = recConfig.shrink;
 
-            onRecWeightChange();
+            onRecWeightChange(true);
         }
 
         function exportRecommendationPlan() {
@@ -2984,7 +3141,8 @@
             }
         }
 
-        function onRecWeightChange() {
+        let recWeightDebounceTimer = null;
+        function onRecWeightChange(immediate = false) {
             recConfig.weightCold = parseInt(document.getElementById('recWeightCold')?.value || '50', 10);
             recConfig.weightMorph = parseInt(document.getElementById('recWeightMorph')?.value || '60', 10);
             recConfig.spanCount = parseInt(document.getElementById('recSpanCount')?.value || '20', 10);
@@ -3014,7 +3172,18 @@
                 shrinkStatusEl.innerHTML = recConfig.shrink ? '<b style="color:var(--up);">已启用</b>' : '未启用';
             }
 
-            generateRecommendations();
+            if (recWeightDebounceTimer) {
+                clearTimeout(recWeightDebounceTimer);
+                recWeightDebounceTimer = null;
+            }
+            if (immediate) {
+                generateRecommendations();
+            } else {
+                recWeightDebounceTimer = setTimeout(() => {
+                    recWeightDebounceTimer = null;
+                    generateRecommendations();
+                }, 120);
+            }
         }
 
         function resetRecWeights() {
@@ -3022,7 +3191,50 @@
             if (document.getElementById('recWeightMorph')) document.getElementById('recWeightMorph').value = 60;
             if (document.getElementById('recSpanCount')) document.getElementById('recSpanCount').value = 24;
             if (document.getElementById('recShrinkToggle')) document.getElementById('recShrinkToggle').checked = false;
-            onRecWeightChange();
+            onRecWeightChange(true);
+        }
+
+        function renderRecommendHitRateBar(strategy, track = 'special', windowDevMeta = state.lastWindowDeviation) {
+            const hitEl = document.getElementById('recommendHitRate');
+            if (!hitEl) return;
+
+            const isNormalTrack = track === 'normal' || strategy === 'normal_track';
+            const effStrat = isNormalTrack ? 'normal_track' : (strategy || 'multifactor');
+            const effTrack = isNormalTrack ? 'normal' : 'special';
+            const lookbackCount = state.recInlineCount || 5;
+            const hitLb = getCachedStrategyLookback(lookbackCount, effStrat, effTrack);
+            const sparkCtx = getStrategySparklineSeries(effStrat, effTrack, 20);
+            const stratSparkHtml = buildTrendSparklineHtml(sparkCtx.overallHits, {
+                width: 48,
+                height: 14,
+                highThreshold: isNormalTrack ? 55 : 50,
+                midThreshold: isNormalTrack ? 35 : 30,
+                label: isNormalTrack
+                    ? '平特双轨近20期命中趋势'
+                    : `${STRATEGY_NAME_MAP[effStrat] || '当前策略'}近20期胜率趋势`
+            });
+
+            if (isNormalTrack) {
+                const devTag = windowDevMeta ? ` <span style="opacity:0.4;margin:0 4px;">|</span> ⚖️ ${windowDevMeta.winSize}期偏离压制${windowDevMeta.overheatedCount}码` : '';
+                const rateSummary = hitLb.count
+                    ? `📜 平特近${hitLb.count}期命中: <b style="color:${hitLb.winRate >= 50 ? 'var(--up)' : 'var(--warn)'};">${hitLb.hitTotal}/${hitLb.count}</b>（${hitLb.winRate}%）`
+                    : `平特双轨模式：已根据正码1~6落球共振生成平特肖与精选尾数`;
+                hitEl.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;"><span>${rateSummary}${devTag}</span>${stratSparkHtml}</div>`;
+                return;
+            }
+
+            const hitStats = computeRecommendationStats(effStrat, 10);
+            const hitLbHtml = hitLb.count
+                ? `📜 近${hitLb.count}期命中: <b style="color:${hitLb.winRate >= 50 ? 'var(--up)' : 'var(--warn)'};">${hitLb.hitTotal}/${hitLb.count}</b>（${hitLb.winRate}%）`
+                : '';
+            const hit10Html = hitStats.total
+                ? `最近10期命中：<b style="color:${hitStats.rate >= 50 ? 'var(--up)' : 'var(--down)'};">${hitStats.hit}/${hitStats.total}</b>（${hitStats.rate.toFixed(0)}%）`
+                : '数据就绪';
+            const devBadge = windowDevMeta
+                ? ` <span style="opacity:0.4;margin:0 4px;">|</span> <span style="color:var(--accent);" title="基于最近${windowDevMeta.winSize}期统计窗口计算频率偏离度，对高频透支号码动态施加杀号降权，提升冷热过渡期命中率">⚖️ ${windowDevMeta.winSize}期偏离度杀号(${windowDevMeta.overheatedCount}码降权)</span>`
+                : '';
+            const textSummary = (hitLbHtml ? `${hitLbHtml} <span style="opacity:0.4;margin:0 4px;">|</span> ${hit10Html}` : hit10Html) + devBadge;
+            hitEl.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;"><span>${textSummary}</span>${stratSparkHtml}</div>`;
         }
 
         function generateRecommendations() {
@@ -3068,24 +3280,7 @@
                 recommendations = getNormalTrackRecommendations(last, state.historyData, windowDevMeta);
                 renderRecommendations(container, recommendations, 'normal_track');
                 renderRecHistory5Inline('normal_track', 'normal');
-                const lookbackCount = state.recInlineCount || 5;
-                const hitLb = getCachedStrategyLookback(lookbackCount, 'normal_track', 'normal');
-                const sparkCtx = getStrategySparklineSeries('normal_track', 'normal', 20);
-                const sparkInlineHtml = buildTrendSparklineHtml(sparkCtx.overallHits, {
-                    width: 48,
-                    height: 14,
-                    highThreshold: 55,
-                    midThreshold: 35,
-                    label: '平特双轨近20期命中趋势'
-                });
-                const hitEl = document.getElementById('recommendHitRate');
-                if (hitEl) {
-                    const devTag = windowDevMeta ? ` <span style="opacity:0.4;margin:0 4px;">|</span> ⚖️ ${windowDevMeta.winSize}期偏离压制${windowDevMeta.overheatedCount}码` : '';
-                    const rateSummary = hitLb.count
-                        ? `📜 平特近${hitLb.count}期命中: <b style="color:${hitLb.winRate >= 50 ? 'var(--up)' : 'var(--warn)'};">${hitLb.hitTotal}/${hitLb.count}</b>（${hitLb.winRate}%）`
-                        : `平特双轨模式：已根据正码1~6落球共振生成平特肖与精选尾数`;
-                    hitEl.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;"><span>${rateSummary}${devTag}</span>${sparkInlineHtml}</div>`;
-                }
+                renderRecommendHitRateBar('normal_track', 'normal', windowDevMeta);
                 const drawerEl = document.getElementById('recDrawer');
                 if (drawerEl && drawerEl.classList.contains('open')) {
                     renderRecPresetSparklines();
@@ -3134,32 +3329,7 @@
 
             // 渲染历史回看验证面板（当前策略实时联动，最多可看100期）
             renderRecHistory5Inline(strategy, 'special');
-
-            const hitStats = computeRecommendationStats(strategy, 10);
-            const lookbackCount = state.recInlineCount || 5;
-            const hitLb = getCachedStrategyLookback(lookbackCount, strategy, 'special');
-            const sparkCtx = getStrategySparklineSeries(strategy, 'special', 20);
-            const stratSparkHtml = buildTrendSparklineHtml(sparkCtx.overallHits, {
-                width: 48,
-                height: 14,
-                highThreshold: 50,
-                midThreshold: 30,
-                label: `${STRATEGY_NAME_MAP[strategy] || '当前策略'}近20期胜率趋势`
-            });
-            const hitEl = document.getElementById('recommendHitRate');
-            if (hitEl) {
-                const hitLbHtml = hitLb.count
-                    ? `📜 近${hitLb.count}期命中: <b style="color:${hitLb.winRate >= 50 ? 'var(--up)' : 'var(--warn)'};">${hitLb.hitTotal}/${hitLb.count}</b>（${hitLb.winRate}%）`
-                    : '';
-                const hit10Html = hitStats.total
-                    ? `最近10期命中：<b style="color:${hitStats.rate >= 50 ? 'var(--up)' : 'var(--down)'};">${hitStats.hit}/${hitStats.total}</b>（${hitStats.rate.toFixed(0)}%）`
-                    : '数据就绪';
-                const devBadge = windowDevMeta
-                    ? ` <span style="opacity:0.4;margin:0 4px;">|</span> <span style="color:var(--accent);" title="基于最近${windowDevMeta.winSize}期统计窗口计算频率偏离度，对高频透支号码动态施加杀号降权，提升冷热过渡期命中率">⚖️ ${windowDevMeta.winSize}期偏离度杀号(${windowDevMeta.overheatedCount}码降权)</span>`
-                    : '';
-                const textSummary = (hitLbHtml ? `${hitLbHtml} <span style="opacity:0.4;margin:0 4px;">|</span> ${hit10Html}` : hit10Html) + devBadge;
-                hitEl.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;"><span>${textSummary}</span>${stratSparkHtml}</div>`;
-            }
+            renderRecommendHitRateBar(strategy, 'special', windowDevMeta);
 
             const drawerEl = document.getElementById('recDrawer');
             if (drawerEl && drawerEl.classList.contains('open')) {
@@ -4731,6 +4901,14 @@
                 activeTrack = 'normal';
                 activeStrat = 'normal_track';
             }
+            if (typeof window !== 'undefined' && window.AppCore && window.AppCore.strategy && typeof window.AppCore.strategy.computeStrategyLookbackRecords === 'function') {
+                return window.AppCore.strategy.computeStrategyLookbackRecords(data, reviewCount, activeStrat, activeTrack, {
+                    currentYear: state.currentYear,
+                    globalMaxOm: state.globalMaxOm,
+                    coldWindow: typeof getEffectiveColdWindow === 'function' ? getEffectiveColdWindow() : 50,
+                    recConfig: { ...recConfig }
+                });
+            }
             const count = Math.min(reviewCount, data.length - 1);
 
             const records = [];
@@ -5108,28 +5286,7 @@
             const strategy = document.getElementById('recommendStrategy')?.value || 'multifactor';
             const track = recConfig.track || 'special';
             renderRecHistory5Inline(strategy, track);
-            const hitEl = document.getElementById('recommendHitRate');
-            if (hitEl) {
-                const effStrat = track === 'normal' ? 'normal_track' : strategy;
-                const hitLb = getCachedStrategyLookback(count, effStrat, track);
-                const hitStats = computeRecommendationStats(strategy, 10);
-                const sparkCtx = getStrategySparklineSeries(effStrat, track, 20);
-                const stratSparkHtml = buildTrendSparklineHtml(sparkCtx.overallHits, {
-                    width: 48,
-                    height: 14,
-                    highThreshold: track === 'normal' ? 55 : 50,
-                    midThreshold: track === 'normal' ? 35 : 30,
-                    label: `${STRATEGY_NAME_MAP[effStrat] || '当前策略'}近20期胜率趋势`
-                });
-                const hitLbHtml = hitLb.count
-                    ? `📜 近${hitLb.count}期命中: <b style="color:${hitLb.winRate >= 50 ? 'var(--up)' : 'var(--warn)'};">${hitLb.hitTotal}/${hitLb.count}</b>（${hitLb.winRate}%）`
-                    : '';
-                const hit10Html = hitStats.total
-                    ? `最近10期命中：<b style="color:${hitStats.rate >= 50 ? 'var(--up)' : 'var(--down)'};">${hitStats.hit}/${hitStats.total}</b>（${hitStats.rate.toFixed(0)}%）`
-                    : '数据就绪';
-                const textSummary = hitLbHtml ? `${hitLbHtml} <span style="opacity:0.4;margin:0 4px;">|</span> ${hit10Html}` : hit10Html;
-                hitEl.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;"><span>${textSummary}</span>${stratSparkHtml}</div>`;
-            }
+            renderRecommendHitRateBar(strategy, track, state.lastWindowDeviation);
         }
         window.changeRecInlinePeriod = changeRecInlinePeriod;
 
@@ -5350,7 +5507,9 @@
         }
         window.openKlineHistoryModal = openKlineHistoryModal;
 
+        let recModalRenderSeq = 0;
         function closeRecHistoryModal() {
+            recModalRenderSeq++;
             const modal = document.getElementById('recHistoryModal');
             if (modal) modal.style.display = 'none';
         }
@@ -5372,9 +5531,42 @@
                 selectEl.value = targetStrat;
             }
 
+            const seq = ++recModalRenderSeq;
+            const isKlineModeStrat = isKlineStratKey(targetStrat);
+            const workerClient = typeof window !== 'undefined' && window.AppCore && window.AppCore.workerClient;
+
+            if (!isKlineModeStrat && count >= 40 && workerClient && typeof workerClient.runLookback === 'function') {
+                if (statsEl) {
+                    statsEl.innerHTML = `<div style="background:rgba(0,212,255,0.06);border:1px solid rgba(0,212,255,0.25);border-radius:8px;padding:8px 12px;font-size:11px;color:var(--text-secondary);">⏳ 正在后台线程推演近 <b>${count}</b> 期历史复盘样本...</div>`;
+                }
+                tbodyEl.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-secondary);font-size:11px;">⏳ 后台 Web Worker 计算中 (${count} 期)...</td></tr>`;
+                const coldWindow = typeof getEffectiveColdWindow === 'function' ? getEffectiveColdWindow() : 50;
+                workerClient.runLookback(state.historyData, count, targetStrat, targetTrack, {
+                    currentYear: state.currentYear,
+                    globalMaxOm: state.globalMaxOm,
+                    coldWindow,
+                    recConfig: { ...recConfig }
+                }).then((lookbackRes) => {
+                    if (seq !== recModalRenderSeq) return;
+                    renderRecHistoryModalContent(lookbackRes, statsEl, sparkEl, tableEl, tbodyEl);
+                }).catch(() => {
+                    if (seq !== recModalRenderSeq) return;
+                    const fallbackRes = getLookbackRecords(count, targetStrat, targetTrack);
+                    renderRecHistoryModalContent(fallbackRes, statsEl, sparkEl, tableEl, tbodyEl);
+                });
+                return;
+            }
+
             const lookbackRes = getLookbackRecords(count, targetStrat, targetTrack);
-            const { records, hitTotal, count: actualCount, winRate, killSafeTotal, killSafeRate, activeStrat } = lookbackRes;
-            if (!records.length) return;
+            renderRecHistoryModalContent(lookbackRes, statsEl, sparkEl, tableEl, tbodyEl);
+        }
+
+        function renderRecHistoryModalContent(lookbackRes, statsEl, sparkEl, tableEl, tbodyEl) {
+            const { records, hitTotal, count: actualCount, winRate, killSafeTotal, killSafeRate, activeStrat } = lookbackRes || {};
+            if (!records || !records.length) {
+                tbodyEl.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:18px;color:var(--text-secondary);">暂无可复盘样本</td></tr>';
+                return;
+            }
 
             const stratDisplayName = STRATEGY_NAME_MAP[activeStrat] || '当前策略';
             const periodLabel = actualCount === 365 ? `近${actualCount}期(一年)` : actualCount === 180 ? `近${actualCount}期(半年)` : `近${actualCount}期`;
@@ -6175,6 +6367,9 @@
         }
 
         function computeRollingSuccessSeries(boolSeries, windowSize = 5) {
+            if (typeof window !== 'undefined' && window.AppCore && typeof window.AppCore.computeRollingSuccessSeries === 'function') {
+                return window.AppCore.computeRollingSuccessSeries(boolSeries, windowSize);
+            }
             if (!Array.isArray(boolSeries) || boolSeries.length === 0) {
                 return { points: [], hits: 0, total: 0, overallRate: 0, recentRate: 0, trend: 'flat' };
             }
@@ -6198,6 +6393,9 @@
         }
 
         function buildTrendSparklineHtml(boolSeries, options = {}) {
+            if (typeof window !== 'undefined' && window.AppCore && typeof window.AppCore.buildTrendSparklineHtml === 'function') {
+                return window.AppCore.buildTrendSparklineHtml(boolSeries, options);
+            }
             if (!Array.isArray(boolSeries) || boolSeries.length < 2) return '';
             const {
                 width = 48,
@@ -6232,7 +6430,7 @@
             const areaPoints = `${coords[0][0]},${height - padY} ${polylinePoints} ${coords[coords.length - 1][0]},${height - padY}`;
             const lastCoord = coords[coords.length - 1];
             const avgY = (padY + (1 - Math.max(0, Math.min(100, overallRate)) / 100) * innerH).toFixed(1);
-            const tooltip = `${label} · 近${total}期命中 ${hits}/${total} (${overallRate}%) · 近${Math.min(windowSize, total)}期滚动 ${recentRate}%`;
+            const tooltip = escapeHtml(`${label} · 近${total}期命中 ${hits}/${total} (${overallRate}%) · 近${Math.min(windowSize, total)}期滚动 ${recentRate}%`);
 
             const svgHtml = `<svg class="rec-sparkline-svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" aria-hidden="true"><line x1="${padX}" y1="${avgY}" x2="${width - padX}" y2="${avgY}" stroke="currentColor" stroke-opacity="0.24" stroke-width="0.8" stroke-dasharray="2,2"/><polygon points="${areaPoints}" fill="currentColor" fill-opacity="0.16"/><polyline points="${polylinePoints}" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="${lastCoord[0]}" cy="${lastCoord[1]}" r="1.7" fill="currentColor"/></svg>`;
 
@@ -6278,6 +6476,25 @@
             };
         }
 
+        let recPresetSparkSeq = 0;
+        function renderRecPresetSparklinesSync(presets, renderPresetResults) {
+            const savedConfig = { ...recConfig };
+            const seriesMap = {};
+            try {
+                presets.forEach(p => {
+                    recConfig.weightCold = p.weightCold;
+                    recConfig.weightMorph = p.weightMorph;
+                    recConfig.spanCount = p.spanCount;
+                    recConfig.shrink = p.shrink;
+                    const series = getStrategySparklineSeries(p.strat, 'special', 16);
+                    seriesMap[p.key] = series.overallHits;
+                });
+            } finally {
+                Object.assign(recConfig, savedConfig);
+            }
+            renderPresetResults(seriesMap);
+        }
+
         function renderRecPresetSparklines() {
             if (!state.historyData || state.historyData.length < 2) return;
             const presets = [
@@ -6287,17 +6504,13 @@
                 { key: 'solid', strat: 'multifactor', weightCold: 50, weightMorph: 50, spanCount: 24, shrink: false, label: '稳健大底预设' },
                 { key: 'sum_span', strat: 'sum_span', weightCold: 50, weightMorph: 75, spanCount: 20, shrink: true, label: '和值跨度均值回归预设' }
             ];
-            const savedConfig = { ...recConfig };
-            try {
+
+            const renderPresetResults = (seriesMap) => {
                 presets.forEach(p => {
                     const el = document.getElementById(`recPresetSpark_${p.key}`);
                     if (!el) return;
-                    recConfig.weightCold = p.weightCold;
-                    recConfig.weightMorph = p.weightMorph;
-                    recConfig.spanCount = p.spanCount;
-                    recConfig.shrink = p.shrink;
-                    const series = getStrategySparklineSeries(p.strat, 'special', 16);
-                    el.innerHTML = buildTrendSparklineHtml(series.overallHits, {
+                    const boolSeries = seriesMap[p.key] || [];
+                    el.innerHTML = buildTrendSparklineHtml(boolSeries, {
                         width: 34,
                         height: 11,
                         windowSize: 4,
@@ -6308,9 +6521,29 @@
                         clickable: false
                     });
                 });
-            } finally {
-                Object.assign(recConfig, savedConfig);
+            };
+
+            const workerClient = typeof window !== 'undefined' && window.AppCore && window.AppCore.workerClient;
+            if (workerClient && typeof workerClient.runPresetSparklines === 'function') {
+                const seq = ++recPresetSparkSeq;
+                const coldWindow = typeof getEffectiveColdWindow === 'function' ? getEffectiveColdWindow() : 50;
+                workerClient.runPresetSparklines({
+                    historyData: state.historyData,
+                    presets,
+                    currentYear: state.currentYear,
+                    globalMaxOm: state.globalMaxOm,
+                    coldWindow
+                }).then((seriesMap) => {
+                    if (seq !== recPresetSparkSeq) return;
+                    renderPresetResults(seriesMap || {});
+                }).catch(() => {
+                    if (seq !== recPresetSparkSeq) return;
+                    renderRecPresetSparklinesSync(presets, renderPresetResults);
+                });
+                return;
             }
+
+            renderRecPresetSparklinesSync(presets, renderPresetResults);
         }
         window.renderRecPresetSparklines = renderRecPresetSparklines;
 
@@ -9809,13 +10042,11 @@
             const { types, finalNumbers, counts, selectedZodiacs, selectedWaves, selectedWaveDs, selectedWuxings, selectedWuxingDs, selectedMorphs, selectedHeNumbers, selectedHeTails, selectedHeads, selectedHeadDs, selectedTails, selectedSegments, selectedNumbers, inputTerms } = detail;
             
             if (!types.length) {
-                if (typeof showToast === 'function') showToast('⚠️ 请先勾选至少一个特码综合K线选项', 3000);
-                else alert('请先选择至少一个特码综合K线选项');
+                showToast('⚠️ 请先勾选至少一个特码综合K线选项', 3000);
                 return;
             }
             if (!finalNumbers.length) {
-                if (typeof showToast === 'function') showToast('⚠️ 当前多维运算或排除过滤后没有可用号码，请调整条件或清空排除项', 3500);
-                else alert('当前多维运算或排除过滤后没有可用号码，请调整条件或清空排除项');
+                showToast('⚠️ 当前多维运算或排除过滤后没有可用号码，请调整条件或清空排除项', 3500);
                 return;
             }
             
@@ -11167,11 +11398,11 @@
             const strategies = getUserStrategies();
             const names = Object.keys(strategies);
             sel.innerHTML = '<option value="">📂 我的自定策略...</option>' +
-                names.map(name => `<option value="${name}">${name}</option>`).join('');
+                names.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('');
         }
 
-        function saveCurrentStrategyPrompt() {
-            const name = prompt('请输入自定义方案名称 (如: 我的平特热肖+红波组合):');
+        async function saveCurrentStrategyPrompt() {
+            const name = await showPromptDialog('请输入自定义方案名称 (如: 我的平特热肖+红波组合):', '', '💾 保存自定策略');
             if (!name || !name.trim()) return;
             const trimmedName = name.trim();
             
@@ -11430,31 +11661,27 @@
             showNotification(`已载入方案: ${name}`);
         }
 
-        function deleteSelectedUserStrategy() {
+        async function deleteSelectedUserStrategy() {
             const sel = document.getElementById('userStrategySel') || document.getElementById('userStrategySelect');
             if (!sel || !sel.value) {
-                if (typeof showToast === 'function') {
-                    showToast('⚠️ 请先在下拉框中选择要删除的方案');
-                } else {
-                    alert('请先选择要删除的方案');
-                }
+                showToast('⚠️ 请先在下拉框中选择要删除的方案');
                 return;
             }
             const name = sel.value;
-            if (!confirm(`确定要删除当前选中的方案 "${name}" 吗？\n（注：仅删除当前这一套方案，不会删除其他方案）`)) return;
+            const confirmed = await showConfirmDialog(`确定要删除当前选中的方案 "${name}" 吗？\n（注：仅删除当前这一套方案，不会删除其他方案）`, '🗑️ 删除自定方案');
+            if (!confirmed) return;
             const strategies = getUserStrategies();
             delete strategies[name];
             saveUserStrategies(strategies);
             initUserStrategies();
-            if (typeof showToast === 'function') {
-                showToast(`🗑️ 方案 "${name}" 已删除`);
-            } else {
-                showNotification(`方案 "${name}" 已删除`);
-            }
+            showToast(`🗑️ 方案 "${escapeHtml(name)}" 已删除`);
         }
 
         // ==================== 自由K线量化指标回测计算 ====================
         function calculateKlineQuantMetrics(data) {
+            if (typeof window !== 'undefined' && window.AppCore && typeof window.AppCore.calculateKlineQuantMetrics === 'function') {
+                return window.AppCore.calculateKlineQuantMetrics(data);
+            }
             if (!data || !data.length) {
                 return {
                     total: 0,
@@ -11684,7 +11911,7 @@
             const e = parseInt(document.getElementById('rangeEnd').value);
 
             if (s > e) {
-                alert('开始期号不能大于结束期号');
+                showToast('⚠️ 开始期号不能大于结束期号');
                 return;
             }
 
@@ -12340,11 +12567,13 @@
         }
         function addColdToOverlay() {
             if (!state.coldSelection || !state.coldSelection.types.length) {
-                return alert('请先在特码综合K线模式生成条件，再加入叠加');
+                showToast('⚠️ 请先在特码综合K线模式生成条件，再加入叠加', 2800);
+                return;
             }
             if (!state.overlay.coldSets) state.overlay.coldSets = [];
             if (state.overlay.coldSets.length >= 3) {
-                return alert('最多叠加3条特码综合K线');
+                showToast('⚠️ 最多叠加3条特码综合K线');
+                return;
             }
             const types = state.coldSelection.setKline
                 ? [...(state.coldSelection.setTypes || [])]
@@ -12581,6 +12810,9 @@
 
         // ==================== 策略回测 ====================
         function calcBacktestStats(slice) {
+            if (typeof window !== 'undefined' && window.AppCore && typeof window.AppCore.calcBacktestStats === 'function') {
+                return window.AppCore.calcBacktestStats(slice);
+            }
             let wins = 0, loss = 0, flat = 0, sum = 0, curUp = 0, maxUp = 0, curDown = 0, maxDown = 0;
             slice.forEach(d => {
                 const s = d.step || 0;
@@ -13195,7 +13427,10 @@
         }
 
         function exportCSV() {
-            if (!state.historyData.length) return alert('无数据可导出');
+            if (!state.historyData.length) {
+                showToast('⚠️ 无数据可导出');
+                return;
+            }
 
             let csv = '期号,开奖时间,特肖,号码,趋势指数,MA5\n';
             state.historyData.forEach(d => {
@@ -14844,7 +15079,11 @@
                     chipsContainer.innerHTML = '<span style="font-size:11px;color:var(--text-secondary);padding-left:4px;">(暂未扣选项目)</span>';
                 } else {
                     const chips = Array.from(omissionSelectedItems.entries()).map(([sKey, it]) => {
-                        return `<span class="omission-item-tag" title="包含号码: ${(it.numbers || []).join(' ')}">${it.dimensionLabel}:${it.name}<span class="om-tag-del" onclick="removeOmissionSelectedItem('${sKey}')">✕</span></span>`;
+                        const titleNums = escapeHtml((it.numbers || []).join(' '));
+                        const dimLabel = escapeHtml(it.dimensionLabel);
+                        const itemName = escapeHtml(it.name);
+                        const safeKey = escapeHtml(sKey).replace(/'/g, '&#39;');
+                        return `<span class="omission-item-tag" title="包含号码: ${titleNums}">${dimLabel}:${itemName}<span class="om-tag-del" onclick="removeOmissionSelectedItem('${safeKey}')">✕</span></span>`;
                     }).slice(0, 10);
                     if (totalCount > 10) {
                         chips.push(`<span style="font-size:10px;color:var(--accent);">+${totalCount - 10}项</span>`);
@@ -14856,11 +15095,7 @@
 
         function confirmAddOmissionToColdKline() {
             if (!omissionSelectedItems || omissionSelectedItems.size === 0) {
-                if (typeof showToast === 'function') {
-                    showToast('⚠️ 请先在遗漏列表中勾选（扣选）需要加入特码综合K线的项目', 2500);
-                } else {
-                    alert('请先在遗漏列表中勾选（扣选）需要加入特码综合K线的项目');
-                }
+                showToast('⚠️ 请先在遗漏列表中勾选（扣选）需要加入特码综合K线的项目', 2500);
                 return;
             }
 

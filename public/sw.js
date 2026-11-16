@@ -1,9 +1,7 @@
-const CACHE_NAME = 'aomen-liuhe-v1';
+const CACHE_NAME = 'aomen-liuhe-v2';
 const STATIC_ASSETS = [
     '/',
     '/index.html',
-    '/style.css',
-    '/app.js',
     '/favicon.svg',
     '/manifest.json',
     '/pwa-192x192.png',
@@ -29,15 +27,22 @@ self.addEventListener('activate', (event) => {
     );
 });
 
+self.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'SKIP_WAITING') {
+        self.skipWaiting();
+    }
+});
+
 self.addEventListener('fetch', (event) => {
     const { request } = event;
     const url = new URL(request.url);
 
-    // 对于非 GET 请求不缓存
-    if (request.method !== 'GET') return;
+    // 仅处理同源 GET 请求
+    if (request.method !== 'GET' || url.origin !== self.location.origin) return;
 
-    // API 请求：网络优先，网络故障时回退到缓存
+    // API 请求：网络优先，强制刷新 (?refresh=1) 不读缓存，离线时回退缓存
     if (url.pathname.startsWith('/api/')) {
+        const isForceRefresh = url.searchParams.get('refresh') === '1';
         event.respondWith(
             fetch(request)
                 .then((response) => {
@@ -47,12 +52,32 @@ self.addEventListener('fetch', (event) => {
                     }
                     return response;
                 })
-                .catch(() => caches.match(request))
+                .catch(() => {
+                    if (isForceRefresh) return new Response(JSON.stringify({ error: 'Offline' }), { status: 503 });
+                    return caches.match(request);
+                })
         );
         return;
     }
 
-    // 静态文件：stale-while-revalidate 策略
+    // HTML 文档与页面导航：网络优先，确保每次部署后首刷即见最新版本
+    const isHtmlDoc = request.mode === 'navigate' || url.pathname === '/' || url.pathname === '/index.html';
+    if (isHtmlDoc) {
+        event.respondWith(
+            fetch(request)
+                .then((response) => {
+                    if (response && response.status === 200) {
+                        const copy = response.clone();
+                        caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+                    }
+                    return response;
+                })
+                .catch(() => caches.match(request).then((res) => res || caches.match('/index.html')))
+        );
+        return;
+    }
+
+    // 带版本号的静态资源：缓存优先 + 后台更新 (stale-while-revalidate)
     event.respondWith(
         caches.match(request).then((cachedResponse) => {
             const fetchPromise = fetch(request).then((networkResponse) => {

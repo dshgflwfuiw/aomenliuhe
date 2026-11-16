@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "node server.js",
     "build": "echo 'Build complete'",
-    "start": "node server.js"
+    "start": "node server.js",
+    "lint": "node --check server.js && node --check functions/api/proxy.js && node --check public/app.js && node --check public/sw.js && node --check public/core/config.js && node --check public/core/rolling.js && node --check public/core/storage.js && node --check public/core/strategyEngine.js && node --check public/core/bridge.js && node --check public/workers/backtest-worker.js",
+    "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
     "express": "^4.21.2"
