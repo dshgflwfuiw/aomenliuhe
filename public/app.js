@@ -2976,7 +2976,12 @@
                 card.classList.remove('collapsed');
             }
             const el = document.getElementById('recDrawer');
-            if (el) el.classList.toggle('open');
+            if (el) {
+                el.classList.toggle('open');
+                if (el.classList.contains('open') && typeof renderRecPresetSparklines === 'function') {
+                    renderRecPresetSparklines();
+                }
+            }
         }
 
         function onRecWeightChange() {
@@ -3064,13 +3069,26 @@
                 renderRecommendations(container, recommendations, 'normal_track');
                 renderRecHistory5Inline('normal_track', 'normal');
                 const lookbackCount = state.recInlineCount || 5;
-                const hitLb = getLookbackRecords(lookbackCount, 'normal_track', 'normal');
+                const hitLb = getCachedStrategyLookback(lookbackCount, 'normal_track', 'normal');
+                const sparkCtx = getStrategySparklineSeries('normal_track', 'normal', 20);
+                const sparkInlineHtml = buildTrendSparklineHtml(sparkCtx.overallHits, {
+                    width: 48,
+                    height: 14,
+                    highThreshold: 55,
+                    midThreshold: 35,
+                    label: '平特双轨近20期命中趋势'
+                });
                 const hitEl = document.getElementById('recommendHitRate');
                 if (hitEl) {
                     const devTag = windowDevMeta ? ` <span style="opacity:0.4;margin:0 4px;">|</span> ⚖️ ${windowDevMeta.winSize}期偏离压制${windowDevMeta.overheatedCount}码` : '';
-                    hitEl.innerHTML = hitLb.count
-                        ? `📜 平特近${hitLb.count}期命中: <b style="color:${hitLb.winRate >= 50 ? 'var(--up)' : 'var(--warn)'};">${hitLb.hitTotal}/${hitLb.count}</b>（${hitLb.winRate}%）${devTag}`
-                        : `平特双轨模式：已根据正码1~6落球共振生成平特肖与精选尾数${devTag}`;
+                    const rateSummary = hitLb.count
+                        ? `📜 平特近${hitLb.count}期命中: <b style="color:${hitLb.winRate >= 50 ? 'var(--up)' : 'var(--warn)'};">${hitLb.hitTotal}/${hitLb.count}</b>（${hitLb.winRate}%）`
+                        : `平特双轨模式：已根据正码1~6落球共振生成平特肖与精选尾数`;
+                    hitEl.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;"><span>${rateSummary}${devTag}</span>${sparkInlineHtml}</div>`;
+                }
+                const drawerEl = document.getElementById('recDrawer');
+                if (drawerEl && drawerEl.classList.contains('open')) {
+                    renderRecPresetSparklines();
                 }
                 const modal = document.getElementById('recHistoryModal');
                 if (modal && modal.style.display !== 'none') {
@@ -3119,7 +3137,15 @@
 
             const hitStats = computeRecommendationStats(strategy, 10);
             const lookbackCount = state.recInlineCount || 5;
-            const hitLb = getLookbackRecords(lookbackCount, strategy, 'special');
+            const hitLb = getCachedStrategyLookback(lookbackCount, strategy, 'special');
+            const sparkCtx = getStrategySparklineSeries(strategy, 'special', 20);
+            const stratSparkHtml = buildTrendSparklineHtml(sparkCtx.overallHits, {
+                width: 48,
+                height: 14,
+                highThreshold: 50,
+                midThreshold: 30,
+                label: `${STRATEGY_NAME_MAP[strategy] || '当前策略'}近20期胜率趋势`
+            });
             const hitEl = document.getElementById('recommendHitRate');
             if (hitEl) {
                 const hitLbHtml = hitLb.count
@@ -3131,7 +3157,13 @@
                 const devBadge = windowDevMeta
                     ? ` <span style="opacity:0.4;margin:0 4px;">|</span> <span style="color:var(--accent);" title="基于最近${windowDevMeta.winSize}期统计窗口计算频率偏离度，对高频透支号码动态施加杀号降权，提升冷热过渡期命中率">⚖️ ${windowDevMeta.winSize}期偏离度杀号(${windowDevMeta.overheatedCount}码降权)</span>`
                     : '';
-                hitEl.innerHTML = (hitLbHtml ? `${hitLbHtml} <span style="opacity:0.4;margin:0 4px;">|</span> ${hit10Html}` : hit10Html) + devBadge;
+                const textSummary = (hitLbHtml ? `${hitLbHtml} <span style="opacity:0.4;margin:0 4px;">|</span> ${hit10Html}` : hit10Html) + devBadge;
+                hitEl.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;"><span>${textSummary}</span>${stratSparkHtml}</div>`;
+            }
+
+            const drawerEl = document.getElementById('recDrawer');
+            if (drawerEl && drawerEl.classList.contains('open')) {
+                renderRecPresetSparklines();
             }
 
             const modal = document.getElementById('recHistoryModal');
@@ -4115,6 +4147,7 @@
             const testLen = Math.min(30, historyData.length);
             presets.forEach(p => {
                 let hitCount = 0;
+                const hitSeries = [];
                 const terms = parseInputTerms(p.text);
                 for (let i = historyData.length - testLen; i < historyData.length; i++) {
                     const pt = historyData[i];
@@ -4122,14 +4155,17 @@
                     const winStr = winNum.toString().padStart(2, '0');
                     const winZ = pt.win;
                     const winColor = pt.currentColor;
-                    if (
+                    const isHit = (
                         terms.numbers.includes(winStr) ||
                         terms.zodiacs.includes(winZ) ||
                         terms.waves.includes(winColor)
-                    ) {
+                    );
+                    if (isHit) {
                         hitCount++;
                     }
+                    hitSeries.push(isHit);
                 }
+                p.hitSeries = hitSeries;
                 p.hitRate = Math.round((hitCount / testLen) * 100);
                 p.hits = hitCount;
                 p.total = testLen;
@@ -5074,15 +5110,25 @@
             renderRecHistory5Inline(strategy, track);
             const hitEl = document.getElementById('recommendHitRate');
             if (hitEl) {
-                const hitLb = getLookbackRecords(count, track === 'normal' ? 'normal_track' : strategy, track);
+                const effStrat = track === 'normal' ? 'normal_track' : strategy;
+                const hitLb = getCachedStrategyLookback(count, effStrat, track);
                 const hitStats = computeRecommendationStats(strategy, 10);
+                const sparkCtx = getStrategySparklineSeries(effStrat, track, 20);
+                const stratSparkHtml = buildTrendSparklineHtml(sparkCtx.overallHits, {
+                    width: 48,
+                    height: 14,
+                    highThreshold: track === 'normal' ? 55 : 50,
+                    midThreshold: track === 'normal' ? 35 : 30,
+                    label: `${STRATEGY_NAME_MAP[effStrat] || '当前策略'}近20期胜率趋势`
+                });
                 const hitLbHtml = hitLb.count
                     ? `📜 近${hitLb.count}期命中: <b style="color:${hitLb.winRate >= 50 ? 'var(--up)' : 'var(--warn)'};">${hitLb.hitTotal}/${hitLb.count}</b>（${hitLb.winRate}%）`
                     : '';
                 const hit10Html = hitStats.total
                     ? `最近10期命中：<b style="color:${hitStats.rate >= 50 ? 'var(--up)' : 'var(--down)'};">${hitStats.hit}/${hitStats.total}</b>（${hitStats.rate.toFixed(0)}%）`
                     : '数据就绪';
-                hitEl.innerHTML = hitLbHtml ? `${hitLbHtml} <span style="opacity:0.4;margin:0 4px;">|</span> ${hit10Html}` : hit10Html;
+                const textSummary = hitLbHtml ? `${hitLbHtml} <span style="opacity:0.4;margin:0 4px;">|</span> ${hit10Html}` : hit10Html;
+                hitEl.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;"><span>${textSummary}</span>${stratSparkHtml}</div>`;
             }
         }
         window.changeRecInlinePeriod = changeRecInlinePeriod;
@@ -5995,7 +6041,7 @@
             const data = state.historyData;
             if (!data || data.length < 2) return { hit: 0, total: 0, rate: 0 };
             const track = recConfig.track || 'special';
-            const lb = getLookbackRecords(n, strategy, track);
+            const lb = getCachedStrategyLookback(n, strategy, track);
             return {
                 hit: lb.hitTotal,
                 total: lb.count,
@@ -6090,6 +6136,184 @@
             return scored.sort((a, b) => b.score - a.score);
         }
 
+        // ==================== 推荐历史成功率趋势迷你图 (Sparkline) ====================
+        function getCachedStrategyLookback(reviewCount = 20, customStrat = null, customTrack = null) {
+            const data = state.historyData;
+            if (!data || data.length < 2) {
+                return { records: [], hitTotal: 0, count: 0, winRate: 0, activeStrat: customStrat || 'multifactor', activeTrack: customTrack || 'special' };
+            }
+            const activeTrack = customTrack !== null ? customTrack : (recConfig.track || 'special');
+            const activeStrat = customStrat || document.getElementById('recommendStrategy')?.value || 'multifactor';
+            if (isKlineStratKey(activeStrat)) {
+                return getLookbackRecords(reviewCount, activeStrat, activeTrack);
+            }
+            const lastItem = data[data.length - 1] || {};
+            const winSize = typeof getEffectiveColdWindow === 'function' ? getEffectiveColdWindow() : 50;
+            const cacheKey = [
+                data.length,
+                lastItem.expect || lastItem.period || lastItem.id || '',
+                reviewCount,
+                activeStrat,
+                activeTrack,
+                recConfig.weightCold,
+                recConfig.weightMorph,
+                recConfig.spanCount,
+                recConfig.shrink ? 1 : 0,
+                winSize === Infinity ? 'all' : winSize
+            ].join('|');
+
+            if (!state._recLookbackCache) state._recLookbackCache = new Map();
+            if (state._recLookbackCache.has(cacheKey)) {
+                return state._recLookbackCache.get(cacheKey);
+            }
+            const res = getLookbackRecords(reviewCount, activeStrat, activeTrack);
+            if (state._recLookbackCache.size > 40) {
+                state._recLookbackCache.clear();
+            }
+            state._recLookbackCache.set(cacheKey, res);
+            return res;
+        }
+
+        function computeRollingSuccessSeries(boolSeries, windowSize = 5) {
+            if (!Array.isArray(boolSeries) || boolSeries.length === 0) {
+                return { points: [], hits: 0, total: 0, overallRate: 0, recentRate: 0, trend: 'flat' };
+            }
+            const total = boolSeries.length;
+            let hits = 0;
+            const points = [];
+            for (let i = 0; i < total; i++) {
+                if (boolSeries[i]) hits++;
+                const start = Math.max(0, i - windowSize + 1);
+                let winHits = 0;
+                for (let j = start; j <= i; j++) {
+                    if (boolSeries[j]) winHits++;
+                }
+                const winLen = i - start + 1;
+                points.push(Math.round((winHits / winLen) * 100));
+            }
+            const overallRate = Math.round((hits / total) * 100);
+            const recentRate = points[points.length - 1] || 0;
+            const trend = recentRate > overallRate + 5 ? 'up' : recentRate < overallRate - 5 ? 'down' : 'flat';
+            return { points, hits, total, overallRate, recentRate, trend };
+        }
+
+        function buildTrendSparklineHtml(boolSeries, options = {}) {
+            if (!Array.isArray(boolSeries) || boolSeries.length < 2) return '';
+            const {
+                width = 48,
+                height = 14,
+                windowSize = 5,
+                highThreshold = 50,
+                midThreshold = 30,
+                label = '历史命中趋势',
+                compact = false,
+                showPercent = true,
+                clickable = true
+            } = options;
+
+            const stats = computeRollingSuccessSeries(boolSeries, windowSize);
+            const { points, hits, total, overallRate, recentRate, trend } = stats;
+            const toneColor = overallRate >= highThreshold ? 'var(--up)' : overallRate >= midThreshold ? 'var(--warn)' : 'var(--down)';
+            const trendArrow = trend === 'up' ? '↗' : trend === 'down' ? '↘' : '';
+
+            const padX = 1.5;
+            const padY = 2;
+            const innerW = Math.max(4, width - padX * 2);
+            const innerH = Math.max(4, height - padY * 2);
+            const denom = Math.max(1, points.length - 1);
+
+            const coords = points.map((val, idx) => {
+                const x = (padX + (idx / denom) * innerW).toFixed(1);
+                const y = (padY + (1 - Math.max(0, Math.min(100, val)) / 100) * innerH).toFixed(1);
+                return [x, y];
+            });
+
+            const polylinePoints = coords.map(c => `${c[0]},${c[1]}`).join(' ');
+            const areaPoints = `${coords[0][0]},${height - padY} ${polylinePoints} ${coords[coords.length - 1][0]},${height - padY}`;
+            const lastCoord = coords[coords.length - 1];
+            const avgY = (padY + (1 - Math.max(0, Math.min(100, overallRate)) / 100) * innerH).toFixed(1);
+            const tooltip = `${label} · 近${total}期命中 ${hits}/${total} (${overallRate}%) · 近${Math.min(windowSize, total)}期滚动 ${recentRate}%`;
+
+            const svgHtml = `<svg class="rec-sparkline-svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" aria-hidden="true"><line x1="${padX}" y1="${avgY}" x2="${width - padX}" y2="${avgY}" stroke="currentColor" stroke-opacity="0.24" stroke-width="0.8" stroke-dasharray="2,2"/><polygon points="${areaPoints}" fill="currentColor" fill-opacity="0.16"/><polyline points="${polylinePoints}" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="${lastCoord[0]}" cy="${lastCoord[1]}" r="1.7" fill="currentColor"/></svg>`;
+
+            const pctHtml = showPercent ? `<span class="rec-sparkline-pct">${overallRate}%${trendArrow}</span>` : '';
+
+            if (compact) {
+                return `<div class="rec-sparkline-mini" style="color:${toneColor};" title="${tooltip}">${svgHtml}${pctHtml}</div>`;
+            }
+            const clickAttr = clickable ? ` onclick="event.stopPropagation();openRecHistoryModal(${total})"` : '';
+            return `<span class="rec-sparkline-pill" style="color:${toneColor};" title="${tooltip} (点击查看详细复盘)"${clickAttr}>${svgHtml}${pctHtml}</span>`;
+        }
+
+        function getStrategySparklineSeries(strategy, track = 'special', reviewCount = 20) {
+            const lb = getCachedStrategyLookback(reviewCount, strategy, track);
+            const chronological = (lb.records || []).slice().reverse();
+            return {
+                lb,
+                overallHits: chronological.map(r => !!r.isHit),
+                topNumbersHits: chronological.map(r => (r.topNumbers || []).includes(r.special)),
+                goldDanHits: chronological.map(r => (r.goldNumbers || []).includes(r.special)),
+                guardHits: chronological.map(r => (r.goldNumbers || []).includes(r.special) || (r.silverNumbers || []).includes(r.special)),
+                baseAndSilverHits: chronological.map(r => (r.topNumbers || []).includes(r.special) || (r.silverNumbers || []).includes(r.special)),
+                zodiacHits: chronological.map(r => (r.recZodiacs || []).includes(r.zodiac)),
+                tailHits: chronological.map(r => {
+                    const winTail = `${parseInt(r.special, 10) % 10}尾`;
+                    return (r.recTails || []).includes(winTail);
+                }),
+                killSafeHits: chronological.map(r => !!r.isKillSafe),
+                flatZodiacHits: chronological.map(r => {
+                    const allB = [...(r.normalBalls || []), r.special].filter(Boolean);
+                    const openZ = allB.map(b => getZodiac(parseInt(b, 10)));
+                    return (r.recZodiacs || []).some(z => openZ.includes(z));
+                }),
+                flatTailHits: chronological.map(r => {
+                    const allB = [...(r.normalBalls || []), r.special].filter(Boolean);
+                    const openT = allB.map(b => `${parseInt(b, 10) % 10}尾`);
+                    return (r.recTails || []).some(t => openT.includes(t));
+                }),
+                flatNumHits: chronological.map(r => {
+                    const allB = [...(r.normalBalls || []), r.special].filter(Boolean);
+                    return (r.topNumbers || []).some(n => allB.includes(n));
+                })
+            };
+        }
+
+        function renderRecPresetSparklines() {
+            if (!state.historyData || state.historyData.length < 2) return;
+            const presets = [
+                { key: 'cold', strat: 'multifactor', weightCold: 20, weightMorph: 35, spanCount: 20, shrink: true, label: '极冷反弹预设' },
+                { key: 'hot', strat: 'multifactor', weightCold: 80, weightMorph: 65, spanCount: 20, shrink: true, label: '顺势高频预设' },
+                { key: 'morph', strat: 'multifactor', weightCold: 50, weightMorph: 90, spanCount: 20, shrink: true, label: '形态共振预设' },
+                { key: 'solid', strat: 'multifactor', weightCold: 50, weightMorph: 50, spanCount: 24, shrink: false, label: '稳健大底预设' },
+                { key: 'sum_span', strat: 'sum_span', weightCold: 50, weightMorph: 75, spanCount: 20, shrink: true, label: '和值跨度均值回归预设' }
+            ];
+            const savedConfig = { ...recConfig };
+            try {
+                presets.forEach(p => {
+                    const el = document.getElementById(`recPresetSpark_${p.key}`);
+                    if (!el) return;
+                    recConfig.weightCold = p.weightCold;
+                    recConfig.weightMorph = p.weightMorph;
+                    recConfig.spanCount = p.spanCount;
+                    recConfig.shrink = p.shrink;
+                    const series = getStrategySparklineSeries(p.strat, 'special', 16);
+                    el.innerHTML = buildTrendSparklineHtml(series.overallHits, {
+                        width: 34,
+                        height: 11,
+                        windowSize: 4,
+                        highThreshold: 50,
+                        midThreshold: 30,
+                        label: p.label,
+                        compact: true,
+                        clickable: false
+                    });
+                });
+            } finally {
+                Object.assign(recConfig, savedConfig);
+            }
+        }
+        window.renderRecPresetSparklines = renderRecPresetSparklines;
+
         function renderRecommendations(container, recommendations, strategy) {
             state.currentRecommendations = { strategy, recommendations, track: recConfig.track };
             if (!recommendations || (Array.isArray(recommendations) && recommendations.length === 0)) {
@@ -6097,17 +6321,26 @@
                 return;
             }
 
+            const sparkSeries = getStrategySparklineSeries(strategy, recConfig.track || 'special', 20);
+
             // 0. 平特肖尾双轨模式界面
             if (strategy === 'normal_track' || recommendations.topFlatZodiacs) {
                 const { topFlatZodiacs, topFlatTails, topFlatNums } = recommendations;
                 const flatZStr = topFlatZodiacs.map(z => z.zodiac).join(',');
                 const flatNumStr = topFlatNums.map(n => n.number).join(',');
 
+                const flatZSpark = buildTrendSparklineHtml(sparkSeries.flatZodiacHits, { highThreshold: 55, midThreshold: 35, label: '高频平特肖近20期命中趋势' });
+                const flatTSpark = buildTrendSparklineHtml(sparkSeries.flatTailHits, { highThreshold: 65, midThreshold: 45, label: '高频平特尾近20期命中趋势' });
+                const flatNumSpark = buildTrendSparklineHtml(sparkSeries.flatNumHits, { highThreshold: 65, midThreshold: 45, label: '正码精选近20期命中趋势' });
+
                 let html = `
                     <div class="rec-section-box">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:4px;flex-wrap:wrap;">
                             <span style="font-size:11px;font-weight:700;color:var(--accent);">🐾 高频平特肖 (近30期正码共振)</span>
-                            <button class="rec-apply-btn" onclick="applyRecommendToKLine('flat_zodiac', '${flatZStr}')">📈 套用平肖</button>
+                            <div style="display:inline-flex;align-items:center;gap:4px;">
+                                ${flatZSpark}
+                                <button class="rec-apply-btn" onclick="applyRecommendToKLine('flat_zodiac', '${flatZStr}')">📈 套用平肖</button>
+                            </div>
                         </div>
                         <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:4px;">
                             ${topFlatZodiacs.map(z => `
@@ -6120,9 +6353,12 @@
                     </div>
 
                     <div class="rec-section-box">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:4px;flex-wrap:wrap;">
                             <span style="font-size:11px;font-weight:700;color:var(--warn);">🎯 高频平特尾数</span>
-                            <span style="font-size:9px;color:var(--text-secondary);">出球频次占比</span>
+                            <div style="display:inline-flex;align-items:center;gap:4px;">
+                                ${flatTSpark}
+                                <span style="font-size:9px;color:var(--text-secondary);">出球频次占比</span>
+                            </div>
                         </div>
                         <div style="display:flex;gap:6px;">
                             ${topFlatTails.map(t => `
@@ -6135,9 +6371,12 @@
                     </div>
 
                     <div class="rec-section-box" style="margin-bottom:0;">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:4px;flex-wrap:wrap;">
                             <span style="font-size:11px;font-weight:700;color:var(--text-primary);">🎰 正码连开精选码 (Top ${topFlatNums.length})</span>
-                            <button class="rec-apply-btn" onclick="applyRecommendToKLine('flat_num', '${flatNumStr}')">套用正码</button>
+                            <div style="display:inline-flex;align-items:center;gap:4px;">
+                                ${flatNumSpark}
+                                <button class="rec-apply-btn" onclick="applyRecommendToKLine('flat_num', '${flatNumStr}')">套用正码</button>
+                            </div>
                         </div>
                         <div style="display:grid;grid-template-columns:repeat(5, 1fr);gap:4px;">
                             ${topFlatNums.map(item => `
@@ -6165,12 +6404,20 @@
                 const sumBadgeColor = metrics.sumStatus === 'high' ? 'var(--down)' : metrics.sumStatus === 'low' ? 'var(--up)' : 'var(--accent)';
                 const spanBadgeColor = metrics.spanStatus === 'wide' ? 'var(--warn)' : metrics.spanStatus === 'narrow' ? 'var(--up)' : 'var(--accent)';
 
+                const sumSpanOverallSpark = buildTrendSparklineHtml(sparkSeries.overallHits, { highThreshold: 50, midThreshold: 35, label: '和值跨度策略近20期综合胜率' });
+                const guardSpark = buildTrendSparklineHtml(sparkSeries.guardHits, { highThreshold: 12, midThreshold: 5, label: '首尾守门码近20期命中趋势' });
+                const sumNumsSpark = buildTrendSparklineHtml(sparkSeries.topNumbersHits, { highThreshold: 45, midThreshold: 30, label: '均值精选号码近20期命中趋势' });
+                const sumZSpark = buildTrendSparklineHtml(sparkSeries.zodiacHits, { highThreshold: 50, midThreshold: 35, label: '均值共振生肖近20期命中趋势' });
+
                 let html = `
                     <!-- 和值与跨度量化状态看板 -->
                     <div class="rec-section-box" style="background:rgba(0,229,255,0.03);border:1px solid rgba(0,229,255,0.2);">
-                        <div style="font-size:10px;font-weight:700;color:var(--accent);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;">
+                        <div style="font-size:10px;font-weight:700;color:var(--accent);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:4px;flex-wrap:wrap;">
                             <span>📐 和值跨度·均值回归诊断台</span>
-                            <span style="font-size:9px;color:var(--text-secondary);">10期均值基准</span>
+                            <div style="display:inline-flex;align-items:center;gap:4px;">
+                                ${sumSpanOverallSpark}
+                                <span style="font-size:9px;color:var(--text-secondary);font-weight:normal;">10期均值基准</span>
+                            </div>
                         </div>
                         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
                             <!-- 和值分析卡 -->
@@ -6207,9 +6454,12 @@
 
                     <!-- 跨度首尾守门码（首号 + 尾号） -->
                     <div class="rec-section-box">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:4px;flex-wrap:wrap;">
                             <span style="font-size:11px;font-weight:700;color:#ffd700;">🚪 跨度首尾守门码 (01-10首 / 40-49尾)</span>
-                            <button class="rec-apply-btn" onclick="applyRecommendToKLine('guard', '${guardStr}')">套用首尾</button>
+                            <div style="display:inline-flex;align-items:center;gap:4px;">
+                                ${guardSpark}
+                                <button class="rec-apply-btn" onclick="applyRecommendToKLine('guard', '${guardStr}')">套用首尾</button>
+                            </div>
                         </div>
                         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
                             <div style="background:rgba(255,215,0,0.06);border:1px solid rgba(255,215,0,0.25);border-radius:6px;padding:4px 6px;">
@@ -6239,12 +6489,15 @@
 
                     <!-- 精选号码推荐群 -->
                     <div class="rec-section-box">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                            <div style="display:flex;align-items:center;gap:4px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:4px;flex-wrap:wrap;">
+                            <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
                                 <span style="font-size:11px;font-weight:700;color:var(--accent);">⭐ 均值回归·精选 ${topNumbers.length} 码</span>
                                 ${isShrinked ? `<span style="font-size:8.5px;padding:1px 4px;border-radius:3px;background:rgba(0,230,118,0.15);color:var(--up);border:1px solid rgba(0,230,118,0.3);" title="${shrinkInfo || '已自动进行同尾/同肖瘦身'}">已缩水${shrinkCount ? `(滤换${shrinkCount}码)` : ''}</span>` : ''}
                             </div>
-                            <button class="rec-apply-btn" onclick="applyRecommendToKLine('multi', '${numListStr}')">📈 套用至K线</button>
+                            <div style="display:inline-flex;align-items:center;gap:4px;">
+                                ${sumNumsSpark}
+                                <button class="rec-apply-btn" onclick="applyRecommendToKLine('multi', '${numListStr}')">📈 套用至K线</button>
+                            </div>
                         </div>
                         <div style="display:grid;grid-template-columns:repeat(5, 1fr);gap:5px;">
                             ${topNumbers.map(item => `
@@ -6259,9 +6512,12 @@
 
                     <!-- 共振生肖 -->
                     <div class="rec-section-box" style="margin-bottom:0;">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:4px;flex-wrap:wrap;">
                             <span style="font-size:11px;font-weight:700;color:var(--warn);">🐾 均值共振优选生肖</span>
-                            <button class="rec-apply-btn" onclick="applyRecommendToKLine('zodiac', '${topZodiacs.map(z=>z.zodiac).join(',')}')">📈 套用生肖</button>
+                            <div style="display:inline-flex;align-items:center;gap:4px;">
+                                ${sumZSpark}
+                                <button class="rec-apply-btn" onclick="applyRecommendToKLine('zodiac', '${topZodiacs.map(z=>z.zodiac).join(',')}')">📈 套用生肖</button>
+                            </div>
                         </div>
                         <div style="display:flex;gap:6px;">
                             ${topZodiacs.map(z => `
@@ -6285,14 +6541,21 @@
                 const isShrinked = recConfig.shrink;
                 const tailsArr = topTails || [];
 
+                const mfNumsSpark = buildTrendSparklineHtml(sparkSeries.topNumbersHits, { highThreshold: 45, midThreshold: 30, label: '多因子大底近20期命中趋势' });
+                const mfZSpark = buildTrendSparklineHtml(sparkSeries.zodiacHits, { highThreshold: 50, midThreshold: 35, label: '共振特肖近20期命中趋势' });
+                const mfTailSpark = buildTrendSparklineHtml(sparkSeries.tailHits, { highThreshold: 40, midThreshold: 25, label: '共振旺尾近20期命中趋势' });
+
                 let html = `
                     <div class="rec-section-box">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                            <div style="display:flex;align-items:center;gap:4px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:4px;flex-wrap:wrap;">
+                            <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
                                 <span style="font-size:11px;font-weight:700;color:var(--accent);">⭐ 综合置信度 Top ${topNumbers.length} 码 (黄金大底)</span>
                                 ${isShrinked ? `<span style="font-size:8.5px;padding:1px 4px;border-radius:3px;background:rgba(0,230,118,0.15);color:var(--up);border:1px solid rgba(0,230,118,0.3);" title="${shrinkInfo || '已自动进行同尾/同肖/冷态瘦身'}">已缩水${shrinkCount ? `(滤换${shrinkCount}码)` : ''}</span>` : ''}
                             </div>
-                            <button class="rec-apply-btn" onclick="applyRecommendToKLine('multi', '${numListStr}')">📈 套用至K线</button>
+                            <div style="display:inline-flex;align-items:center;gap:4px;">
+                                ${mfNumsSpark}
+                                <button class="rec-apply-btn" onclick="applyRecommendToKLine('multi', '${numListStr}')">📈 套用至K线</button>
+                            </div>
                         </div>
                         <div style="display:grid;grid-template-columns:repeat(6, 1fr);gap:4px;">
                             ${topNumbers.map(item => `
@@ -6306,9 +6569,12 @@
                     </div>
 
                     <div class="rec-section-box" style="margin-bottom:6px;">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:4px;flex-wrap:wrap;">
                             <span style="font-size:11px;font-weight:700;color:var(--warn);">🐾 共振优选特肖 (${topZodiacs.length}肖：4核心+2防守)</span>
-                            <button class="rec-apply-btn" onclick="applyRecommendToKLine('zodiac', '${topZodiacs.map(z=>z.zodiac).join(',')}')">📈 套用生肖</button>
+                            <div style="display:inline-flex;align-items:center;gap:4px;">
+                                ${mfZSpark}
+                                <button class="rec-apply-btn" onclick="applyRecommendToKLine('zodiac', '${topZodiacs.map(z=>z.zodiac).join(',')}')">📈 套用生肖</button>
+                            </div>
                         </div>
                         <div style="display:grid;grid-template-columns:repeat(6, 1fr);gap:4px;">
                             ${topZodiacs.map((z, idx) => `
@@ -6323,8 +6589,11 @@
 
                     ${tailsArr.length ? `
                     <div class="rec-section-box" style="margin-bottom:0;">
-                        <div style="display:flex;justify-content:space-between;align-items:center;">
-                            <span style="font-size:11px;font-weight:700;color:var(--accent);">🎯 活跃共振旺尾</span>
+                        <div style="display:flex;justify-content:space-between;align-items:center;gap:4px;flex-wrap:wrap;">
+                            <div style="display:inline-flex;align-items:center;gap:5px;">
+                                <span style="font-size:11px;font-weight:700;color:var(--accent);">🎯 活跃共振旺尾</span>
+                                ${mfTailSpark}
+                            </div>
                             <span style="font-size:11px;color:#ffd700;font-weight:700;">${tailsArr.map(t => `${t}尾`).join(' · ')}</span>
                         </div>
                     </div>
@@ -6339,13 +6608,20 @@
                 const { goldDan, silverDan, baseNumbers, killedNumbers, topZodiacs } = recommendations;
                 const goldStr = goldDan.map(n => n.number).join(',');
                 const baseStr = baseNumbers.map(n => n.number).join(',');
-                const killStr = killedNumbers.map(n => n.number).join(',');
+
+                const goldSpark = buildTrendSparklineHtml(sparkSeries.goldDanHits, { highThreshold: 10, midThreshold: 4, label: '核心金胆近20期命中趋势' });
+                const baseSpark = buildTrendSparklineHtml(sparkSeries.baseAndSilverHits, { highThreshold: 45, midThreshold: 30, label: '银胆大底近20期命中趋势' });
+                const danZSpark = buildTrendSparklineHtml(sparkSeries.zodiacHits, { highThreshold: 50, midThreshold: 35, label: '共振特肖近20期命中趋势' });
+                const killSpark = buildTrendSparklineHtml(sparkSeries.killSafeHits, { highThreshold: 88, midThreshold: 75, label: '安全杀码近20期避杀准确率' });
 
                 let html = `
                     <div class="rec-section-box">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:4px;flex-wrap:wrap;">
                             <span style="font-size:11px;font-weight:700;color:#ffd700;">🥇 核心金胆 (主攻)</span>
-                            <button class="rec-apply-btn" onclick="applyRecommendToKLine('dan', '${goldStr}')">套用金胆</button>
+                            <div style="display:inline-flex;align-items:center;gap:4px;">
+                                ${goldSpark}
+                                <button class="rec-apply-btn" onclick="applyRecommendToKLine('dan', '${goldStr}')">套用金胆</button>
+                            </div>
                         </div>
                         <div style="display:flex;gap:10px;align-items:center;">
                             ${goldDan.map(g => `
@@ -6361,9 +6637,12 @@
                     </div>
 
                     <div class="rec-section-box">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:4px;flex-wrap:wrap;">
                             <span style="font-size:11px;font-weight:700;color:#c0c0c0;">🥈 辅助银胆 & 稳健精选大底 (${baseNumbers.length}码)</span>
-                            <button class="rec-apply-btn" onclick="applyRecommendToKLine('base', '${baseStr}')">套用大底</button>
+                            <div style="display:inline-flex;align-items:center;gap:4px;">
+                                ${baseSpark}
+                                <button class="rec-apply-btn" onclick="applyRecommendToKLine('base', '${baseStr}')">套用大底</button>
+                            </div>
                         </div>
                         <div style="display:flex;flex-wrap:wrap;gap:4px;">
                             ${baseNumbers.map((b, idx) => `
@@ -6376,17 +6655,23 @@
 
                     ${topZodiacs && topZodiacs.length ? `
                     <div class="rec-section-box" style="margin-bottom:6px;">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:4px;flex-wrap:wrap;">
                             <span style="font-size:11px;font-weight:700;color:var(--warn);">🐾 共振特肖防御 (${topZodiacs.length}肖)</span>
-                            <span style="font-size:9.5px;color:var(--text-secondary);">${topZodiacs.map(z=>z.zodiac).join(' ')}</span>
+                            <div style="display:inline-flex;align-items:center;gap:4px;">
+                                ${danZSpark}
+                                <span style="font-size:9.5px;color:var(--text-secondary);">${topZodiacs.map(z=>z.zodiac).join(' ')}</span>
+                            </div>
                         </div>
                     </div>
                     ` : ''}
 
                     <div class="rec-section-box" style="margin-bottom:0;background:rgba(255,23,68,0.03);border-color:rgba(255,23,68,0.2);">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:4px;flex-wrap:wrap;">
                             <span style="font-size:11px;font-weight:700;color:var(--down);">🚫 极准安全杀码 (${killedNumbers.length}码 · 安全率93%+)</span>
-                            <span style="font-size:9px;color:var(--text-secondary);">极冷惰性排除</span>
+                            <div style="display:inline-flex;align-items:center;gap:4px;">
+                                ${killSpark}
+                                <span style="font-size:9px;color:var(--text-secondary);">极冷惰性排除</span>
+                            </div>
                         </div>
                         <div style="display:flex;flex-wrap:wrap;gap:4px;">
                             ${killedNumbers.map(k => `
@@ -6404,17 +6689,27 @@
             // 4. AI 自动寻优界面
             if (strategy === 'auto_opt' && recommendations.best) {
                 const { best, presets } = recommendations;
+                const bestSparkHtml = buildTrendSparklineHtml(best.hitSeries || sparkSeries.overallHits, {
+                    width: 52,
+                    height: 15,
+                    highThreshold: 55,
+                    midThreshold: 35,
+                    label: `${best.name} 近${best.total || 30}期命中趋势`
+                });
                 let html = `
                     <div class="rec-section-box" style="background:rgba(0,212,255,0.05);border-color:var(--accent);">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:4px;flex-wrap:wrap;">
                             <span style="font-size:11px;font-weight:700;color:var(--accent);">🏆 AI 历史最优寻优方案</span>
-                            <button class="rec-apply-btn" onclick="applyRecommendToKLine('opt', '${best.text}')">⚡ 一键套用回测</button>
+                            <div style="display:inline-flex;align-items:center;gap:4px;">
+                                ${bestSparkHtml}
+                                <button class="rec-apply-btn" onclick="applyRecommendToKLine('opt', '${best.text}')">⚡ 一键套用回测</button>
+                            </div>
                         </div>
                         <div style="font-size:12px;font-weight:700;color:var(--text-primary);margin-bottom:4px;">
                             ${best.name}
                         </div>
                         <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-secondary);margin-bottom:6px;">
-                            <span>近30期命中率: <b style="color:var(--up);">${best.hitRate}%</b> (${best.hits}/${best.total})</span>
+                            <span>近${best.total || 30}期命中率: <b style="color:var(--up);">${best.hitRate}%</b> (${best.hits}/${best.total})</span>
                             <span>胜率回报比: <b style="color:var(--accent);">${best.roi > 0 ? '+' : ''}${best.roi}%</b></span>
                         </div>
                         <div style="font-size:10px;padding:4px 6px;background:rgba(0,0,0,0.3);border-radius:4px;word-break:break-all;color:var(--text-primary);">
@@ -6424,15 +6719,24 @@
 
                     <div style="font-size:10px;color:var(--text-secondary);margin-bottom:4px;">📊 备选优胜方案对决</div>
                     <div style="display:flex;flex-direction:column;gap:4px;">
-                        ${presets.slice(1, 3).map(p => `
-                            <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 6px;background:rgba(0,0,0,0.2);border:1px solid var(--border);border-radius:4px;font-size:10px;">
-                                <span style="color:var(--text-secondary);">${p.name}</span>
-                                <div>
-                                    <span style="color:var(--up);margin-right:6px;">命中 ${p.hitRate}%</span>
-                                    <button class="rec-apply-btn" style="padding:1px 4px;font-size:9px;" onclick="applyRecommendToKLine('opt', '${p.text}')">套用</button>
+                        ${presets.slice(1, 3).map(p => {
+                            const pSpark = buildTrendSparklineHtml(p.hitSeries || [], {
+                                width: 42,
+                                height: 12,
+                                highThreshold: 55,
+                                midThreshold: 35,
+                                label: `${p.name} 近${p.total || 30}期命中趋势`
+                            });
+                            return `
+                                <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 6px;background:rgba(0,0,0,0.2);border:1px solid var(--border);border-radius:4px;font-size:10px;gap:4px;">
+                                    <span style="color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.name}</span>
+                                    <div style="display:inline-flex;align-items:center;gap:4px;flex-shrink:0;">
+                                        ${pSpark}
+                                        <button class="rec-apply-btn" style="padding:1px 4px;font-size:9px;" onclick="applyRecommendToKLine('opt', '${p.text}')">套用</button>
+                                    </div>
                                 </div>
-                            </div>
-                        `).join('')}
+                            `;
+                        }).join('')}
                     </div>
                 `;
                 container.innerHTML = html;
@@ -6448,9 +6752,19 @@
                 size: '大小策略 - 推荐大小方向',
             };
 
+            const defaultStratSpark = buildTrendSparklineHtml(sparkSeries.overallHits, {
+                width: 48,
+                height: 14,
+                highThreshold: 50,
+                midThreshold: 30,
+                label: `${STRATEGY_NAME_MAP[strategy] || '当前策略'}近20期命中趋势`
+            });
+            const recentHistory20 = (state.historyData || []).slice(-20);
+
             let html = `
-                <div style="font-size: 10px; color: var(--text-secondary); margin-bottom: 10px;">
-                    ${strategyLabels[strategy] || ''}
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
+                    <span style="font-size: 10px; color: var(--text-secondary);">${strategyLabels[strategy] || ''}</span>
+                    ${defaultStratSpark}
                 </div>
                 <div style="display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;">
             `;
@@ -6462,27 +6776,48 @@
                     const ratio = item.maxRecord > 0 ? Math.round(item.currentOm / item.maxRecord * 100) : 0;
                     const isHot = item.currentOm <= 3;
                     const isCold = ratio >= 80;
+                    const zItemSeries = recentHistory20.map(d => d.win === item.zodiac);
+                    const zItemSpark = buildTrendSparklineHtml(zItemSeries, {
+                        width: 38,
+                        height: 11,
+                        windowSize: 5,
+                        highThreshold: 15,
+                        midThreshold: 5,
+                        compact: true,
+                        label: `特肖「${item.zodiac}」近${recentHistory20.length}期开出趋势`
+                    });
 
                     html += `
                         <div style="
-                            padding: 6px 10px;
+                            padding: 6px 8px;
                             background: ${isCold ? 'rgba(255, 23, 68, 0.2)' : isHot ? 'rgba(0, 230, 118, 0.2)' : 'var(--card-bg)'};
                             border: 1px solid ${isCold ? 'var(--down)' : isHot ? 'var(--up)' : 'var(--border)'};
                             border-radius: 6px;
                             text-align: center;
-                            min-width: 44px;
+                            min-width: 58px;
                         ">
                             <div style="font-size: 14px; font-weight: 700; color: var(--accent);">${item.zodiac}</div>
                             <div style="font-size: 9px; color: var(--text-secondary);">遗漏:${item.currentOm}</div>
                             ${ratio > 0 ? `<div style="font-size: 9px; color: ${ratio >= 80 ? 'var(--down)' : 'var(--text-secondary)'};">${ratio}%</div>` : ''}
+                            ${zItemSpark}
                         </div>
                     `;
                 });
             } else if (recommendations[0]?.color) {
                 recommendations.forEach(item => {
+                    const cItemSeries = recentHistory20.map(d => d.currentColor === item.color);
+                    const cItemSpark = buildTrendSparklineHtml(cItemSeries, {
+                        width: 44,
+                        height: 12,
+                        windowSize: 5,
+                        highThreshold: 40,
+                        midThreshold: 25,
+                        compact: true,
+                        label: `${item.name}近${recentHistory20.length}期开出趋势`
+                    });
                     html += `
                         <div style="
-                            padding: 8px 12px;
+                            padding: 8px 10px;
                             background: ${item.color === 'red' ? 'rgba(255, 23, 68, 0.15)' : item.color === 'blue' ? 'rgba(68, 138, 255, 0.15)' : 'rgba(0, 230, 118, 0.15)'};
                             border: 1px solid ${item.color === 'red' ? '#ff1744' : item.color === 'blue' ? '#448aff' : '#00e676'};
                             border-radius: 8px;
@@ -6493,6 +6828,7 @@
                             <div style="font-size: 12px; font-weight: 700; color: ${item.color === 'red' ? '#ff1744' : item.color === 'blue' ? '#448aff' : '#00e676'};">${item.name}</div>
                             <div style="font-size: 11px; font-weight: 700; margin-top: 2px;">${item.current}期</div>
                             <div style="font-size: 9px; color: var(--text-secondary);">最高${item.max}期</div>
+                            ${cItemSpark}
                             ${item.numbers ? `<div style="font-size: 8px; color: var(--text-secondary); margin-top: 4px;">${item.numbers}</div>` : ''}
                         </div>
                     `;
@@ -6500,6 +6836,19 @@
             } else if (recommendations[0]?.type) {
                 recommendations.forEach(item => {
                     const color = item.type === 'big' ? '#00e676' : '#00d4ff';
+                    const sItemSeries = recentHistory20.map(d => {
+                        const sp = parseInt(d.special, 10);
+                        return !isNaN(sp) && ((sp >= 25 ? 'big' : 'small') === item.type);
+                    });
+                    const sItemSpark = buildTrendSparklineHtml(sItemSeries, {
+                        width: 48,
+                        height: 12,
+                        windowSize: 5,
+                        highThreshold: 55,
+                        midThreshold: 40,
+                        compact: true,
+                        label: `${item.name}近${recentHistory20.length}期开出趋势`
+                    });
                     html += `
                         <div style="
                             padding: 10px;
@@ -6512,6 +6861,7 @@
                             <div style="font-size: 14px; font-weight: 700; color: ${color};">${item.name}</div>
                             <div style="font-size: 20px; font-weight: 700; color: ${color}; margin: 4px 0;">${item.current}期</div>
                             <div style="font-size: 9px; color: var(--text-secondary);">当前遗漏</div>
+                            ${sItemSpark}
                         </div>
                     `;
                 });

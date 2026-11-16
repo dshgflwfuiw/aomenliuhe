@@ -14,7 +14,7 @@
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="/apple-touch-icon.png">
     <link rel="manifest" href="/manifest.json">
-<link rel="stylesheet" href="style.css?v=20261022e">
+<link rel="stylesheet" href="style.css?v=20261115a">
 </head>
 
 <body>
@@ -1468,11 +1468,11 @@
                 <div style="margin-bottom:8px;">
                     <div style="font-size:9.5px;color:var(--text-secondary);margin-bottom:4px;">⚡ 快速应用预设策略：</div>
                     <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:4px;">
-                        <button type="button" class="rec-preset-btn" onclick="applyRecPreset('cold')">❄️ 极冷超跌反弹</button>
-                        <button type="button" class="rec-preset-btn" onclick="applyRecPreset('hot')">🔥 顺势高频连开</button>
-                        <button type="button" class="rec-preset-btn" onclick="applyRecPreset('morph')">🎯 形态共振精选</button>
-                        <button type="button" class="rec-preset-btn" onclick="applyRecPreset('solid')">🛡️ 稳健防守大底</button>
-                        <button type="button" class="rec-preset-btn" onclick="applyRecPreset('sum_span')" style="grid-column: span 2;">📐 和值跨度·均值回归精选</button>
+                        <button type="button" class="rec-preset-btn" data-preset="cold" onclick="applyRecPreset('cold')"><span class="rec-preset-label">❄️ 极冷反弹</span><span class="rec-preset-spark" id="recPresetSpark_cold"></span></button>
+                        <button type="button" class="rec-preset-btn" data-preset="hot" onclick="applyRecPreset('hot')"><span class="rec-preset-label">🔥 顺势高频</span><span class="rec-preset-spark" id="recPresetSpark_hot"></span></button>
+                        <button type="button" class="rec-preset-btn" data-preset="morph" onclick="applyRecPreset('morph')"><span class="rec-preset-label">🎯 形态共振</span><span class="rec-preset-spark" id="recPresetSpark_morph"></span></button>
+                        <button type="button" class="rec-preset-btn" data-preset="solid" onclick="applyRecPreset('solid')"><span class="rec-preset-label">🛡️ 稳健大底</span><span class="rec-preset-spark" id="recPresetSpark_solid"></span></button>
+                        <button type="button" class="rec-preset-btn" data-preset="sum_span" onclick="applyRecPreset('sum_span')" style="grid-column: span 2;"><span class="rec-preset-label">📐 和值跨度·均值回归精选</span><span class="rec-preset-spark" id="recPresetSpark_sum_span"></span></button>
                     </div>
                 </div>
                 <div class="rec-slider-row">
@@ -2064,7 +2064,7 @@
         </div>
     </div>
 
-    <script src="app.js?v=20261022e"></script>
+    <script src="app.js?v=20261115a"></script>
 
     <nav class="mobile-nav" id="mobileNav">
         <div class="mobile-nav-item active" data-page="chart" onclick="switchToChart()">

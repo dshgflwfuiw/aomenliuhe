@@ -4268,8 +4268,25 @@
             color: var(--text-primary);
             cursor: pointer;
             transition: all 0.15s ease;
-            text-align: center;
+            text-align: left;
             white-space: nowrap;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 4px;
+            min-height: 26px;
+        }
+
+        .rec-preset-label {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .rec-preset-spark {
+            display: inline-flex;
+            align-items: center;
+            flex-shrink: 0;
         }
 
         .rec-preset-btn:hover {
@@ -4283,6 +4300,68 @@
             background: rgba(255, 215, 0, 0.18);
             color: var(--accent);
             font-weight: 700;
+        }
+
+        /* 推荐抽屉内趋势迷你折线图 (Sparkline) */
+        .rec-sparkline-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 1px 5px;
+            border-radius: 4px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 9px;
+            font-weight: 700;
+            line-height: 1.2;
+            white-space: nowrap;
+            flex-shrink: 0;
+            cursor: pointer;
+            transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+        }
+
+        .rec-sparkline-pill:hover {
+            border-color: currentColor;
+            background: rgba(0, 212, 255, 0.08);
+        }
+
+        .rec-sparkline-svg {
+            display: block;
+            overflow: visible;
+            flex-shrink: 0;
+        }
+
+        .rec-sparkline-pct {
+            font-variant-numeric: tabular-nums;
+            letter-spacing: -0.2px;
+        }
+
+        .rec-sparkline-mini {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+            margin-top: 3px;
+            padding: 1px 4px;
+            border-radius: 3px;
+            background: rgba(0, 0, 0, 0.22);
+            font-size: 8.5px;
+            font-weight: 700;
+            line-height: 1.1;
+            white-space: nowrap;
+        }
+
+        body.light-theme .rec-preset-btn {
+            background: rgba(0, 0, 0, 0.03);
+        }
+
+        body.light-theme .rec-sparkline-pill {
+            background: rgba(0, 0, 0, 0.04);
+            border-color: var(--border);
+        }
+
+        body.light-theme .rec-sparkline-mini {
+            background: rgba(0, 0, 0, 0.04);
         }
 
         /* 全局轻量 Toast 提示框 */
